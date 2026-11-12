@@ -1,17 +1,5 @@
 package it.eng.spagobi.tools.scheduler;
 
-import it.eng.spago.security.IEngUserProfile;
-import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.commons.utilities.AuditLogUtilities;
-import it.eng.spagobi.services.exceptions.ExceptionUtilities;
-import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
-import it.eng.spagobi.services.rest.annotations.UserConstraint;
-import it.eng.spagobi.tools.scheduler.bo.TriggerPaused;
-import it.eng.spagobi.tools.scheduler.dao.ISchedulerDAO;
-import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
-
 import java.util.HashMap;
 
 import javax.servlet.http.HttpServletRequest;
@@ -24,6 +12,18 @@ import javax.ws.rs.core.MediaType;
 import org.apache.log4j.Logger;
 import org.json.JSONObject;
 
+import it.eng.spago.security.IEngUserProfile;
+import it.eng.spagobi.api.AbstractSpagoBIResource;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.commons.utilities.AuditLogUtilities;
+import it.eng.spagobi.services.exceptions.ExceptionUtilities;
+import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
+import it.eng.spagobi.services.rest.annotations.UserConstraint;
+import it.eng.spagobi.tools.scheduler.bo.TriggerPaused;
+import it.eng.spagobi.tools.scheduler.dao.ISchedulerDAO;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
+
 /**
  * @author Marco Cortella (marco.cortella@eng.it)
  * @author Alessandro Portosa (alessandro.portosa@eng.it)
@@ -34,17 +34,16 @@ import org.json.JSONObject;
 @ManageAuthorization
 public class SchedulerResource extends AbstractSpagoBIResource {
 
-	private static final Logger logger = Logger.getLogger(SchedulerResource.class);
-
-	protected static final String canNotFillResponseError = "error.mesage.description.generic.can.not.responce";
+	private static final Logger LOGGER = Logger.getLogger(SchedulerResource.class);
+	private static final String ERROR_CAN_NOT_FILL_RESPONSE = "error.mesage.description.generic.can.not.responce";
 
 	@POST
 	@Path("/pauseTrigger")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_SCHEDULATION })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SCHEDULER_MANAGEMENT })
 	public String pauseTrigger(@Context HttpServletRequest req) {
 		IEngUserProfile profile = (IEngUserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
-		HashMap<String, String> logParam = new HashMap<String, String>();
+		HashMap<String, String> logParam = new HashMap<>();
 		try {
 			String jobGroupName = req.getParameter("jobGroup");
 			String jobName = req.getParameter("jobName");
@@ -70,12 +69,12 @@ public class SchedulerResource extends AbstractSpagoBIResource {
 			return new JSONObject().put("resp", "ok").toString();
 		} catch (Exception e) {
 			updateAudit(req, profile, "SCHED_TRIGGER.PAUSE", logParam, "KO");
-			logger.error("Error while pausing trigger ", e);
-			logger.debug(canNotFillResponseError);
+			LOGGER.error("Error while pausing trigger ", e);
+			LOGGER.debug(ERROR_CAN_NOT_FILL_RESPONSE);
 			try {
-				return (ExceptionUtilities.serializeException(canNotFillResponseError, null));
+				return (ExceptionUtilities.serializeException(ERROR_CAN_NOT_FILL_RESPONSE, null));
 			} catch (Exception ex) {
-				logger.debug("Cannot fill response container.");
+				LOGGER.debug("Cannot fill response container.");
 				throw new SpagoBIRuntimeException("Cannot fill response container", ex);
 			}
 		}
@@ -84,10 +83,10 @@ public class SchedulerResource extends AbstractSpagoBIResource {
 	@POST
 	@Path("/resumeTrigger")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_SCHEDULATION })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SCHEDULER_MANAGEMENT, CommunityFunctionalityConstants.KPI_SCHEDULATION })
 	public String resumeTrigger(@Context HttpServletRequest req) {
 		IEngUserProfile profile = (IEngUserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
-		HashMap<String, String> logParam = new HashMap<String, String>();
+		HashMap<String, String> logParam = new HashMap<>();
 		try {
 			String jobGroup = req.getParameter("jobGroup");
 			String jobName = req.getParameter("jobName");
@@ -107,22 +106,22 @@ public class SchedulerResource extends AbstractSpagoBIResource {
 			return new JSONObject().put("resp", "ok").toString();
 		} catch (Exception e) {
 			updateAudit(req, profile, "SCHED_TRIGGER.RESUME", logParam, "KO");
-			logger.error("Error while resuming trigger ", e);
-			logger.debug(canNotFillResponseError);
+			LOGGER.error("Error while resuming trigger ", e);
+			LOGGER.debug(ERROR_CAN_NOT_FILL_RESPONSE);
 			try {
-				return (ExceptionUtilities.serializeException(canNotFillResponseError, null));
+				return (ExceptionUtilities.serializeException(ERROR_CAN_NOT_FILL_RESPONSE, null));
 			} catch (Exception ex) {
-				logger.debug("Cannot fill response container.");
+				LOGGER.debug("Cannot fill response container.");
 				throw new SpagoBIRuntimeException("Cannot fill response container", ex);
 			}
 		}
 	}
 
-	protected static void updateAudit(HttpServletRequest request, IEngUserProfile profile, String action_code, HashMap<String, String> parameters, String esito) {
+	protected static void updateAudit(HttpServletRequest request, IEngUserProfile profile, String actionCode, HashMap<String, String> parameters, String esito) {
 		try {
-			AuditLogUtilities.updateAudit(request, profile, action_code, parameters, esito);
+			AuditLogUtilities.updateAudit(request, profile, actionCode, parameters, esito);
 		} catch (Exception e) {
-			logger.debug("Error writing audit", e);
+			LOGGER.debug("Error writing audit", e);
 		}
 	}
 }

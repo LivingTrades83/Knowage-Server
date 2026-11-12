@@ -63,13 +63,19 @@ public class DatasetMetadataParser {
 	public static final String MULTIVALUE = "multivalue";
 	public static final String VERSION = "version";
 
+	public static final String PERSONAL = "personal";
+	public static final String MASKED = "masked";
+	public static final String DECRYPT = "decrypt";
+	public static final String SUBJECT_ID = "subjectId";
+	public static final String DESCRIPTION = "description";
+
 	// XML VALUES FOR PROPERTIES TAG
 
 	public static final String VALUE = "value";
 	public static final String NAME_P = "name";
 
-	public final static String CURRENT_VERSION = "1";
-	public final static String ATTRIBUTE_VERSION = "version";
+	public static final String CURRENT_VERSION = "1";
+	public static final String ATTRIBUTE_VERSION = "version";
 
 	// Previous version of metadataToXml left only for backup
 	@Deprecated
@@ -89,7 +95,9 @@ public class DatasetMetadataParser {
 				String type = fieldMetaData.getType().getName();
 				boolean multiValue = fieldMetaData.isMultiValue();
 				Assert.assertNotNull(type, "Type of the field " + name + " cannot be null");
+
 				FieldType fieldType = fieldMetaData.getFieldType();
+
 				Map properties = fieldMetaData.getProperties();
 
 				SourceBean sbMeta = new SourceBean(DatasetMetadataParser.COLUMN);
@@ -98,13 +106,17 @@ public class DatasetMetadataParser {
 				SourceBeanAttribute attM = new SourceBeanAttribute(MULTIVALUE, multiValue);
 				SourceBeanAttribute attA = alias != null ? new SourceBeanAttribute(ALIAS, alias) : null;
 				SourceBeanAttribute attF = fieldType != null ? new SourceBeanAttribute(FIELD_TYPE, fieldType.toString()) : null;
+
 				sbMeta.setAttribute(attN);
 				sbMeta.setAttribute(attT);
 				sbMeta.setAttribute(attM);
-				if (attA != null)
+
+				if (attA != null) {
 					sbMeta.setAttribute(attA);
-				if (attF != null)
+				}
+				if (attF != null) {
 					sbMeta.setAttribute(attF);
+				}
 				sb.setAttribute(sbMeta);
 
 				// insert properties
@@ -148,6 +160,7 @@ public class DatasetMetadataParser {
 				String name = fieldMetaData.getName();
 				String alias = fieldMetaData.getAlias();
 				String type = fieldMetaData.getType().getName();
+
 				boolean multiValue = fieldMetaData.isMultiValue();
 				Assert.assertNotNull(type, "Type of the field " + name + " cannot be null");
 				FieldType fieldType = fieldMetaData.getFieldType();
@@ -160,15 +173,33 @@ public class DatasetMetadataParser {
 				SourceBeanAttribute attM = new SourceBeanAttribute(MULTIVALUE, multiValue);
 				SourceBeanAttribute attF = fieldType != null ? new SourceBeanAttribute(FIELD_TYPE, fieldType.toString()) : null;
 				SourceBeanAttribute attA = alias != null ? new SourceBeanAttribute(ALIAS, alias) : null;
-				if (attF != null)
+				if (attF != null) {
 					sbMeta.setAttribute(attF);
-				if (attA != null)
+				}
+				if (attA != null) {
 					sbMeta.setAttribute(attA);
+				}
 
 				sbMeta.setAttribute(attN);
 				sbMeta.setAttribute(attT);
 				sbMeta.setAttribute(attM);
 
+				SourceBeanAttribute attPersonal = new SourceBeanAttribute(PERSONAL, fieldMetaData.isPersonal());
+				sbMeta.setAttribute(attPersonal);
+//				SourceBeanAttribute attMasked = new SourceBeanAttribute(MASKED, fieldMetaData.isMaskValue());
+//				sbMeta.setAttribute(attMasked);
+				SourceBeanAttribute attDecrypt = new SourceBeanAttribute(DECRYPT, fieldMetaData.isDecrypt());
+				sbMeta.setAttribute(attDecrypt);
+				SourceBeanAttribute attSubjectId = new SourceBeanAttribute(SUBJECT_ID, fieldMetaData.isSubjectId());
+				sbMeta.setAttribute(attSubjectId);
+				SourceBeanAttribute attDescription = null;
+				if (fieldMetaData.getDescription() != null && !fieldMetaData.getDescription().trim().equals("null")) {
+					attDescription = new SourceBeanAttribute(DESCRIPTION, fieldMetaData.getDescription());
+				} else {
+					attDescription = new SourceBeanAttribute(DESCRIPTION, "");
+				}
+
+				sbMeta.setAttribute(attDescription);
 				sbColumns.setAttribute(sbMeta);
 
 				// insert properties
@@ -321,14 +352,26 @@ public class DatasetMetadataParser {
 					fieldMeta.setMultiValue(isMultivalue);
 
 					fieldMeta.setAlias(alias);
-					if (fieldType != null && fieldType.equalsIgnoreCase(FieldType.ATTRIBUTE.toString()))
+					if (fieldType != null && fieldType.equalsIgnoreCase(FieldType.ATTRIBUTE.toString())) {
 						fieldMeta.setFieldType(FieldType.ATTRIBUTE);
-					else if (fieldType != null && fieldType.equalsIgnoreCase(FieldType.MEASURE.toString()))
+					} else if (fieldType != null && fieldType.equalsIgnoreCase(FieldType.MEASURE.toString())) {
 						fieldMeta.setFieldType(FieldType.MEASURE);
-					else if (fieldType != null && fieldType.equalsIgnoreCase(FieldType.SPATIAL_ATTRIBUTE.toString()))
+					} else if (fieldType != null && fieldType.equalsIgnoreCase(FieldType.SPATIAL_ATTRIBUTE.toString())) {
 						fieldMeta.setFieldType(FieldType.SPATIAL_ATTRIBUTE);
-					else
+					} else {
 						fieldMeta.setFieldType(FieldType.ATTRIBUTE);
+					}
+
+					boolean personal = sbRow.getAttribute(PERSONAL) != null ? Boolean.parseBoolean((String) sbRow.getAttribute(PERSONAL)) : false;
+					fieldMeta.setPersonal(personal);
+//					boolean masked = sbRow.getAttribute(MASKED) != null ? Boolean.parseBoolean((String) sbRow.getAttribute(MASKED)) : false;
+//					fieldMeta.setMasked(masked);
+					boolean decrypt = sbRow.getAttribute(DECRYPT) != null ? Boolean.parseBoolean((String) sbRow.getAttribute(DECRYPT)) : false;
+					fieldMeta.setDecrypt(decrypt);
+					boolean subjectId = sbRow.getAttribute(SUBJECT_ID) != null ? Boolean.parseBoolean((String) sbRow.getAttribute(SUBJECT_ID)) : false;
+					fieldMeta.setSubjectId(subjectId);
+					String description = sbRow.getAttribute(DESCRIPTION) != null ? sbRow.getAttribute(DESCRIPTION).toString() : null;
+					fieldMeta.setDescription(description);
 
 					List properties = sbRow.getAttributeAsList(DatasetMetadataParser.PROPERTY);
 

@@ -39,7 +39,7 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO#getExecutionNotes(java.lang.Integer, java.lang.String)
 	 */
 	@Override
@@ -68,21 +68,17 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			}
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return objNote;
 	}
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO#getExecutionNotesByOwner(java.lang.Integer, java.lang.String, java.lang.String)
 	 */
 	@Override
@@ -107,21 +103,50 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
+			closeSessionIfOpen(aSession);
+		}
+		return objNote;
+	}
+
+	@Override
+	public ObjNote getNoteById(Integer documentId, Integer noteId, String owner) throws Exception {
+		ObjNote objNote = null;
+		Session aSession = null;
+		Transaction tx = null;
+		if (documentId == null || noteId == null)
+			return null;
+		try {
+			aSession = getSession();
+			tx = aSession.beginTransaction();
+
+			String hql = "from SbiObjNotes son where son.sbiObject.biobjId = ?"
+					+ " and son.objNoteId = ? and owner = ? ";
+			Query query = aSession.createQuery(hql);
+			query.setInteger(0, documentId);
+			query.setInteger(1, noteId);
+			query.setString(2, owner);
+
+			SbiObjNotes hibObjNote = (SbiObjNotes) query.uniqueResult();
+			if (hibObjNote != null) {
+				objNote = toObjNote(hibObjNote);
 			}
+			tx.commit();
+		} catch (HibernateException he) {
+			logException(he);
+			rollbackIfActive(tx);
+			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
+		} finally {
+			closeSessionIfOpen(aSession);
 		}
 		return objNote;
 	}
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO#getListExecutionNotes(java.lang.Integer, java.lang.String)
 	 */
 	@Override
@@ -153,25 +178,21 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return lstObjNote;
 	}
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO#saveExecutionNotes(java.lang.Integer, it.eng.spagobi.analiticalmodel.document.bo.ObjNote)
 	 */
 	@Override
-	public void saveExecutionNotes(Integer biobjId, ObjNote objNote) throws Exception {
+	public ObjNote saveExecutionNotes(Integer biobjId, ObjNote objNote) throws Exception {
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -197,16 +218,13 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			updateSbiCommonInfo4Insert(hibObjNote);
 			aSession.save(hibObjNote);
 			tx.commit();
+			return toObjNote(hibObjNote);
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
@@ -236,7 +254,16 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			hibObjNote.setLastChangeDate(now);
 			updateSbiCommonInfo4Insert(hibObjNote);
 			if (flag) {
-				hibObjNote.setObjNoteId(objNote.getId());
+				//hibObjNote.setObjNoteId(objNote.getId());
+				hibObjNote = new SbiObjNotes(objNote.getId());
+				hibObjNote.setExecReq(execReq);
+				hibObjNote.setSbiBinContents(hibBinContent);
+				hibObjNote.setSbiObject(hibBIObject);
+				hibObjNote.setOwner(objNote.getOwner());
+				hibObjNote.setIsPublic(objNote.getIsPublic());
+				hibObjNote.setCreationDate(now);
+				hibObjNote.setLastChangeDate(now);
+				updateSbiCommonInfo4Insert(hibObjNote);
 				aSession.update(hibObjNote);
 			} else {
 				aSession.save(hibObjNote);
@@ -245,24 +272,20 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO#modifyExecutionNotes(it.eng.spagobi.analiticalmodel.document.bo.ObjNote)
 	 */
 	@Override
-	public void modifyExecutionNotes(ObjNote objNote) throws Exception {
+	public ObjNote modifyExecutionNotes(ObjNote objNote) throws Exception {
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -279,39 +302,38 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			hibObjNote.setLastChangeDate(now);
 			updateSbiCommonInfo4Update(hibObjNote);
 			tx.commit();
+			return toObjNote(hibObjNote);
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	private ObjNote toObjNote(SbiObjNotes hibnotes) {
 		ObjNote objNote = new ObjNote();
-		objNote.setBinId(hibnotes.getSbiBinContents().getId());
-		objNote.setBiobjId(hibnotes.getSbiObject().getBiobjId());
-		byte[] content = hibnotes.getSbiBinContents().getContent();
-		String notes = new String(content);
-		objNote.setNotes((notes == null) ? "" : notes);
-		objNote.setContent(hibnotes.getSbiBinContents().getContent());
-		objNote.setExecReq(hibnotes.getExecReq());
-		objNote.setId(hibnotes.getObjNoteId());
-		objNote.setOwner((hibnotes.getOwner() == null) ? "" : hibnotes.getOwner());
-		objNote.setIsPublic((hibnotes.getIsPublic() == null) ? true : hibnotes.getIsPublic());
-		objNote.setCreationDate(hibnotes.getCreationDate());
-		objNote.setLastChangeDate(hibnotes.getLastChangeDate());
+		if (hibnotes != null) {
+			objNote.setBinId(hibnotes.getSbiBinContents().getId());
+			objNote.setBiobjId(hibnotes.getSbiObject().getBiobjId());
+			byte[] content = hibnotes.getSbiBinContents().getContent();
+			String notes = new String(content);
+			objNote.setNotes((notes == null) ? "" : notes);
+			objNote.setContent(hibnotes.getSbiBinContents().getContent());
+			objNote.setExecReq(hibnotes.getExecReq());
+			objNote.setId(hibnotes.getObjNoteId());
+			objNote.setOwner((hibnotes.getOwner() == null) ? "" : hibnotes.getOwner());
+			objNote.setIsPublic((hibnotes.getIsPublic() == null) ? true : hibnotes.getIsPublic());
+			objNote.setCreationDate(hibnotes.getCreationDate());
+			objNote.setLastChangeDate(hibnotes.getLastChangeDate());
+		}
 		return objNote;
 	}
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO#eraseNotes(java.lang.Integer)
 	 */
 	@Override
@@ -336,36 +358,32 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO#eraseNotesByOwner(java.lang.Integer, java.lang.String)
 	 */
 	@Override
-	public void eraseNotesByOwner(Integer biobjId, String execIdentif, String owner) throws Exception {
+	public void eraseNotesByIdAndOwner(Integer biobjId, Integer noteId, String owner) throws Exception {
 		Session aSession = null;
 		Transaction tx = null;
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 			// String hql = "from SbiObjNotes son where son.sbiObject.biobjId = " + biobjId;
-			String hql = "from SbiObjNotes son where son.sbiObject.biobjId = ? and son.execReq = ? and son.owner = ?";
+			String hql = "from SbiObjNotes son where son.sbiObject.biobjId = ? and son.objNoteId = ? and son.owner = ?";
 
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, biobjId.intValue());
-			query.setString(1, execIdentif);
+			query.setInteger(1, noteId);
 			query.setString(2, owner);
 
 			List notes = query.list();
@@ -379,14 +397,10 @@ public class ObjNoteDAOHibImpl extends AbstractHibernateDAO implements IObjNoteD
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}

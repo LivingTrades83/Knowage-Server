@@ -1,7 +1,7 @@
 /*
  * Knowage, Open Source Business Intelligence suite
  * Copyright (C) 2016 Engineering Ingegneria Informatica S.p.A.
- * 
+ *
  * Knowage is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -11,7 +11,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -27,12 +27,18 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.owasp.esapi.HTTPUtilities;
+import org.owasp.esapi.errors.AccessControlException;
+import org.owasp.esapi.reference.DefaultHTTPUtilities;
+
 import it.eng.spago.base.Constants;
 import it.eng.spago.configuration.ConfigSingleton;
 import it.eng.spago.tracing.TracerSingleton;
 import it.eng.spago.util.JavaScript;
 
 public class Router {
+
+	private static HTTPUtilities httpUtils = new DefaultHTTPUtilities();
     public Router(String publisher) {
         this(publisher, true);
     } // public Router(String publisher)
@@ -48,23 +54,27 @@ public class Router {
     } // public static ActionRouter getDefaultRouter()
 
     public Object getParameter(String key) {
-        if (key == null)
-            return null;
+        if (key == null) {
+			return null;
+		}
         return _parameters.get(key);
     } // public Object getParameter(String key)
 
     public void setParameter(String key, Object value) {
-        if (key == null)
-            return;
-        if (value == null)
-            delParameter(key);
-        else
-            _parameters.put(key, value);
+        if (key == null) {
+			return;
+		}
+        if (value == null) {
+			delParameter(key);
+		} else {
+			_parameters.put(key, value);
+		}
     } // public void setParameter(String key, Object value)
 
     public void delParameter(String key) {
-        if (key == null)
-            return;
+        if (key == null) {
+			return;
+		}
         _parameters.remove(key);
     } // public void delParameter(String key)
 
@@ -72,7 +82,7 @@ public class Router {
         ServletContext servletContext,
         HttpServletRequest request,
         HttpServletResponse response)
-        throws ServletException, IOException {
+        throws ServletException, IOException, AccessControlException {
         TracerSingleton.log(
             Constants.NOME_MODULO,
             TracerSingleton.DEBUG,
@@ -93,11 +103,12 @@ public class Router {
             String parameterName = (String) parameterNames.nextElement();
             String parameterValue =
                 String.valueOf(_parameters.get(parameterName));
-            if (_publisher.indexOf(parameterName) == -1)
-                publishingParameters += JavaScript.escape(parameterName)
+            if (_publisher.indexOf(parameterName) == -1) {
+				publishingParameters += JavaScript.escape(parameterName)
                     + "="
                     + JavaScript.escape(parameterValue)
                     + "&";
+			}
         } // while (parameterNames.hasMoreElements())
         TracerSingleton.log(
             Constants.NOME_MODULO,
@@ -111,15 +122,17 @@ public class Router {
             (String) configure.getAttribute("PUBLISHING.APPEND_CONTEXT_ROOT");
         if ((appendContextRoot == null)
             || (appendContextRoot.equalsIgnoreCase("TRUE")))
-            if (_publisher.startsWith("/")) {
+		 {
+			if (_publisher.startsWith("/")) {
                 TracerSingleton.log(
                     Constants.NOME_MODULO,
                     TracerSingleton.DEBUG,
                     "Router::route: publisher assoluto");
-                if (_isForward)
-                    publishingURL = _publisher;
-                else
-                    publishingURL = request.getContextPath() + _publisher;
+                if (_isForward) {
+					publishingURL = _publisher;
+				} else {
+					publishingURL = request.getContextPath() + _publisher;
+				}
             } // if (_publisher.startsWith("/"))
         else {
             TracerSingleton.log(
@@ -128,23 +141,28 @@ public class Router {
                 "Router::route: publisher relativo");
             publishingURL = _publisher;
         } // if (_publisher.startsWith("/")) else
+		}
         if (publishingParameters!=null && publishingParameters.length()>0) {
-            if (_publisher.indexOf('?') == -1)
-                publishingURL += "?" + publishingParameters;
-            else
-                publishingURL += "&" + publishingParameters;
+            if (_publisher.indexOf('?') == -1) {
+				publishingURL += "?" + publishingParameters;
+			} else {
+				publishingURL += "&" + publishingParameters;
+			}
         }
         TracerSingleton.log(
             Constants.NOME_MODULO,
             TracerSingleton.DEBUG,
             "Router::route: publishingURL [" + publishingURL + "]");
         if (_isForward) {
-            RequestDispatcher requestDispatcher =
-                servletContext.getRequestDispatcher(publishingURL);
-            requestDispatcher.forward(request, response);
+			if (!response.isCommitted()) {
+				RequestDispatcher requestDispatcher = servletContext.getRequestDispatcher(publishingURL);
+				requestDispatcher.forward(request, response);
+			}
+
         } // if (_isForward)
         else {
-            response.sendRedirect(response.encodeRedirectURL(publishingURL));
+        	httpUtils.sendRedirect(response, publishingURL);
+            //response.sendRedirect(response.encodeRedirectURL(publishingURL));
         } // if (_isForward) else
     } // public void route(ServletContext servletContext, HttpServletRequest request,
 

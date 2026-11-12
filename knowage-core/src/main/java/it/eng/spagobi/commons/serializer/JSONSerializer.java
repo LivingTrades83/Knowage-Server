@@ -23,6 +23,7 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 
+import org.apache.log4j.Logger;
 import org.json.JSONArray;
 
 import it.eng.qbe.dataset.FederatedDataSet;
@@ -33,7 +34,6 @@ import it.eng.spagobi.analiticalmodel.document.bo.Snapshot;
 import it.eng.spagobi.analiticalmodel.document.bo.SubObject;
 import it.eng.spagobi.analiticalmodel.document.bo.Viewpoint;
 import it.eng.spagobi.analiticalmodel.document.handlers.DocumentDriverRuntime;
-import it.eng.spagobi.analiticalmodel.execution.service.GetParametersForExecutionAction;
 import it.eng.spagobi.analiticalmodel.functionalitytree.bo.LowFunctionality;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.Parameter;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ParameterUse;
@@ -51,7 +51,6 @@ import it.eng.spagobi.profiling.bo.UserBO;
 import it.eng.spagobi.tools.catalogue.bo.Artifact;
 import it.eng.spagobi.tools.catalogue.bo.Content;
 import it.eng.spagobi.tools.catalogue.bo.MetaModel;
-import it.eng.spagobi.tools.dataset.bo.CkanDataSet;
 import it.eng.spagobi.tools.dataset.bo.CustomDataSet;
 import it.eng.spagobi.tools.dataset.bo.FileDataSet;
 import it.eng.spagobi.tools.dataset.bo.JDBCDataSet;
@@ -79,7 +78,7 @@ import it.eng.spagobi.tools.udp.metadata.SbiUdpValue;
 public class JSONSerializer implements Serializer {
 
 	Map<Class, Serializer> mappings;
-
+	private static Logger logger = Logger.getLogger(JSONSerializer.class);
 	public JSONSerializer() {
 		mappings = new HashMap();
 
@@ -108,7 +107,6 @@ public class JSONSerializer implements Serializer {
 		mappings.put(JDBCHiveDataSet.class, new DataSetJSONSerializer());
 		mappings.put(ScriptDataSet.class, new DataSetJSONSerializer());
 		mappings.put(FileDataSet.class, new DataSetJSONSerializer());
-		mappings.put(CkanDataSet.class, new DataSetJSONSerializer());
 		mappings.put(FederatedDataSet.class, new DataSetJSONSerializer());
 		mappings.put(RESTDataSet.class, new DataSetJSONSerializer());
 		mappings.put(SPARQLDataSet.class, new DataSetJSONSerializer());
@@ -118,7 +116,6 @@ public class JSONSerializer implements Serializer {
 
 		mappings.put(RoleMetaModelCategory.class, new RoleMetaModelCategoryJSONSerializer());
 
-		mappings.put(GetParametersForExecutionAction.ParameterForExecution.class, new ParameterForExecutionJSONSerializer());
 		// mappings.put(ParameterForExecution.class, new ParameterForExecutionJSONSerializer());
 		mappings.put(DocumentDriverRuntime.class, new DocumentParameterForExecutionJSONSerializer());
 		mappings.put(SbiUdp.class, new UdpJSONSerializer());
@@ -168,7 +165,7 @@ public class JSONSerializer implements Serializer {
 			}
 
 		} catch (Throwable t) {
-			t.printStackTrace();
+			logger.error("serialize",t);
 			throw new SerializationException("An error occurred while serializing object: " + o, t);
 		} finally {
 

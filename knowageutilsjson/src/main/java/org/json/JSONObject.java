@@ -29,6 +29,8 @@ import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BigIntegerNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
@@ -44,14 +46,15 @@ import com.fasterxml.jackson.databind.node.TextNode;
  * @author Andrea Gioia (andrea.gioia@eng.it)
  *
  */
-public class JSONObject extends AbstractJSONObject implements ICommonObject, Serializable {
+@JsonSerialize(using = JSONObjectSerializer.class)
+@JsonDeserialize(using = JSONObjectDeserializer.class)
+public class JSONObject extends AbstractJSONObject implements Serializable {
 
 	private static final long serialVersionUID = -6237508419256769078L;
 
 	private ObjectNode rootNode;
 
-	@Override
-	public ObjectNode getWrappedObject() {
+	ObjectNode getWrappedObject() {
 		return this.rootNode;
 	}
 
@@ -234,40 +237,57 @@ public class JSONObject extends AbstractJSONObject implements ICommonObject, Ser
 	private void populate(Object bean) {
 		Class klass = bean.getClass();
 
-		// If klass is a System class then set includeSuperClass to false.
-		boolean includeSuperClass = klass.getClassLoader() != null;
 
-		Method[] methods = includeSuperClass ? klass.getMethods() : klass.getDeclaredMethods();
+		if (JSONObject.class.equals(klass)) {
+			JSONObject _bean = (JSONObject) bean;
 
-		for (int i = 0; i < methods.length; i += 1) {
-			try {
-				Method method = methods[i];
-				if (Modifier.isPublic(method.getModifiers())) {
-					String name = method.getName();
-					String key = "";
-					if (name.startsWith("get")) {
-						if ("getClass".equals(name) || "getDeclaringClass".equals(name)) {
-							key = "";
-						} else {
-							key = name.substring(3);
-						}
-					} else if (name.startsWith("is")) {
-						key = name.substring(2);
-					}
-					if (key.length() > 0 && Character.isUpperCase(key.charAt(0)) && method.getParameterTypes().length == 0) {
-						if (key.length() == 1) {
-							key = key.toLowerCase();
-						} else if (!Character.isUpperCase(key.charAt(1))) {
-							key = key.substring(0, 1).toLowerCase() + key.substring(1);
-						}
+			Iterator<String> keys = _bean.keys();
 
-						Object result = method.invoke(bean, (Object[]) null);
-						if (result != null) {
-							put(key, result);
-						}
-					}
+			while (keys.hasNext()) {
+				String key = keys.next();
+
+				try {
+					put(key, _bean.get(key));
+				} catch (JSONException e) {
+					// If the value was in the original object it could be in the new without problems
 				}
-			} catch (Exception ignore) {
+			}
+		} else {
+			// If klass is a System class then set includeSuperClass to false.
+			boolean includeSuperClass = klass.getClassLoader() != null;
+
+			Method[] methods = includeSuperClass ? klass.getMethods() : klass.getDeclaredMethods();
+
+			for (int i = 0; i < methods.length; i += 1) {
+				try {
+					Method method = methods[i];
+					if (Modifier.isPublic(method.getModifiers())) {
+						String name = method.getName();
+						String key = "";
+						if (name.startsWith("get")) {
+							if ("getClass".equals(name) || "getDeclaringClass".equals(name)) {
+								key = "";
+							} else {
+								key = name.substring(3);
+							}
+						} else if (name.startsWith("is")) {
+							key = name.substring(2);
+						}
+						if (key.length() > 0 && Character.isUpperCase(key.charAt(0)) && method.getParameterTypes().length == 0) {
+							if (key.length() == 1) {
+								key = key.toLowerCase();
+							} else if (!Character.isUpperCase(key.charAt(1))) {
+								key = key.substring(0, 1).toLowerCase() + key.substring(1);
+							}
+
+							Object result = method.invoke(bean, (Object[]) null);
+							if (result != null) {
+								put(key, result);
+							}
+						}
+					}
+				} catch (Exception ignore) {
+				}
 			}
 		}
 	}

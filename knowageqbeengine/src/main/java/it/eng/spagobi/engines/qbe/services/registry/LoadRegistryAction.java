@@ -20,16 +20,23 @@ package it.eng.spagobi.engines.qbe.services.registry;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
+import org.apache.metamodel.data.DataSet;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.google.gson.Gson;
+
+import gnu.trove.set.hash.TLongHashSet;
 import it.eng.qbe.datasource.IDataSource;
 import it.eng.qbe.model.structure.IModelEntity;
 import it.eng.qbe.model.structure.IModelField;
@@ -59,12 +66,15 @@ import it.eng.spagobi.engines.qbe.services.core.ExecuteQueryAction;
 import it.eng.spagobi.engines.qbe.template.QbeTemplate;
 import it.eng.spagobi.services.common.SsoServiceInterface;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
+import it.eng.spagobi.tools.dataset.common.datastore.DataStoreStats;
 import it.eng.spagobi.tools.dataset.common.datastore.Field;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
+import it.eng.spagobi.tools.dataset.common.datastore.IRecordMatcher;
 import it.eng.spagobi.tools.dataset.common.datastore.Record;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import it.eng.spagobi.tools.dataset.common.query.IQuery;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.engines.EngineConstants;
 import it.eng.spagobi.utilities.engines.SpagoBIEngineServiceException;
@@ -78,8 +88,8 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 public class LoadRegistryAction extends ExecuteQueryAction {
 
 	private static final long serialVersionUID = -642121076148276452L;
-	private final String ID_COLUMN = "ID_COLUMN";
 	private final String REGISTRY_QUERY_ID = "q9";
+	private static final String KEY_COLUMN = "keyColumn";
 
 	private final JSONArray mandatories = new JSONArray();
 	private final JSONArray columnsInfos = new JSONArray();
@@ -96,7 +106,13 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 
 	@Override
 	public Query getQuery() {
-		Query query = buildQuery();
+		Query query = buildQuery(null, null);
+		return query;
+	}
+
+	@Override
+	public Query getQuery(String fieldName, String orderType) {
+		Query query = buildQuery(fieldName, orderType);
 		return query;
 	}
 
@@ -110,10 +126,12 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 	public void service(SourceBean request, SourceBean response) {
 
 		try {
-			if (!request.containsAttribute(START))
+			if (!request.containsAttribute(START)) {
 				request.setAttribute(START, new Integer(0));
-			if (!request.containsAttribute(LIMIT))
+			}
+			if (!request.containsAttribute(LIMIT)) {
 				request.setAttribute(LIMIT, Integer.MAX_VALUE);
+			}
 		} catch (SourceBeanException e) {
 			throw new SpagoBIEngineServiceException(getActionName(), e);
 		}
@@ -166,21 +184,25 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 	public IDataStore executeQuery(Integer start, Integer limit, Query filteredQuery) {
 		IDataStore dataStore = null;
 
+		QbeEngineInstance qbeEngineInstance = (QbeEngineInstance) getAttributeFromSession(
+				EngineConstants.ENGINE_INSTANCE);
 		IStatement statement = getEngineInstance().getDataSource().createStatement(filteredQuery);
 
 		IDataSet dataSet = getActiveQueryAsDataSet(filteredQuery);
 		AbstractQbeDataSet qbeDataSet = (AbstractQbeDataSet) dataSet;
 		// QueryGraph graph = statement.getQuery().getQueryGraph();
 		boolean valid = true; // GraphManager.getGraphValidatorInstance(QbeEngineConfig.getInstance().getGraphValidatorImpl()).isValid(graph,
-								// statement.getQuery().getQueryEntities(getDataSource()));
+								 // statement.getQuery().getQueryEntities(getDataSource()));
 		// logger.debug("QueryGraph valid = " + valid);
 		if (!valid) {
-			throw new SpagoBIEngineServiceException(getActionName(), "error.mesage.description.relationship.not.enough");
+			throw new SpagoBIEngineServiceException(getActionName(),
+					"error.mesage.description.relationship.not.enough");
 		}
 		try {
 			logger.debug("Executing query ...");
 			Integer maxSize = QbeEngineConfig.getInstance().getResultLimit();
-			logger.debug("Configuration setting  [" + "QBE.QBE-SQL-RESULT-LIMIT.value" + "] is equals to [" + (maxSize != null ? maxSize : "none") + "]");
+			logger.debug("Configuration setting  [" + "QBE.QBE-SQL-RESULT-LIMIT.value" + "] is equals to ["
+					+ (maxSize != null ? maxSize : "none") + "]");
 			String jpaQueryStr = statement.getQueryString();
 			logger.debug("Executable query (HQL/JPQL): [" + jpaQueryStr + "]");
 
@@ -189,16 +211,20 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			int startI = start;
 			int limitI = (limit == null ? (maxSize == null ? -1 : maxSize) : limit);
 			int maxI = (maxSize == null ? -1 : maxSize.intValue());
+
 			dataSet.loadData(startI, limitI, maxI);
 			dataStore = dataSet.getDataStore();
+			dataStore = new DecoratedDataStore(dataStore, qbeEngineInstance);
 			changeAlias(dataStore);
-			Assert.assertNotNull(dataStore, "The dataStore returned by loadData method of the class [" + dataSet.getClass().getName() + "] cannot be null");
+			Assert.assertNotNull(dataStore, "The dataStore returned by loadData method of the class ["
+					+ dataSet.getClass().getName() + "] cannot be null");
 		} catch (Exception e) {
 			logger.debug("Query execution aborted because of an internal exceptian");
 			SpagoBIEngineServiceException exception;
 			String message;
 
-			message = "An error occurred in " + getActionName() + " service while executing query: [" + statement.getQueryString() + "]";
+			message = "An error occurred in " + getActionName() + " service while executing query: ["
+					+ statement.getQueryString() + "]";
 			exception = new SpagoBIEngineServiceException(getActionName(), message, e);
 			exception.addHint("Check if the query is properly formed: [" + statement.getQueryString() + "]");
 			exception.addHint("Check connection configuration");
@@ -231,6 +257,23 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		setSummaryInfos(gridDataFeed);
 		setSummaryColorInfos(gridDataFeed);
 		setFieldsDefaultValue(gridDataFeed);
+		setFieldsKeyColumnProperty(gridDataFeed);
+
+		if (dataStore instanceof DecoratedDataStore) {
+			DecoratedDataStore _dataStore = (DecoratedDataStore) dataStore;
+
+			try {
+				Gson gson = new Gson();
+
+				String json = gson.toJson(_dataStore.getRegistryConfiguration());
+
+				JSONObject obj = new JSONObject(json);
+
+				gridDataFeed.put("registryConfig", obj);
+			} catch (JSONException e) {
+				// Yes, it's mute!
+			}
+		}
 
 		logger.debug("OUT");
 
@@ -305,10 +348,11 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		summaryColorCellsArray = new JSONArray();
 		summaryCellsArray = new JSONArray();
 
-		ArrayList<Integer> columnsIndexToMerge = new ArrayList<Integer>();
-		ArrayList<Integer> columnsIndexToEmpty = new ArrayList<Integer>();
-		ArrayList<Integer> columnsIndexToAfter = new ArrayList<Integer>();
-		HashMap<Integer, Object> columnsIndexToSum2Counter = new HashMap<Integer, Object>();
+		ArrayList<Integer> columnsIndexToMerge = new ArrayList<>();
+		ArrayList<Integer> columnsIndexToEmpty = new ArrayList<>();
+		ArrayList<Integer> columnsIndexToAfter = new ArrayList<>();
+		HashMap<Integer, Object> columnsIndexToSum2Counter = new HashMap<>();
+
 
 		// collect columns to merge and columns to sum and colummsn to empty:
 		// -- columns to merge have merge attributes until a columns with summaryFunc is found
@@ -322,43 +366,43 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		for (Iterator iterator = columns.iterator(); iterator.hasNext();) {
 			Column column = (Column) iterator.next();
 
-			if (column.isMerge() && summaryFuncFound == false) {
+			if (column.isMerge() && !summaryFuncFound) {
 				columnsIndexToMerge.add(index);
-			} else if (summaryFuncFound == true && !column.isMeasure() && !measureFound) {
+			} else if (summaryFuncFound && !column.isMeasure() && !measureFound) {
 				columnsIndexToEmpty.add(index);
-			} else if (summaryFuncFound == true && !column.isMeasure() && measureFound) {
+			} else if (summaryFuncFound && !column.isMeasure() && measureFound) {
 				columnsIndexToAfter.add(index);
 			} else if (column.isMeasure()) {
 				columnsIndexToSum2Counter.put(index, 0);
 				measureFound = true;
 			}
-			if (column.getSummaryFunction() != null && column.getSummaryFunction().equals("sum"))
+			if (column.getSummaryFunction() != null && column.getSummaryFunction().equals("sum")) {
 				summaryFuncFound = true;
+			}
 			index++;
 		}
 
 		// Map to store previous merge values on iteration
-		HashMap<Integer, Object> previousMergeValues = new HashMap<Integer, Object>();
+		HashMap<Integer, Object> previousMergeValues = new HashMap<>();
 		for (Iterator iterator = columnsIndexToMerge.iterator(); iterator.hasNext();) {
 			Integer columnIndex = (Integer) iterator.next();
 			previousMergeValues.put(columnIndex, null);
 		}
-
-		TreeMap<Integer, Record> recordsToAddMap = new TreeMap<Integer, Record>();
+		TreeMap<Integer, Record> recordsToAddMap = new TreeMap<>();
 
 		int sumCounter = 0; // add total row only if grouping has more than one member
 
 		// iterate on each store row
 		for (int i = 0; i < dataStore.getRecordsCount(); i++) {
-			IRecord record = dataStore.getRecordAt(i);
+			IRecord currRecord = dataStore.getRecordAt(i);
 
 			// get current values of column to merge
-			HashMap<Integer, Object> currentMergeValues = new HashMap<Integer, Object>();
+			HashMap<Integer, Object> currentMergeValues = new HashMap<>();
 
 			// iterate on each column to merge and store values
-			for (Iterator iterator = columnsIndexToMerge.iterator(); iterator.hasNext();) {
-				Integer columnIndex = (Integer) iterator.next();
-				Object value = record.getFieldAt(columnIndex).getValue();
+			for (Iterator<Integer> iterator = columnsIndexToMerge.iterator(); iterator.hasNext();) {
+				Integer columnIndex = iterator.next();
+				Object value = currRecord.getFieldAt(columnIndex).getValue();
 				currentMergeValues.put(columnIndex, value);
 			}
 
@@ -369,20 +413,18 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			if (isEqual) {
 				sumCounter++;
 
-				for (Iterator iterator = columnsIndexToSum2Counter.keySet().iterator(); iterator.hasNext();) {
-					Integer indexMeasure = (Integer) iterator.next();
-					Object value = record.getFieldAt(indexMeasure).getValue();
+				for (Iterator<Integer> iterator = columnsIndexToSum2Counter.keySet().iterator(); iterator.hasNext();) {
+					Integer indexMeasure = iterator.next();
+					Object value = currRecord.getFieldAt(indexMeasure).getValue();
 
 					// TODO treat the case this is not a number, should keep it to null
 					if (value != null) {
 						// get previous value
-
 						Object result = operateWithNumbers(columnsIndexToSum2Counter.get(indexMeasure), value);
-
 						columnsIndexToSum2Counter.put(indexMeasure, result);
-					} else {
-						columnsIndexToSum2Counter.put(indexMeasure, null);
-					}
+					} /*
+						 * else { columnsIndexToSum2Counter.put(indexMeasure, null); }
+						 */
 
 				}
 			} else {
@@ -390,14 +432,14 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 
 				// add a new record only if sumCounter > 0
 				if (sumCounter > 0) {
-					addTotalRecord(dataStore, i, columnsIndexToMerge, columnsIndexToEmpty, columnsIndexToAfter, columnsIndexToSum2Counter, previousMergeValues,
-							recordsToAddMap);
+					addTotalRecord(dataStore, i, columnsIndexToMerge, columnsIndexToEmpty, columnsIndexToAfter,
+							columnsIndexToSum2Counter, previousMergeValues, recordsToAddMap);
 				}
 
 				// put the counters to actual values
-				for (Iterator iterator = columnsIndexToSum2Counter.keySet().iterator(); iterator.hasNext();) {
-					Integer columnInd = (Integer) iterator.next();
-					Object v = record.getFieldAt(columnInd).getValue();
+				for (Iterator<Integer> iterator = columnsIndexToSum2Counter.keySet().iterator(); iterator.hasNext();) {
+					Integer columnInd = iterator.next();
+					Object v = currRecord.getFieldAt(columnInd).getValue();
 					columnsIndexToSum2Counter.put(columnInd, v);
 				}
 
@@ -410,13 +452,13 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 
 		// add final total if last records were merged
 		if (sumCounter > 0) {
-			addTotalRecord(dataStore, null, columnsIndexToMerge, columnsIndexToEmpty, columnsIndexToAfter, columnsIndexToSum2Counter, previousMergeValues,
-					recordsToAddMap);
+			addTotalRecord(dataStore, null, columnsIndexToMerge, columnsIndexToEmpty, columnsIndexToAfter,
+					columnsIndexToSum2Counter, previousMergeValues, recordsToAddMap);
 		}
 
 		// finally add the record (could not add them while cycling the store)
-		for (Iterator iterator = recordsToAddMap.keySet().iterator(); iterator.hasNext();) {
-			Integer indexR = (Integer) iterator.next();
+		for (Iterator<Integer> iterator = recordsToAddMap.keySet().iterator(); iterator.hasNext();) {
+			Integer indexR = iterator.next();
 			Record rec = recordsToAddMap.get(indexR);
 			if (indexR == -1) {
 				dataStore.appendRecord(rec);
@@ -428,8 +470,9 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		logger.debug("OUT");
 	}
 
-	private void addTotalRecord(IDataStore dataStore, Integer currentIndexRow, ArrayList<Integer> columnsIndexToMerge, ArrayList<Integer> columnsIndexToEmpty,
-			ArrayList<Integer> columnsIndexToAfter, HashMap<Integer, Object> columnsIndexToSum2Counter, HashMap<Integer, Object> previousMergeValues,
+	private void addTotalRecord(IDataStore dataStore, Integer currentIndexRow, ArrayList<Integer> columnsIndexToMerge,
+			ArrayList<Integer> columnsIndexToEmpty, ArrayList<Integer> columnsIndexToAfter,
+			HashMap<Integer, Object> columnsIndexToSum2Counter, HashMap<Integer, Object> previousMergeValues,
 			TreeMap<Integer, Record> recordsToAddMap) {
 		logger.debug("IN");
 		Record recordNew = new Record();
@@ -446,8 +489,8 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		summaryRecordsAddedCounter++;
 
 		// insert fields for each column to merge
-		for (Iterator iterator = columnsIndexToMerge.iterator(); iterator.hasNext();) {
-			Integer columnIndex = (Integer) iterator.next();
+		for (Iterator<Integer> iterator = columnsIndexToMerge.iterator(); iterator.hasNext();) {
+			Integer columnIndex = iterator.next();
 			Field field = new Field();
 			Object valueToPut = previousMergeValues.get(columnIndex);
 			field.setValue(valueToPut);
@@ -463,7 +506,7 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			setNewSummaryColorCell(dataStore, index, columnIndex);
 		}
 		// insert field for each column to after but do not color
-		for (Iterator iterator = columnsIndexToEmpty.iterator(); iterator.hasNext();) {
+		for (Iterator iterator = columnsIndexToAfter.iterator(); iterator.hasNext();) {
 			Integer columnIndex = (Integer) iterator.next();
 			Field field = new Field();
 			field.setValue("      ");
@@ -483,6 +526,7 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			setNewSummaryCell(dataStore, index, columnIndex);
 
 		}
+
 
 		if (currentIndexRow != null) {
 			// dataStore.insertRecord(currentIndex, recordNew);
@@ -566,14 +610,42 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		try {
 			JSONArray fieldsArray = gridDataFeed.getJSONObject("metaData").getJSONArray("fields");
 			for (int i = 0; i < fieldsArray.length(); i++) {
-				if (fieldsArray.get(i).equals("recNo"))
+				if (fieldsArray.get(i).equals("recNo")) {
 					continue;
+				}
 				JSONObject field = (JSONObject) fieldsArray.get(i);
 				fieldHeader = field.getString("header");
 				field.put("defaultValue", getDefaultValueForColumn(fieldHeader));
 			}
 		} catch (JSONException e) {
 			logger.error("Error during adding defaultValue attribute for column " + fieldHeader);
+		}
+
+	}
+
+	private void setFieldsKeyColumnProperty(JSONObject gridDataFeed) {
+
+		QbeEngineInstance qbeEngineInstance = (QbeEngineInstance) getAttributeFromSession(
+				EngineConstants.ENGINE_INSTANCE);
+		Assert.assertNotNull(qbeEngineInstance, "It's not possible to execute " + this.getActionName()
+				+ " service before having properly created an instance of EngineInstance class");
+		RegistryConfiguration registryConf = qbeEngineInstance.getRegistryConfiguration();
+		IDataSource genericDatasource = qbeEngineInstance.getDataSource();
+		String keyColumn = genericDatasource.getPersistenceManager().getKeyColumn(registryConf);
+
+		String fieldHeader = null;
+		try {
+			JSONArray fieldsArray = gridDataFeed.getJSONObject("metaData").getJSONArray("fields");
+			for (int i = 0; i < fieldsArray.length(); i++) {
+				if (fieldsArray.get(i).equals("recNo")) {
+					continue;
+				}
+				JSONObject field = (JSONObject) fieldsArray.get(i);
+				fieldHeader = field.getString("header");
+				field.put("keyColumn", fieldHeader.equals(keyColumn));
+			}
+		} catch (JSONException e) {
+			logger.error("Error during adding keyColumn attribute for column " + fieldHeader);
 		}
 
 	}
@@ -622,7 +694,8 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			obj.put("column", column);
 			summaryColorCellsArray.put(obj);
 		} catch (JSONException e) {
-			logger.error("Error while tracing summary cell in row " + row + " and column " + column + ": " + e.getMessage());
+			logger.error(
+					"Error while tracing summary cell in row " + row + " and column " + column + ": " + e.getMessage());
 		}
 	}
 
@@ -639,7 +712,8 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			obj.put("column", column);
 			summaryCellsArray.put(obj);
 		} catch (JSONException e) {
-			logger.error("Error while tracing summary cell in row " + row + " and column " + column + ": " + e.getMessage());
+			logger.error(
+					"Error while tracing summary cell in row " + row + " and column " + column + ": " + e.getMessage());
 		}
 	}
 
@@ -654,7 +728,7 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			infoObj.putOpt("size", size);
 
 			infoObj.putOpt("unsigned", unsigned);
-			if (size != null || unsigned != false) {
+			if (size != null || unsigned) {
 				columnsInfos.put(infoObj);
 			}
 
@@ -663,7 +737,7 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		}
 	}
 
-	private Query buildQuery() {
+	private Query buildQuery(String fieldName, String orderType) {
 		logger.debug("IN");
 		Query query = null;
 		try {
@@ -686,7 +760,7 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			columnMaxSize = registryConfig.getColumnsMaxSize();
 			Iterator<Column> it = columns.iterator();
 
-			Map<String, String> fieldNameIdMap = new HashMap<String, String>();
+			Map<String, String> fieldNameIdMap = new HashMap<>();
 
 			while (it.hasNext()) {
 				Column column = it.next();
@@ -701,12 +775,17 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 						name = field.getName();
 					}
 
-					String sorter = column.getSorter() != null && (column.getSorter().equalsIgnoreCase("ASC") || column.getSorter().equalsIgnoreCase("DESC"))
-							? column.getSorter().toUpperCase()
-							: null;
+					String sorter = null;
+					if (fieldName != null && orderType != null) {
+						sorter = name.equals(fieldName) ? orderType.toUpperCase() : null;
+					} else {
+						sorter = column.getSorter() != null && (column.getSorter().equalsIgnoreCase("ASC")
+								|| column.getSorter().equalsIgnoreCase("DESC")) ? column.getSorter().toUpperCase()
+										: null;
+					}
 
-					query.addSelectFiled(field.getUniqueName(), "NONE", field.getName(), true, true, false, sorter, field.getPropertyAsString("format"), null,
-							field.getJavaClass());
+					query.addSelectFiled(field.getUniqueName(), "NONE", field.getName(), true, true, false, sorter,
+							field.getPropertyAsString("format"), null, field.getJavaClass());
 					fieldNameIdMap.put(column.getField(), field.getUniqueName());
 				}
 			}
@@ -715,7 +794,7 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 
 			List<RegistryConfiguration.Filter> filters = registryConfig.getFilters();
 			int i = 0;
-			ArrayList<ExpressionNode> expressionNodes = new ArrayList<ExpressionNode>();
+			ArrayList<ExpressionNode> expressionNodes = new ArrayList<>();
 			for (Iterator iterator = filters.iterator(); iterator.hasNext();) {
 				Filter filter = (Filter) iterator.next();
 				addFilter(i, query, env, fieldNameIdMap, filter, expressionNodes);
@@ -736,7 +815,8 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		return query;
 	}
 
-	private void addSort(int i, Query query, Map env, Map<String, String> fieldNameIdMap, ArrayList<ExpressionNode> expressionNodes) {
+	private void addSort(int i, Query query, Map env, Map<String, String> fieldNameIdMap,
+			ArrayList<ExpressionNode> expressionNodes) {
 		logger.debug("IN");
 
 		// if(requestContainsAttribute("sort")){
@@ -753,7 +833,8 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 		logger.debug("OUT");
 	}
 
-	private void addFilter(int i, Query query, Map env, Map<String, String> fieldNameIdMap, Filter filter, ArrayList<ExpressionNode> expressionNodes) {
+	private void addFilter(int i, Query query, Map env, Map<String, String> fieldNameIdMap, Filter filter,
+			ArrayList<ExpressionNode> expressionNodes) {
 		logger.debug("IN");
 
 		// in case it is a driver
@@ -771,18 +852,22 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 
 				String[] valuesArr = value.toString().split(",", -1);
 
-				logger.debug("Set filter from analytical driver " + driverName + ": " + filter.getField() + "=" + value);
+				logger.debug(
+						"Set filter from analytical driver " + driverName + ": " + filter.getField() + "=" + value);
 
 				String fieldId = fieldNameIdMap.get(fieldName);
 				String[] fields = new String[] { fieldId };
-				WhereField.Operand left = new WhereField.Operand(fields, "driverName", AbstractStatement.OPERAND_TYPE_SIMPLE_FIELD, null, null);
+				WhereField.Operand left = new WhereField.Operand(fields, "driverName",
+						AbstractStatement.OPERAND_TYPE_SIMPLE_FIELD, null, null);
 
-				WhereField.Operand right = new WhereField.Operand(valuesArr, "value", AbstractStatement.OPERAND_TYPE_STATIC, null, null);
+				WhereField.Operand right = new WhereField.Operand(valuesArr, "value",
+						AbstractStatement.OPERAND_TYPE_STATIC, null, null);
 
 				if (valuesArr.length > 1) {
 					query.addWhereField("Driver_" + i, driverName, false, left, CriteriaConstants.IN, right, "AND");
 				} else {
-					query.addWhereField("Driver_" + i, driverName, false, left, CriteriaConstants.EQUALS_TO, right, "AND");
+					query.addWhereField("Driver_" + i, driverName, false, left, CriteriaConstants.EQUALS_TO, right,
+							"AND");
 				}
 
 				ExpressionNode newFilterNode = new ExpressionNode("NODE_CONST", "$F{" + "Driver_" + i + "}");
@@ -801,21 +886,30 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 				value = getAttribute(filter.getField()).toString();
 			}
 			if (value != null && !value.equalsIgnoreCase("")) {
+
+				if (value.contains("?")) {
+					throw new SpagoBIEngineServiceException(getActionName(),
+							"Character '?' not allowed in query filter");
+				}
 				logger.debug("Set filter " + filter.getField() + "=" + value);
 
 				String fieldId = fieldNameIdMap.get(filter.getField());
 				String[] fields = new String[] { fieldId };
 				String[] values = new String[] { value };
 
-				WhereField.Operand left = new WhereField.Operand(fields, "filterName", AbstractStatement.OPERAND_TYPE_SIMPLE_FIELD, null, null);
+				WhereField.Operand left = new WhereField.Operand(fields, "filterName",
+						AbstractStatement.OPERAND_TYPE_SIMPLE_FIELD, null, null);
 
-				WhereField.Operand right = new WhereField.Operand(values, "value", AbstractStatement.OPERAND_TYPE_STATIC, null, null);
+				WhereField.Operand right = new WhereField.Operand(values, "value",
+						AbstractStatement.OPERAND_TYPE_STATIC, null, null);
 
 				// if filter type is manual use it as string starting, else as equals
 				if (filter.getPresentationType().equals(RegistryConfigurationXMLParser.PRESENTATION_TYPE_COMBO)) {
-					query.addWhereField("Filter_" + i, filter.getField(), false, left, CriteriaConstants.EQUALS_TO, right, "AND");
+					query.addWhereField("Filter_" + i, filter.getField(), false, left, CriteriaConstants.EQUALS_TO,
+							right, "AND");
 				} else {
-					query.addWhereField("Filter_" + i, filter.getField(), false, left, CriteriaConstants.STARTS_WITH, right, "AND");
+					query.addWhereField("Filter_" + i, filter.getField(), false, left, CriteriaConstants.STARTS_WITH,
+							right, "AND");
 				}
 
 				ExpressionNode newFilterNode = new ExpressionNode("NODE_CONST", "$F{" + "Filter_" + i + "}");
@@ -832,13 +926,14 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 
 			// In order to recover subentities the new way if DEFAULT_MAX_RECURSION_LEVEL is set to zero
 			/*
-			 * QbeEngineInstance engineInstance = getEngineInstance(); QbeTemplate template = engineInstance.getTemplate(); // takes the only datamart's name
-			 * configured String modelName = (String) template.getDatamartNames().get(0); IModelStructure md = getDataSource().getModelStructure(); IModelEntity
-			 * subEntity = md.getEntity(column.getSubEntity());
+			 * QbeEngineInstance engineInstance = getEngineInstance(); QbeTemplate template = engineInstance.getTemplate(); // takes the only datamart's name configured
+			 * String modelName = (String) template.getDatamartNames().get(0); IModelStructure md = getDataSource().getModelStructure(); IModelEntity subEntity =
+			 * md.getEntity(column.getSubEntity());
 			 */
 
 			String entityUName = entity.getUniqueName();
-			String subEntityKey = entityUName.substring(0, entityUName.lastIndexOf("::")) + "::" + column.getSubEntity() + "(" + column.getForeignKey() + ")";
+			String subEntityKey = entityUName.substring(0, entityUName.lastIndexOf("::")) + "::" + column.getSubEntity()
+					+ "(" + column.getForeignKey() + ")";
 			IModelEntity subEntity = entity.getSubEntity(subEntityKey);
 			if (subEntity == null) {
 				throw new SpagoBIEngineServiceException(getActionName(),
@@ -872,11 +967,13 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			QbeTemplate template = engineInstance.getTemplate();
 			if (template.isComposite()) { // composite Qbe is not supported
 				logger.error("Template is composite. This is not supported by the Registry engine");
-				throw new SpagoBIEngineServiceException(getActionName(), "Template is composite. This is not supported by the Registry engine");
+				throw new SpagoBIEngineServiceException(getActionName(),
+						"Template is composite. This is not supported by the Registry engine");
 			}
 			// takes the only datamart's name configured
 			String modelName = (String) template.getDatamartNames().get(0);
-			RegistryConfiguration registryConfig = (RegistryConfiguration) template.getProperty("registryConfiguration");
+			RegistryConfiguration registryConfig = (RegistryConfiguration) template
+					.getProperty("registryConfiguration");
 			String entityName = registryConfig.getEntity();
 
 			int index = entityName.lastIndexOf(".");
@@ -902,10 +999,208 @@ public class LoadRegistryAction extends ExecuteQueryAction {
 			auditlogger.info("[" + userProfile.getUserId() + "]:: SQL: " + ((JPQLDataSet) dataset).getSQLQuery(true));
 		} else if (dataset instanceof HQLDataSet) {
 			auditlogger.info("[" + userProfile.getUserId() + "]:: HQL: " + dataset.getStatement().getQueryString());
-			auditlogger.info("[" + userProfile.getUserId() + "]:: SQL: " + ((HQLDataSet) dataset).getSQLQuery(true));
+			auditlogger.info("[" + userProfile.getUserId() + "]:: SQL: " + dataset.getSQLQuery(true));
 		} else {
 			auditlogger.info("[" + userProfile.getUserId() + "]:: SQL: " + dataset.getStatement().getSqlQueryString());
 		}
+	}
+
+}
+
+class DecoratedDataStore implements IDataStore {
+
+	private final IDataStore dataStore;
+
+	private final QbeTemplate template;
+
+	private final RegistryConfiguration registryConfiguration;
+
+	public DecoratedDataStore(IDataStore dataStore, QbeEngineInstance qbeEngineInstance) {
+		this.dataStore = dataStore;
+		this.template = qbeEngineInstance.getTemplate();
+
+		if (template.hasRegistryConfiguration()) {
+			registryConfiguration = qbeEngineInstance.getRegistryConfiguration();
+		} else {
+			throw new RuntimeException("We need a QBE Engine with a registry configuration here");
+		}
+
+	}
+
+	@Override
+	public IMetaData getMetaData() {
+		return dataStore.getMetaData();
+	}
+
+	@Override
+	public void setMetaData(IMetaData metaData) {
+		dataStore.setMetaData(metaData);
+	}
+
+	@Override
+	public Iterator iterator() {
+		return dataStore.iterator();
+	}
+
+	@Override
+	public boolean isEmpty() {
+		return dataStore.isEmpty();
+	}
+
+	@Override
+	public long getRecordsCount() {
+		return dataStore.getRecordsCount();
+	}
+
+	@Override
+	public List getRecords() {
+		return dataStore.getRecords();
+	}
+
+	@Override
+	public void setRecords(List records) {
+		dataStore.setRecords(records);
+	}
+
+	@Override
+	public IRecord getRecordAt(int i) {
+		return dataStore.getRecordAt(i);
+	}
+
+	@Override
+	public IRecord getRecordByID(Object value) {
+		return dataStore.getRecordByID(value);
+	}
+
+	@Override
+	public List<IRecord> findRecords(int fieldIndex, Object fieldValue) {
+		return dataStore.findRecords(fieldIndex, fieldValue);
+	}
+
+	@Override
+	public List<IRecord> findRecords(List fieldIndexes, List fieldValues) {
+		return dataStore.findRecords(fieldIndexes, fieldValues);
+	}
+
+	@Override
+	public List<IRecord> findRecords(IRecordMatcher... matcher) {
+		return dataStore.findRecords(matcher);
+	}
+
+	@Override
+	public List getFieldValues(int fieldIndex) {
+		return dataStore.getFieldValues(fieldIndex);
+	}
+
+	@Override
+	public Set getFieldDistinctValues(int fieldIndex) {
+		return dataStore.getFieldDistinctValues(fieldIndex);
+	}
+
+	@Override
+	public Set<String> getFieldDistinctValuesAsString(int fieldIndex) {
+		return dataStore.getFieldDistinctValuesAsString(fieldIndex);
+	}
+
+	@Override
+	public Map<Integer, Set<Object>> getFieldsDistinctValues(List<Integer> fieldIndexes) {
+		return dataStore.getFieldsDistinctValues(fieldIndexes);
+	}
+
+	@Override
+	public Map<Integer, Set<String>> getFieldsDistinctValuesAsString(List<Integer> fieldIndexes) {
+		return dataStore.getFieldsDistinctValuesAsString(fieldIndexes);
+	}
+
+	@Override
+	public Map<String, TLongHashSet> getFieldsDistinctValuesAsLongHash(List<Integer> fieldIndexes) {
+		return dataStore.getFieldsDistinctValuesAsLongHash(fieldIndexes);
+	}
+
+	@Override
+	public void sortRecords(int fieldIndex) {
+		dataStore.sortRecords(fieldIndex);
+	}
+
+	@Override
+	public void sortRecords(int fieldIndex, Comparator filedComparator) {
+		dataStore.sortRecords(fieldIndex, filedComparator);
+	}
+
+	@Override
+	public void sortRecords(Comparator recordComparator) {
+		dataStore.sortRecords(recordComparator);
+	}
+
+	@Override
+	public void appendRecord(IRecord r) {
+		dataStore.appendRecord(r);
+	}
+
+	@Override
+	public void prependRecord(IRecord recordToPrepend) {
+		dataStore.prependRecord(recordToPrepend);
+	}
+
+	@Override
+	public void insertRecord(int recordIndex, IRecord recordToInsert) {
+		dataStore.insertRecord(recordIndex, recordToInsert);
+	}
+
+	@Override
+	public IDataStore aggregateAndFilterRecords(String sqlQuery, int offset, int fetchSize, String dateFormatJava) {
+		return dataStore.aggregateAndFilterRecords(sqlQuery, offset, fetchSize, dateFormatJava);
+	}
+
+	@Override
+	public IDataStore aggregateAndFilterRecords(String sqlQuery, int offset, int fetchSize, int maxRowCount,
+			String dateFormatJava) {
+		return dataStore.aggregateAndFilterRecords(sqlQuery, offset, fetchSize, maxRowCount, dateFormatJava);
+	}
+
+	@Override
+	public IDataStore aggregateAndFilterRecords(String sqlQuery, List<Object> values, int offset, int fetchSize,
+			int maxRowCount, String dateFormatJava) {
+		return dataStore.aggregateAndFilterRecords(sqlQuery, values, offset, fetchSize, maxRowCount, dateFormatJava);
+	}
+
+	@Override
+	public IDataStore aggregateAndFilterRecords(IQuery query, String dateFormatJava) {
+		return dataStore.aggregateAndFilterRecords(query, dateFormatJava);
+	}
+
+	@Override
+	public DataSet getMetaModelResultSet(String sqlQuery) {
+		return dataStore.getMetaModelResultSet(sqlQuery);
+	}
+
+	@Override
+	public String toXml() {
+		return dataStore.toXml();
+	}
+
+	@Override
+	public Date getCacheDate() {
+		return dataStore.getCacheDate();
+	}
+
+	@Override
+	public void setCacheDate(Date cacheDate) {
+		dataStore.setCacheDate(cacheDate);
+	}
+
+	@Override
+	public void adjustMetadata(IMetaData dataSetMetadata) {
+		dataStore.adjustMetadata(dataSetMetadata);
+	}
+
+	public RegistryConfiguration getRegistryConfiguration() {
+		return registryConfiguration;
+	}
+
+	@Override
+	public DataStoreStats getStats() {
+		return dataStore.getStats();
 	}
 
 }

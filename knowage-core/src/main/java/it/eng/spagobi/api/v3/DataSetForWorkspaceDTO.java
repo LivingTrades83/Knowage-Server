@@ -25,23 +25,24 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.node.ContainerNode;
 
+import it.eng.knowage.parameter.ParameterManagerFactory;
 import it.eng.spago.base.SourceBean;
 import it.eng.spago.base.SourceBeanException;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.serializer.DataSetMetadataJSONSerializer;
 import it.eng.spagobi.tools.catalogue.bo.MetaModel;
 import it.eng.spagobi.tools.dataset.bo.DataSetParametersList;
+import it.eng.spagobi.tools.dataset.constants.DataSetConstants;
 import it.eng.spagobi.tools.dataset.metadata.SbiDataSet;
 import it.eng.spagobi.tools.tag.SbiTag;
 
-class DataSetForWorkspaceDTO extends DataSetMainDTO {
+class DataSetForWorkspaceDTO extends AbstractDataSetDTO {
 
 	private static final DataSetMetadataJSONSerializer metaSerializer = new DataSetMetadataJSONSerializer();
 	private final List<DataSetParameterDTO> params = new ArrayList<>();
 	private final List<DataSetParameterDTO> drivers = new ArrayList<>();
-	private ContainerNode<?> meta;
+	private JSONObject meta;
 
 	public DataSetForWorkspaceDTO(SbiDataSet dataset) {
 		super(dataset);
@@ -67,7 +68,14 @@ class DataSetForWorkspaceDTO extends DataSetMainDTO {
 					String defaultValue = (String) row.getAttribute(DataSetParametersList.DEFAULT_VALUE_XML);
 					boolean multiValue = "true".equalsIgnoreCase((String) row.getAttribute("MULTIVALUE"));
 
-					params.add(new DataSetParameterDTO(name, type, defaultValue, multiValue));
+					try {
+						Object defaultValueAsObject = ParameterManagerFactory.getInstance().defaultManager().fromBeToFe(type, defaultValue, multiValue);
+
+						params.add(new DataSetParameterDTO(name, type, defaultValueAsObject, multiValue));
+					} catch (JSONException e) {
+						String msg = String.format("Cannot parse default value %s for parameter %s of type %s", defaultValue, name, type);
+						throw new SourceBeanException(msg);
+					}
 				}
 			}
 		}
@@ -75,7 +83,8 @@ class DataSetForWorkspaceDTO extends DataSetMainDTO {
 
 	private void initMeta() throws SourceBeanException, JSONException {
 		String metaAsString = dataset.getDsMetadata();
-		meta = metaSerializer.serializeToJson(metaAsString).getWrappedObject();
+		if (metaAsString != null)
+			meta = (JSONObject) metaSerializer.serializeToJson(metaAsString);
 	}
 
 	private void initDrivers() throws JSONException {
@@ -132,8 +141,21 @@ class DataSetForWorkspaceDTO extends DataSetMainDTO {
 		return params;
 	}
 
-	public ContainerNode<?> getMeta() throws SourceBeanException, JSONException {
+	public JSONObject getMeta() throws SourceBeanException, JSONException {
 		return meta;
+	}
+
+	public boolean getIsPersisted() {
+		return dataset.isPersisted();
+	}
+
+	public String getSourceDatasetLabel() throws JSONException {
+		String sourceDatasetLabel = null;
+		if (dataset.getType().equals(DataSetConstants.DS_DERIVED)) {
+			JSONObject dsJsonConfig = new JSONObject(dataset.getConfiguration());
+			sourceDatasetLabel = dsJsonConfig.getString(DataSetConstants.SOURCE_DS_LABEL);
+		}
+		return sourceDatasetLabel;
 	}
 
 }

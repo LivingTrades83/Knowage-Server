@@ -17,20 +17,17 @@
  */
 package it.eng.spagobi.engines.whatif.api.page;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.core.Context;
 
 import org.apache.log4j.Logger;
-import org.json.JSONException;
+import org.jboss.resteasy.plugins.providers.html.View;
 import org.json.JSONObject;
 
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
@@ -41,61 +38,37 @@ import it.eng.spagobi.utilities.engines.rest.AbstractRestService;
 @ManageAuthorization
 public class PageResource extends AbstractRestService {
 
-	static private Map<String, JSONObject> pages;
-	static private Map<String, String> urls;
-	@Context
-	HttpServletRequest request;
-	@Context
-	HttpServletResponse response;
+	private static Map<String, JSONObject> pages;
+	private static Map<String, String> urls;
 
-	static private Logger logger = Logger.getLogger(PageResource.class);
+	private static Logger logger = Logger.getLogger(PageResource.class);
 
 	/**
 	 * TODO Tutte le pagine dell'engine
 	 *
 	 */
-	static {
-		pages = new HashMap<String, JSONObject>();
-		urls = new HashMap<String, String>();
-
-		try {
-			pages.put("execute", new JSONObject("{name: 'execute', description: 'the Olap execution page', parameters: []}"));
-			urls.put("execute", "/WEB-INF/jsp/whatIf2.jsp");
-
-			pages.put("edit", new JSONObject("{name: 'execute', description: 'the Whatif execution page', parameters: []}"));
-			urls.put("edit", "/WEB-INF/jsp/edit.jsp");
-
-		} catch (JSONException t) {
-			logger.error(t);
-		}
-	}
-
 	@GET
 	@Path("/{pagename}")
 	@Produces("text/html")
-	public void openPageGet(@PathParam("pagename") String pageName) {
-		openPage(pageName);
+	public View openPageGet(@PathParam("pagename") String pageName) {
+		return openPage(pageName);
 	}
 
 	@POST
 	@Path("/{pagename}")
 	@Produces("text/html")
-	public void openPagePost(@PathParam("pagename") String pageName) {
-		openPage(pageName);
+	public View openPagePost(@PathParam("pagename") String pageName) {
+		return openPage(pageName);
 	}
 
 	/**
 	 * @param pageName
+	 * @return
 	 */
-	private void openPage(String pageName) {
+	private View openPage(String pageName) {
 		String dispatchUrl = urls.get(pageName);
 		try {
-			// To deploy into JBOSSEAP64 is needed a StandardWrapper, instead of
-			// RestEasy Wrapper
-			// HttpServletRequest request = ResteasyProviderFactory.getContextData(HttpServletRequest.class);
-			// HttpServletResponse response = ResteasyProviderFactory.getContextData(HttpServletResponse.class);
-
-			request.getRequestDispatcher(dispatchUrl).forward(request, response);
+			return new View(dispatchUrl);
 		} catch (Exception e) {
 			throw SpagoBIEngineServiceExceptionHandler.getInstance().getWrappedException("", getEngineInstance(), e);
 		} finally {

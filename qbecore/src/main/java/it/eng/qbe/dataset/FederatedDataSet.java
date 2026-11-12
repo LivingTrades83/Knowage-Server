@@ -58,10 +58,10 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class FederatedDataSet extends QbeDataSet {
 
-	public static String DS_TYPE = "SbiFederatedDataSet";
-	public static final String QBE_DATASET_CACHE_MAP = "datasetCacheMap";
+	private static final Logger LOGGER = Logger.getLogger(FederatedDataSet.class);
 
-	private static transient Logger logger = Logger.getLogger(FederatedDataSet.class);
+	public static final String DS_TYPE = "SbiFederatedDataSet";
+	public static final String QBE_DATASET_CACHE_MAP = "datasetCacheMap";
 
 	private FederationDefinition federation;
 	private String userId = "";
@@ -81,13 +81,24 @@ public class FederatedDataSet extends QbeDataSet {
 		// load the map dataset->cached table name
 		JSONObject jsonConf = ObjectUtils.toJSONObject(dataSetConfig.getConfiguration());
 		try {
-			this.setDataset2CacheTableName(
-					(jsonConf.opt(FederatedDataSet.QBE_DATASET_CACHE_MAP) != null) ? (JSONObject) jsonConf.get(FederatedDataSet.QBE_DATASET_CACHE_MAP)
-							: new JSONObject());
+			this.setDataset2CacheTableName((jsonConf.opt(FederatedDataSet.QBE_DATASET_CACHE_MAP) != null)
+					? (JSONObject) jsonConf.get(FederatedDataSet.QBE_DATASET_CACHE_MAP)
+					: new JSONObject());
 		} catch (JSONException e) {
-			logger.error("Error loading the map dataset->cached dataset table name", e);
+			LOGGER.error("Error loading the map dataset->cached dataset table name", e);
 			throw new SpagoBIEngineRuntimeException("Error loading the map dataset->cached dataset table name", e);
 		}
+	}
+
+	@Override
+	protected void init() {
+		/*
+		 * Federated datasets rely on cached dataset. Those cached datasets are refreshed very often during creation and execution of a federated dataset. So we force a
+		 * complete recreation of the internal dataset of the federation because it contains a lot of information related to the cached datasets and their table name in
+		 * cache.
+		 */
+		ds = null;
+		super.init();
 	}
 
 	@Override
@@ -135,7 +146,7 @@ public class FederatedDataSet extends QbeDataSet {
 	}
 
 	public void setDependentDataSets(List<IDataSet> sourceDatasets) {
-		Set<IDataSet> sourceDatasetsSet = new HashSet<IDataSet>();
+		Set<IDataSet> sourceDatasetsSet = new HashSet<>();
 		for (Iterator iterator = sourceDatasets.iterator(); iterator.hasNext();) {
 			IDataSet iDataSet = (IDataSet) iterator.next();
 			sourceDatasetsSet.add(iDataSet);
@@ -144,7 +155,7 @@ public class FederatedDataSet extends QbeDataSet {
 	}
 
 	public void setDependentDataSets(SpagoBiDataSet[] sourceDatasets, HttpSession session) {
-		Set<IDataSet> sourceDatasetsSet = new HashSet<IDataSet>();
+		Set<IDataSet> sourceDatasetsSet = new HashSet<>();
 		for (int i = 0; i < sourceDatasets.length; i++) {
 			IDataSet iDataSet = DataSetFactory.getDataSet(sourceDatasets[i], getUserIn(), session);
 			sourceDatasetsSet.add(iDataSet);
@@ -155,13 +166,13 @@ public class FederatedDataSet extends QbeDataSet {
 	@Override
 	public it.eng.qbe.datasource.IDataSource getQbeDataSource() {
 
-		Map<String, Object> dataSourceProperties = new HashMap<String, Object>();
+		Map<String, Object> dataSourceProperties = new HashMap<>();
 
 		dataSourceProperties.put("datasource", dataSource);
 		dataSourceProperties.put("dblinkMap", new HashMap());
 
 		if (this.getSourceDataset() != null) {
-			List<IDataSet> dataSets = new ArrayList<IDataSet>();
+			List<IDataSet> dataSets = new ArrayList<>();
 			dataSets.add(this.getSourceDataset());
 			dataSourceProperties.put(EngineConstants.ENV_DATASETS, dataSets);
 		}
@@ -180,12 +191,14 @@ public class FederatedDataSet extends QbeDataSet {
 	}
 
 	@Override
-	public it.eng.qbe.datasource.IDataSource getDataSourceFromDataSet(Map<String, Object> dataSourceProperties, boolean useCache) {
+	public it.eng.qbe.datasource.IDataSource getDataSourceFromDataSet(Map<String, Object> dataSourceProperties,
+			boolean useCache) {
 
 		it.eng.qbe.datasource.IDataSource dataSource;
-		List<String> datasetNames = new ArrayList<String>();
+		List<String> datasetNames = new ArrayList<>();
 
-		CompositeDataSourceConfiguration compositeConfiguration = new CompositeDataSourceConfiguration(DataSetDataSource.EMPTY_MODEL_NAME);
+		CompositeDataSourceConfiguration compositeConfiguration = new CompositeDataSourceConfiguration(
+				DataSetDataSource.EMPTY_MODEL_NAME);
 		Iterator<String> it = dataSourceProperties.keySet().iterator();
 
 		while (it.hasNext()) {
@@ -205,7 +218,7 @@ public class FederatedDataSet extends QbeDataSet {
 		try {
 			datasetLabels = FederationUtils.createDatasetsOnCache(federation.getDataSetRelationKeysMap(), userId);
 		} catch (JSONException e1) {
-			logger.error("Error caching the datasets", e1);
+			LOGGER.error("Error caching the datasets", e1);
 			throw new SpagoBIRuntimeException("Error caching the datasets", e1);
 		}
 		setDataset2CacheTableName(datasetLabels);
@@ -215,14 +228,18 @@ public class FederatedDataSet extends QbeDataSet {
 			IDataSet dataSets = (IDataSet) iterator.next();
 			IDataSet cachedDataSet = null;
 			try {
-				cachedDataSet = FederationUtils.createDatasetOnCache(getDataset2CacheTableName().getString(dataSets.getLabel()), dataSets,
+				cachedDataSet = FederationUtils.createDatasetOnCache(
+						getDataset2CacheTableName().getString(dataSets.getLabel()), dataSets,
 						getDataSourceForReading());
 			} catch (JSONException e) {
-				logger.error("Error getting the name of the cached table linked to the dataset " + dataSets.getLabel(), e);
-				throw new SpagoBIRuntimeException("Error getting the name of the cached table linked to the dataset " + dataSets.getLabel(), e);
+				LOGGER.error("Error getting the name of the cached table linked to the dataset " + dataSets.getLabel(),
+						e);
+				throw new SpagoBIRuntimeException(
+						"Error getting the name of the cached table linked to the dataset " + dataSets.getLabel(), e);
 			}
 
-			DataSetDataSourceConfiguration c = new DataSetDataSourceConfiguration((cachedDataSet).getLabel(), cachedDataSet);
+			DataSetDataSourceConfiguration c = new DataSetDataSourceConfiguration((cachedDataSet).getLabel(),
+					cachedDataSet);
 			compositeConfiguration.addSubConfiguration(c);
 			// compositeConfiguration.loadDataSourceProperties().put(DataSetDataSource.DATA_SOURCE_TYPE, DS_TYPE);
 		}
@@ -258,7 +275,8 @@ public class FederatedDataSet extends QbeDataSet {
 
 	@Override
 	public DataIterator iterator() {
-		throw new UnsupportedOperationException("This operation has to be overriden by subclasses in order to be used.");
+		throw new UnsupportedOperationException(
+				"This operation has to be overriden by subclasses in order to be used.");
 	}
 
 	@Override

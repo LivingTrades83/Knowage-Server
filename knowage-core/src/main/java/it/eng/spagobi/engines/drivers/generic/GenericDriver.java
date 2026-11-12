@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
@@ -29,25 +28,16 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.simple.JSONArray;
 
-import it.eng.spago.base.SourceBean;
-import it.eng.spago.configuration.ConfigSingleton;
-import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.analiticalmodel.document.bo.ObjTemplate;
 import it.eng.spagobi.analiticalmodel.document.bo.OutputParameter;
 import it.eng.spagobi.analiticalmodel.document.bo.SubObject;
-import it.eng.spagobi.analiticalmodel.functionalitytree.bo.LowFunctionality;
-import it.eng.spagobi.analiticalmodel.functionalitytree.dao.ILowFunctionalityDAO;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.BIObjectParameter;
 import it.eng.spagobi.commons.SingletonConfig;
-import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.ParameterValuesEncoder;
-import it.eng.spagobi.commons.utilities.PortletUtilities;
 import it.eng.spagobi.commons.utilities.UserUtilities;
-import it.eng.spagobi.commons.utilities.messages.MessageBuilder;
-import it.eng.spagobi.community.mapping.SbiCommunity;
 import it.eng.spagobi.engines.drivers.AbstractEngineDriver;
 import it.eng.spagobi.engines.drivers.DefaultOutputParameter;
 import it.eng.spagobi.engines.drivers.EngineURL;
@@ -60,7 +50,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class GenericDriver extends AbstractEngineDriver implements IEngineDriver {
 
-	private final static String PARAM_NEW_SESSION = "NEW_SESSION";
+	private static final String PARAM_NEW_SESSION = "NEW_SESSION";
 	public static final String DOCUMENT_ID = "document";
 	public static final String DOCUMENT_LABEL = "DOCUMENT_LABEL";
 	public static final String DOCUMENT_VERSION = "DOCUMENT_VERSION";
@@ -75,7 +65,7 @@ public class GenericDriver extends AbstractEngineDriver implements IEngineDriver
 	public static final String IS_TECHNICAL_USER = "IS_TECHNICAL_USER";
 	public static final String DOCUMENT_OUTPUT_PARAMETERS = "DOCUMENT_OUTPUT_PARAMETERS";
 
-	static private Logger logger = Logger.getLogger(GenericDriver.class);
+	private static Logger logger = Logger.getLogger(GenericDriver.class);
 
 	/**
 	 * Returns a map of parameters which will be send in the request to the engine application.
@@ -95,7 +85,6 @@ public class GenericDriver extends AbstractEngineDriver implements IEngineDriver
 			// map.put("query", "#");
 			map.put(PARAM_NEW_SESSION, "TRUE");
 			map = applySecurity(map, profile);
-			map = applyLocale(map);
 		} catch (Exception e) {
 			throw new SpagoBIRuntimeException(e);
 		}
@@ -143,7 +132,6 @@ public class GenericDriver extends AbstractEngineDriver implements IEngineDriver
 		}
 
 		map = applySecurity(map, profile);
-		map = applyLocale(map);
 
 		logger.debug("OUT");
 
@@ -205,14 +193,10 @@ public class GenericDriver extends AbstractEngineDriver implements IEngineDriver
 			logger.debug("Add " + DOCUMENT_IS_PUBLIC + " parameter: " + biobj.isPublicDoc());
 			pars.put(DOCUMENT_IS_VISIBLE, biobj.isVisible());
 			logger.debug("Add " + DOCUMENT_IS_VISIBLE + " parameter: " + biobj.isVisible());
-			if (biobj.getPreviewFile() != null)
+			if (biobj.getPreviewFile() != null) {
 				pars.put(DOCUMENT_PREVIEW_FILE, biobj.getPreviewFile());
-			logger.debug("Add " + DOCUMENT_PREVIEW_FILE + " parameter: " + biobj.getPreviewFile());
-			List<String> communities = getCommunities(profile);
-			if (communities != null) {
-				pars.put(DOCUMENT_COMMUNITIES, communities);
-				logger.debug("Add " + DOCUMENT_COMMUNITIES + " parameter: " + communities);
 			}
+			logger.debug("Add " + DOCUMENT_PREVIEW_FILE + " parameter: " + biobj.getPreviewFile());
 			List funcs = biobj.getFunctionalities();
 			if (funcs != null) {
 				pars.put(DOCUMENT_FUNCTIONALITIES, funcs);
@@ -279,7 +263,7 @@ public class GenericDriver extends AbstractEngineDriver implements IEngineDriver
 	 * @param pars  Map of the parameters for the execution call
 	 * @return Map The map of the execution call parameters
 	 */
-	private Map addOutputParameters(BIObject biobj, Map pars) {
+	protected Map addOutputParameters(BIObject biobj, Map pars) {
 		logger.debug("IN");
 
 		if (biobj == null) {
@@ -356,58 +340,6 @@ public class GenericDriver extends AbstractEngineDriver implements IEngineDriver
 		throw new InvalidOperationRequest();
 	}
 
-	private Map applyLocale(Map map) {
-		logger.debug("IN");
-
-		ConfigSingleton config = ConfigSingleton.getInstance();
-		Locale portalLocale = null;
-		try {
-			portalLocale = PortletUtilities.getPortalLocale();
-			logger.debug("Portal locale: " + portalLocale);
-		} catch (Exception e) {
-			logger.warn("Error while getting portal locale.");
-			portalLocale = MessageBuilder.getBrowserLocaleFromSpago();
-			logger.debug("Spago locale: " + portalLocale);
-		}
-
-		SourceBean languageSB = null;
-		if (portalLocale != null && portalLocale.getLanguage() != null) {
-			languageSB = (SourceBean) config.getFilteredSourceBeanAttribute("SPAGOBI.LANGUAGE_SUPPORTED.LANGUAGE", "language", portalLocale.getLanguage());
-		}
-
-		if (languageSB != null) {
-			map.put(COUNTRY, languageSB.getAttribute("country"));
-			map.put(LANGUAGE, languageSB.getAttribute("language"));
-			logger.debug("Added parameter: country/" + (String) languageSB.getAttribute("country"));
-			logger.debug("Added parameter: language/" + (String) languageSB.getAttribute("language"));
-		} else {
-			logger.warn("Language " + portalLocale.getLanguage() + " is not supported by SpagoBI");
-			logger.warn("Portal locale will be replaced with the default lacale (country: US; language: en).");
-			map.put(COUNTRY, "US");
-			map.put(LANGUAGE, "en");
-			logger.debug("Added parameter: country/US");
-			logger.debug("Added parameter: language/en");
-		}
-
-		logger.debug("OUT");
-		return map;
-	}
-
-	private List<String> getCommunities(IEngUserProfile profile) throws EMFUserError {
-		List<String> toReturn = new ArrayList();
-		List<SbiCommunity> communities = DAOFactory.getCommunityDAO().loadSbiCommunityByUser(((UserProfile) profile).getUserId().toString());
-		if (communities != null) {
-			for (int i = 0; i < communities.size(); i++) {
-				SbiCommunity community = communities.get(i);
-				String functCode = community.getFunctCode();
-				ILowFunctionalityDAO functDao = DAOFactory.getLowFunctionalityDAO();
-				LowFunctionality funct = functDao.loadLowFunctionalityByCode(functCode, false);
-				String name = community.getName();
-				toReturn.add("\"" + funct.getId().toString() + "||" + funct.getCode() + "__" + name + "\"");
-			}
-		}
-		return toReturn;
-	}
 
 	@Override
 	public ArrayList<String> getDatasetAssociated(byte[] contentTemplate) throws JSONException {

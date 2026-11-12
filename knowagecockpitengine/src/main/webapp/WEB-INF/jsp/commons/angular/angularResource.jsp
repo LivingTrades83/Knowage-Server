@@ -24,8 +24,8 @@
 <%@page import="it.eng.spagobi.utilities.engines.EngineConstants"%>
 <%@page import="it.eng.spagobi.engine.chart.util.ChartEngineUtil"%>
 <%@page import="it.eng.spago.security.IEngUserProfile"%>
-<%@page import="it.eng.spagobi.commons.utilities.ChannelUtilities"%>
 <%@page import="it.eng.spagobi.commons.constants.SpagoBIConstants"%>
+<%@page import="it.eng.spagobi.commons.constants.CommunityFunctionalityConstants"%>
 <%@page import="java.util.Iterator"%>
 <%@page import="com.fasterxml.jackson.databind.ObjectMapper"%>
 <%@page import="it.eng.knowage.commons.security.KnowageSystemConfiguration"%>
@@ -41,12 +41,16 @@
 <%@page import="it.eng.spagobi.engine.chart.util.ChartEngineUtil"%>
 <%@page import="it.eng.spagobi.commons.bo.AccessibilityPreferences" %>
 <%@page import="it.eng.knowage.commons.utilities.urls.UrlBuilder"%>
+<%@page import="it.eng.knowage.commons.utilities.urls.UrlBuilder"%>
+<%@page import="it.eng.knowage.security.OwaspDefaultEncoderFactory"%>
+<%@page import="org.owasp.esapi.Encoder"%>	
 
 <%-- ---------------------------------------------------------------------- --%>
 <%-- JAVA CODE 																--%>
 <%-- ---------------------------------------------------------------------- --%>
 
 <%
+	Encoder esapiEncoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
 	String spagoBiContext = KnowageSystemConfiguration.getKnowageContext();							//  /knowage
 	String cockpitEngineContext = request.getContextPath(); 								//  /cockpitengine
 	UrlBuilder urlBuilder = new UrlBuilder(spagoBiContext, cockpitEngineContext);

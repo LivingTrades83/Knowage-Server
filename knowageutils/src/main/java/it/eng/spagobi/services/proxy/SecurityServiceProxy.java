@@ -62,7 +62,6 @@ public final class SecurityServiceProxy extends AbstractServiceProxy {
 	 * Don't use it.
 	 */
 	private SecurityServiceProxy() {
-		super();
 	}
 
 	/**
@@ -82,6 +81,9 @@ public final class SecurityServiceProxy extends AbstractServiceProxy {
 			} else {
 				service = Service.create(SERVICE_QNAME).getPort(SecurityService.class);
 			}
+
+			setCommonHeader(service);
+
 		} catch (Throwable e) {
 			logger.error("Impossible to locate [" + SERVICE_NAME + "] at [" + serviceUrl + "]");
 			throw new SecurityException("Impossible to locate [" + SERVICE_NAME + "] at [" + serviceUrl + "]", e);
@@ -110,7 +112,7 @@ public final class SecurityServiceProxy extends AbstractServiceProxy {
 				try {
 					userProfile = UserProfile.createSchedulerUserProfile(userId);
 				} catch (SpagoBIRuntimeException e) {
-					userProfile = UserProfile.createSchedulerUserProfile();
+					userProfile = UserProfile.createSchedulerUserProfileWithRole(null);
 				}
 			} else {
 				SpagoBIUserProfile user = lookUp().getUserProfile(readTicket(), userId);

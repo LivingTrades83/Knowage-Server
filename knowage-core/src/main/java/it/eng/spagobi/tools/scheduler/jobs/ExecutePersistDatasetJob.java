@@ -36,13 +36,12 @@ import it.eng.spagobi.tools.dataset.bo.IDataSet;
 import it.eng.spagobi.tools.dataset.bo.VersionedDataSet;
 import it.eng.spagobi.tools.dataset.dao.IDataSetDAO;
 import it.eng.spagobi.tools.dataset.persist.IPersistedManager;
-import it.eng.spagobi.tools.dataset.persist.PersistedHDFSManager;
 import it.eng.spagobi.tools.dataset.persist.PersistedTableManager;
 import it.eng.spagobi.tools.dataset.utils.datamart.SpagoBICoreDatamartRetriever;
 
 public class ExecutePersistDatasetJob extends AbstractSpagoBIJob implements Job {
 
-	static private Logger logger = Logger.getLogger(ExecutePersistDatasetJob.class);
+	private static Logger logger = Logger.getLogger(ExecutePersistDatasetJob.class);
 
 	@Override
 	public void execute(JobExecutionContext jobExecutionContext) throws JobExecutionException {
@@ -65,8 +64,8 @@ public class ExecutePersistDatasetJob extends AbstractSpagoBIJob implements Job 
 		logger.debug("IN");
 
 		try {
-			userProfile = UserProfile.createSchedulerUserProfile();
-			jobName = jobExecutionContext.getJobDetail().getName();
+			userProfile = UserProfile.createSchedulerUserProfileWithRole(null);
+			jobName = jobExecutionContext.getJobDetail().getKey().getName();
 
 			datasetDAO = DAOFactory.getDataSetDAO();
 			if (userProfile != null) {
@@ -84,10 +83,6 @@ public class ExecutePersistDatasetJob extends AbstractSpagoBIJob implements Job 
 				ptm.persistDataSet(dataset);
 			}
 
-			if (dataset.isPersistedHDFS()) {
-				ptm = new PersistedHDFSManager(userProfile);
-				ptm.persistDataSet(dataset);
-			}
 			logger.debug("Persistence ended succesfully!");
 		} catch (Exception e) {
 			logger.error("Error while executiong job ", e);

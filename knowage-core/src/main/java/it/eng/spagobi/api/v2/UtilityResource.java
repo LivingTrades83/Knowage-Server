@@ -17,9 +17,19 @@
  */
 package it.eng.spagobi.api.v2;
 
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.MediaType;
+
+import org.apache.log4j.Logger;
+import org.owasp.esapi.Encoder;
+
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
@@ -28,16 +38,6 @@ import it.eng.spagobi.tenant.Tenant;
 import it.eng.spagobi.tenant.TenantManager;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
-import java.net.URLDecoder;
-
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.MediaType;
-
-import org.apache.log4j.Logger;
-
 /**
  * @author Francesco Lucchi (francesco.lucchi@eng.it)
  */
@@ -45,17 +45,19 @@ import org.apache.log4j.Logger;
 @ManageAuthorization
 public class UtilityResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(UtilityResource.class);
+	protected static Logger logger = Logger.getLogger(UtilityResource.class);
 
 	@GET
 	@Path("/jndi")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Produces(MediaType.TEXT_PLAIN + "; charset=UTF-8")
 	public String getJndiValue(@QueryParam("label") String jndiLabel) {
 		logger.debug("IN");
 		try {
 			checkIsSuperadmin();
-			String value = SpagoBIUtilities.readJndiResource(URLDecoder.decode(jndiLabel));
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String value = SpagoBIUtilities.readJndiResource(encoder.decodeFromURL(jndiLabel));
+			// URLDecoder.decode(jndiLabel));
 			return value;
 		} catch (Exception e) {
 			String message = "Error while getting the JNDI resource with label [" + jndiLabel + "]";
@@ -68,7 +70,7 @@ public class UtilityResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/tenant")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public String getTenant() {
 		logger.debug("IN");

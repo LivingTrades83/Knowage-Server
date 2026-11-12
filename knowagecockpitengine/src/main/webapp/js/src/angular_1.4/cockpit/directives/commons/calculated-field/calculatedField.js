@@ -189,6 +189,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 			if(newValue && !newValue.match(/(?:AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT|TOTAL_SUM|TOTAL_AVG|TOTAL_MIN|TOTAL_MAX|TOTAL_COUNT|TOTAL_COUNT_DISTINCT)+\(.+\)/gm)) {
 				$scope.showWarning =   $scope.translate.load('kn.cockpit.calculatedfield.validation.aggregationfunctions');
 			}
+			if(newValue && $scope.isSolrDataset() && newValue.match(/(?:AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT)+\((.*[\+\-\*\/].*)\)/gm)) {
+				$scope.showWarning =   $scope.translate.load('kn.cockpit.calculatedfield.validation.solr.wrongformula');
+			}
 			else {
 				$scope.showWarning = false;
 			}
@@ -232,9 +235,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 		$scope.validateFormula = function(save) {
 			return $q(function(resolve, reject) {
-				$scope.calculatedField.formula =  $scope.calculatedField.formulaEditor.replace(/\$V\{([a-zA-Z0-9\-\_]*){1}(?:.([a-zA-Z0-9\-\_]*){1})?\}/g,function(match,p1,p2){
+				$scope.calculatedField.formula =  $scope.calculatedField.formulaEditor.replace(/\$V\{([a-zA-Z0-9\-\_]{1,255})(?:.([a-zA-Z0-9\-\_]{1,255}))?\}/g,function(match,p1,p2){
 					return p2 ? cockpitModule_properties.VARIABLES[p1][p2] : cockpitModule_properties.VARIABLES[p1];
 				})
+				$scope.calculatedField.formula = $scope.calculatedField.formula.replace(/\n/g,'');
 				if(!$scope.calculatedField.formulaEditor) {
 					if(!save) $scope.toastifyMsg('warning',$scope.translate.load("kn.cockpit.calculatedfield.validation.error.noformula"));
 					reject();

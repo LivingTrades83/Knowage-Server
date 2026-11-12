@@ -31,6 +31,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
 import org.apache.log4j.Logger;
+import org.jboss.resteasy.plugins.providers.html.View;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -55,18 +56,18 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 @Path("/1.0/pages")
 public class PageResource extends AbstractFullKpiEngineResource {
 
-	static private Map<String, JSONObject> pages;
-	static private Map<String, String> urls;
+	private static Map<String, JSONObject> pages;
+	private static Map<String, String> urls;
 
-	static private Logger logger = Logger.getLogger(PageResource.class);
+	private static Logger logger = Logger.getLogger(PageResource.class);
 
 	/**
 	 * TODO Tutte le pagine dell'engine
 	 *
 	 */
 	static {
-		pages = new HashMap<String, JSONObject>();
-		urls = new HashMap<String, String>();
+		pages = new HashMap<>();
+		urls = new HashMap<>();
 
 		try {
 			pages.put("edit", new JSONObject("{name: 'edit', description: 'the kpi edit page', parameters: []}"));
@@ -132,22 +133,23 @@ public class PageResource extends AbstractFullKpiEngineResource {
 	@GET
 	@Path("/{pagename}")
 	@Produces("text/html")
-	public void openPageGet(@PathParam("pagename") String pageName) {
-		openPage(pageName);
+	public View openPageGet(@PathParam("pagename") String pageName) {
+		return openPage(pageName);
 	}
 
 	@SuppressWarnings("unchecked")
 	@POST
 	@Path("/{pagename}")
 	@Produces("text/html")
-	public void openPagePost(@PathParam("pagename") String pageName) {
-		openPage(pageName);
+	public View openPagePost(@PathParam("pagename") String pageName) {
+		return openPage(pageName);
 	}
 
 	/**
 	 * @param pageName
+	 * @return
 	 */
-	private void openPage(String pageName) {
+	private View openPage(String pageName) {
 		KpiEngineInstance engineInstance;
 		String dispatchUrl = urls.get(pageName);
 
@@ -183,11 +185,7 @@ public class PageResource extends AbstractFullKpiEngineResource {
 				break;
 			}
 
-			// To deploy into JBOSSEAP64 is needed a StandardWrapper, instead of RestEasy Wrapper
-			// HttpServletRequest request = ResteasyProviderFactory.getContextData(HttpServletRequest.class);
-			// HttpServletResponse response = ResteasyProviderFactory.getContextData(HttpServletResponse.class);
-
-			request.getRequestDispatcher(dispatchUrl).forward(request, response);
+			return new View(dispatchUrl);
 		} catch (Exception e) {
 			throw SpagoBIEngineServiceExceptionHandler.getInstance().getWrappedException("", getEngineInstance(), e);
 		} finally {

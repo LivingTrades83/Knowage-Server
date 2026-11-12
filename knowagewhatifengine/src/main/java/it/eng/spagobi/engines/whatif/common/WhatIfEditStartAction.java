@@ -24,9 +24,9 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
 
 import org.apache.log4j.Logger;
+import org.jboss.resteasy.plugins.providers.html.View;
 
 import it.eng.spago.base.SourceBean;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
@@ -43,9 +43,6 @@ import it.eng.spagobi.utilities.engines.SpagoBIEngineStartupException;
 public class WhatIfEditStartAction extends WhatIfEngineAbstractStartAction {
 
 	public static transient Logger logger = Logger.getLogger(WhatIfEditStartAction.class);
-	private static final String SUCCESS_REQUEST_DISPATCHER_URL_NEW = "/WEB-INF/jsp/edit.jsp";
-	private static final String SUCCESS_REQUEST_DISPATCHER_URL_EDIT = "/WEB-INF/jsp/whatIf2.jsp";
-	private static final String FAILURE_REQUEST_DISPATCHER_URL = "/WEB-INF/jsp/errors/startupError.jsp";
 	private String url = "";
 	private boolean whatif;
 	@Context
@@ -55,21 +52,19 @@ public class WhatIfEditStartAction extends WhatIfEngineAbstractStartAction {
 
 	@GET
 	@Path("/edit")
-	@Produces(MediaType.APPLICATION_JSON)
+	@Produces("text/html")
 	public void startActionGet() {
 		startAction();
 	}
 
 	@POST
 	@Path("/edit")
-	@Produces(MediaType.APPLICATION_JSON)
+	@Produces("text/html")
 	public void startActionPost() {
+
 		startAction();
 	}
 
-	/**
-	 *
-	 */
 	private void startAction() {
 		logger.debug("IN");
 
@@ -103,30 +98,21 @@ public class WhatIfEditStartAction extends WhatIfEngineAbstractStartAction {
 					} else {
 						template = null;
 					}
-					if (getEnv().get("ENGINE").equals("knowageolapengine")) {
-						whatif = false;
-					} else {
-						whatif = true;
-					}
+                    whatif = !getEnv().get("ENGINE").equals("knowageolapengine");
 					whatIfEngineInstance.updateWhatIfEngineInstance(template, whatif, getEnv());
 					logger.debug("Engine instance succesfully updated");
-
-					url = SUCCESS_REQUEST_DISPATCHER_URL_EDIT;
-				} else {
-					url = SUCCESS_REQUEST_DISPATCHER_URL_NEW;
 				}
+
 				getExecutionSession().setAttributeInSession(ENGINE_INSTANCE, whatIfEngineInstance);
-				request.getRequestDispatcher(url).forward(request, response);
 
 			} catch (Exception e) {
 				logger.error("Error starting the What-If engine: error while forwarding the execution to the jsp " + url, e);
 				throw new SpagoBIEngineRuntimeException("Error starting the What-If engine: error while forwarding the execution to the jsp " + url, e);
+			} finally {
+				if (getAuditServiceProxy() != null) {
+					getAuditServiceProxy().notifyServiceEndEvent();
+				}
 			}
-
-			if (getAuditServiceProxy() != null) {
-				getAuditServiceProxy().notifyServiceEndEvent();
-			}
-
 		} catch (Exception e) {
 			logger.error("Error starting the What-If engine", e);
 			if (getAuditServiceProxy() != null) {
@@ -136,13 +122,6 @@ public class WhatIfEditStartAction extends WhatIfEngineAbstractStartAction {
 			SpagoBIEngineStartupException serviceException = this.getWrappedException(e);
 
 			getExecutionSession().setAttributeInSession(STARTUP_ERROR, serviceException);
-			try {
-				request.getRequestDispatcher(FAILURE_REQUEST_DISPATCHER_URL).forward(request, response);
-			} catch (Exception ex) {
-				logger.error("Error starting the What-If engine: error while forwarding the execution to the jsp " + FAILURE_REQUEST_DISPATCHER_URL, ex);
-				throw new SpagoBIEngineRuntimeException(
-						"Error starting the What-If engine: error while forwarding the execution to the jsp " + FAILURE_REQUEST_DISPATCHER_URL, ex);
-			}
 		} finally {
 			logger.debug("OUT");
 		}

@@ -17,6 +17,8 @@
  */
 package it.eng.spagobi.dataset.cache.test;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -40,7 +42,7 @@ import it.eng.spagobi.tools.datasource.bo.IDataSource;
 public class TestXmlFactory {
 
 	private static JSONObject getJsonObjectFromXml(String xmlFileAbsolutePath) throws Exception {
-		String xmlString = new String(Files.readAllBytes(Paths.get(xmlFileAbsolutePath)), "UTF-8");
+		String xmlString = new String(Files.readAllBytes(Paths.get(xmlFileAbsolutePath)), UTF_8);
 		String jsonString = Xml.xml2json(xmlString);
 		JSONObject jsonObject = new JSONObject(jsonString);
 		return jsonObject;
@@ -62,7 +64,7 @@ public class TestXmlFactory {
 
 		JSONObject jsonObject = getJsonObjectFromXml(xmlFileAbsolutePath);
 		JSONArray jsonDatasets = jsonObject.getJSONObject("test").getJSONArray(dataset);
-		List<IDataSource> dataSourceList = new ArrayList<IDataSource>();
+		List<IDataSource> dataSourceList = new ArrayList<>();
 		for (int i = 0; i < jsonDatasets.length(); i++) {
 			JSONObject jsonDataset = jsonDatasets.getJSONObject(i);
 			String label = jsonDataset.getString("text");
@@ -73,7 +75,7 @@ public class TestXmlFactory {
 			String hibDialectClass = jsonDataset.getString("hibDialectClass");
 			String hibDialectName = jsonDataset.getString("hibDialectName");
 			dataSourceList.add(
-					TestDataSourceFactory.createDataSource(label, url, user, password, driver, hibDialectClass, hibDialectName, isReadOnly, isWriteDefault));
+					TestDataSourceFactory.createDataSource(label, url, user, password, driver, hibDialectClass, hibDialectName, isReadOnly, isWriteDefault, false));
 		}
 
 		return dataSourceList;
@@ -103,7 +105,7 @@ public class TestXmlFactory {
 		String hibDialectClass = jsonDataset.getString("hibDialectClass");
 		String hibDialectName = jsonDataset.getString("hibDialectName");
 
-		return TestDataSourceFactory.createDataSource(label, url, user, password, driver, hibDialectClass, hibDialectName, isReadOnly, isWriteDefault);
+		return TestDataSourceFactory.createDataSource(label, url, user, password, driver, hibDialectClass, hibDialectName, isReadOnly, isWriteDefault, false);
 	}
 
 	public static SQLDBCacheConfiguration createCacheConfiguration(String xmlFileAbsolutePath, IDataSource dataSourceWriting) throws Exception {
@@ -143,7 +145,7 @@ public class TestXmlFactory {
 		JSONObject jsonObject = getJsonObjectFromXml(xmlFileAbsolutePath);
 		JSONArray fields = jsonObject.getJSONObject("test").getJSONObject("table").getJSONArray("field");
 
-		Map<String, String> map = new HashMap<String, String>();
+		Map<String, String> map = new HashMap<>();
 		for (int i = 0; i < fields.length(); i++) {
 			JSONObject field = fields.getJSONObject(i);
 			map.put(field.getString("text"), field.getString(type));

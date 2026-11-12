@@ -21,30 +21,55 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.ClientAnchor;
+import org.apache.poi.ss.usermodel.CreationHelper;
+import org.apache.poi.ss.usermodel.Drawing;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Picture;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.util.Units;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.json.JSONException;
+import org.json.JSONObject;
 import org.quartz.Job;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
+import it.eng.qbe.dataset.DerivedDataSet;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.tenant.Tenant;
 import it.eng.spagobi.tenant.TenantManager;
+import it.eng.spagobi.tools.dataset.DatasetManagementAPI;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
+import it.eng.spagobi.tools.dataset.bo.VersionedDataSet;
 import it.eng.spagobi.tools.dataset.dao.IDataSetDAO;
+import it.eng.spagobi.utilities.exceptions.ActionNotPermittedException;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 abstract class AbstractExportJob implements Job {
 
-	private static final Logger logger = Logger.getLogger(AbstractExportJob.class);
+	private static final Logger LOGGER = Logger.getLogger(AbstractExportJob.class);
 
 	public static final String MAP_KEY_DATA_SET_ID = "dataSetId";
 
@@ -69,13 +94,13 @@ abstract class AbstractExportJob implements Job {
 	private Locale locale = null;
 	private Map<String, String> parameters = null;
 	Path resourcePath = null;
-	private String resourcePathAsStr = null;
-	private UserProfile userProfile = null;
+	String resourcePathAsStr = null;
+	UserProfile userProfile = null;
 
 	/**
 	 * Internal cleanup in case of error.
 	 */
-	private void deleteJobDirectory() {
+	protected void deleteJobDirectory() {
 		try {
 			FileUtils.deleteDirectory(resourcePath.toFile());
 		} catch (IOException e) {
@@ -105,7 +130,7 @@ abstract class AbstractExportJob implements Job {
 			Files.createDirectories(resourcePath);
 		} catch (IOException e) {
 			String msg = String.format("Error creating directory \"%s\"!", resourcePath);
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			throw new JobExecutionException(e);
 		}
 
@@ -118,12 +143,16 @@ abstract class AbstractExportJob implements Job {
 			deleteJobDirectory();
 
 			String msg = String.format("Error creating file \"%s\"!", dataFile);
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			throw new JobExecutionException(e);
 		}
 
-		export(context);
-		Path metadataFile = ExportPathBuilder.getInstance().getPerJobIdMetadataFile(resourcePathAsStr, userProfile, id);
+        try {
+            export(context);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        Path metadataFile = ExportPathBuilder.getInstance().getPerJobIdMetadataFile(resourcePathAsStr, userProfile, id);
 
 		try {
 			String dataSetName = dataSet.getName();
@@ -142,7 +171,7 @@ abstract class AbstractExportJob implements Job {
 			deleteJobDirectory();
 
 			String msg = String.format("Error creating file \"%s\"!", metadataFile);
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			throw new JobExecutionException(e);
 		}
 
@@ -165,34 +194,61 @@ abstract class AbstractExportJob implements Job {
 		return dataSet;
 	}
 
-	private final IDataSet getDataSet(Integer dataSetId, Map<String, Object> drivers, Map<String, String> parameters, UserProfile userProfile)
+	private IDataSet getDataSet(Integer dataSetId, Map<String, Object> drivers, Map<String, String> parameters, UserProfile userProfile)
 			throws JobExecutionException {
 		IDataSetDAO dsDAO = DAOFactory.getDataSetDAO();
 		dsDAO.setUserProfile(userProfile);
-		IDataSet dataSet = dsDAO.loadDataSetById(dataSetId);
+		IDataSet currDataSet = dsDAO.loadDataSetById(dataSetId);
+		// The dataset may have changed since the request enqueued this job. Authorize
+		// the exact snapshot used below before resolving parameters or creating files.
+		if (currDataSet == null) {
+			throw new JobExecutionException("Dataset no longer exists");
+		}
+		try {
+			new DatasetManagementAPI(userProfile).canSee(currDataSet);
+		} catch (ActionNotPermittedException e) {
+			throw new JobExecutionException("Dataset is not visible to the requesting user", e);
+		}
+		if (currDataSet instanceof VersionedDataSet) {
+			VersionedDataSet vds = (VersionedDataSet) currDataSet;
+			if (vds.getWrappedDataset() instanceof DerivedDataSet) {
+				IDataSet sourcedataSet = this.getDerivedSourceDataset(currDataSet);
+				String jsonQuery = this.getJSonQueryDataset(currDataSet);
+				if (sourcedataSet != null) {
+					DerivedDataSet dataSetDer = (DerivedDataSet) vds.getWrappedDataset();
+					dataSetDer.setSourceDataset(sourcedataSet);
+					dataSetDer.setJsonQuery(jsonQuery);
+					dataSetDer
+							.setDataSource(dataSetDer.getDataSourceForReading() != null ? dataSetDer.getDataSourceForReading() : sourcedataSet.getDataSource());
+					dataSetDer.setDataSourceForReading(
+							dataSetDer.getDataSourceForReading() != null ? dataSetDer.getDataSourceForReading() : sourcedataSet.getDataSource());
+					currDataSet = dataSetDer;
+				}
+			}
+		}
 
-		logger.debug("Dump drivers:");
+		LOGGER.debug("Dump drivers:");
 		for (Entry<String, Object> entry : drivers.entrySet()) {
 			String msg = String.format("\t%s: %s", entry.getKey(), entry.getValue());
-			logger.debug(msg);
+			LOGGER.debug(msg);
 		}
 
-		logger.debug("Dump parameters:");
+		LOGGER.debug("Dump parameters:");
 		for (java.util.Map.Entry<String, String> entry : parameters.entrySet()) {
 			String msg = String.format("\t%s: %s", entry.getKey(), entry.getValue());
-			logger.debug(msg);
+			LOGGER.debug(msg);
 		}
 
-		dataSet.setDrivers(drivers);
+		currDataSet.setDrivers(drivers);
 		try {
-			dataSet.setParametersMap(parameters);
+			currDataSet.setParametersMap(parameters);
 		} catch (JSONException e) {
 			throw new JobExecutionException("An error occurred when applying parameters into dataset", e);
 		}
-		dataSet.resolveParameters();
+		currDataSet.resolveParameters();
 
-		dataSet.setUserProfileAttributes(userProfile.getUserAttributes());
-		return dataSet;
+		currDataSet.setUserProfileAttributes(userProfile.getUserAttributes());
+		return currDataSet;
 	}
 
 	protected Integer getDataSetId() {
@@ -266,11 +322,269 @@ abstract class AbstractExportJob implements Job {
 	 * @param context
 	 * @throws JobExecutionException
 	 */
-	protected abstract void export(JobExecutionContext context) throws JobExecutionException;
+	protected abstract void export(JobExecutionContext context) throws JobExecutionException, IOException;
 
 	/**
 	 * @return The MIME type of generated file.
 	 */
 	protected abstract String mime();
 
+	public IDataSet getDerivedSourceDataset(IDataSet dataset) {
+		if (dataset instanceof VersionedDataSet) {
+			VersionedDataSet vds = (VersionedDataSet) dataset;
+			if (vds.getWrappedDataset() instanceof DerivedDataSet) {
+				JSONObject sourceJsonConfig;
+				try {
+					sourceJsonConfig = new JSONObject(vds.getWrappedDataset().getConfiguration());
+					String sourceDatasetLabel = sourceJsonConfig.getString("sourceDatasetLabel");
+					return DAOFactory.getDataSetDAO().loadDataSetByLabel(sourceDatasetLabel);
+				} catch (JSONException e) {
+					throw new SpagoBIRuntimeException("sourceJsonConfig no longer exists for " + vds.getWrappedDataset().getLabel() + " Dataset");
+				}
+
+			}
+		}
+		return dataset;
+	}
+
+	public String getJSonQueryDataset(IDataSet dataset) {
+		String jsonQuery = null;
+		if (dataset instanceof VersionedDataSet) {
+			VersionedDataSet vds = (VersionedDataSet) dataset;
+			if (vds.getWrappedDataset() instanceof DerivedDataSet) {
+				JSONObject sourceJsonConfig;
+				try {
+					sourceJsonConfig = new JSONObject(vds.getWrappedDataset().getConfiguration());
+					jsonQuery = sourceJsonConfig.getString("qbeJSONQuery");
+				} catch (JSONException e) {
+					throw new SpagoBIRuntimeException("sourceJsonConfig no longer exists for " + vds.getWrappedDataset().getLabel() + " Dataset");
+				}
+
+			}
+		}
+		return jsonQuery;
+	}
+	
+	public void adjustColumnWidth(Sheet sheet, String imageB64) {
+		try {		    			
+			((SXSSFSheet) sheet).trackAllColumnsForAutoSizing();
+			Row row = sheet.getRow(sheet.getLastRowNum());
+			if(row != null) {
+				for (int i = 0; i < row.getLastCellNum(); i++) {
+					sheet.autoSizeColumn(i);
+					if(StringUtils.isNotEmpty(imageB64) && (i == 0 || i == 1)) {
+						// first or second column
+						int colWidth = 25;
+						if (sheet.getColumnWidthInPixels(i) < (colWidth * 256))
+							sheet.setColumnWidth(i, colWidth * 256);
+					}
+				}	
+			}
+		} catch (Exception e) {
+			throw new SpagoBIRuntimeException("Cannot write data to Excel file", e);
+		}
+	}
+	
+	public int createBrandedHeaderSheet(Sheet sheet, String imageB64, 
+			int startRow, float rowHeight, int rowspan, int startCol, int colWidth, int colspan, int namespan, int dataspan, 
+			String documentName, String widgetName) {				
+		if (StringUtils.isNotEmpty(imageB64)) {			
+			for (int r = startRow; r < startRow+rowspan; r++) {
+				   sheet.createRow(r).setHeightInPoints(rowHeight);
+				   for (int c = startCol; c < startCol+colspan; c++) {
+					   sheet.getRow(r).createCell(c);
+					   sheet.setColumnWidth(c, colWidth * 256);
+				}
+			}
+			
+			// set brandend header image
+			sheet.addMergedRegion(new CellRangeAddress(startRow, startRow+rowspan-1, startCol, startCol+colspan-1));
+			drawBrandendHeaderImage(sheet, imageB64, Workbook.PICTURE_TYPE_PNG, startCol, startRow, colspan, rowspan);				
+			
+			// set document name
+			sheet.getRow(startRow).createCell(startCol+colspan).setCellValue(documentName);
+			sheet.addMergedRegion(new CellRangeAddress(startRow, startRow, startCol+colspan, namespan));
+			// set cell style
+			CellStyle documentNameCellStyle = buildCellStyle(sheet, true, HorizontalAlignment.LEFT, VerticalAlignment.CENTER, (short) 16);
+			sheet.getRow(startRow).getCell(startCol+colspan).setCellStyle(documentNameCellStyle);
+			
+			// set date 
+			DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+			Date date = new Date();
+			sheet.getRow(startRow+1).createCell(startCol+colspan).setCellValue("Data di generazione: " + dateFormat.format(date));
+			sheet.addMergedRegion(new CellRangeAddress(startRow+1, startRow+1, startCol+colspan, dataspan));
+			// set cell style
+			CellStyle dateCellStyle = buildCellStyle(sheet, false, HorizontalAlignment.LEFT, VerticalAlignment.CENTER, (short) 8);
+			sheet.getRow(startRow+1).getCell(startCol+colspan).setCellStyle(dateCellStyle);
+		}
+		
+		int headerIndex = (StringUtils.isNotEmpty(imageB64)) ? (startRow+rowspan) : 0;
+		Row widgetNameRow = sheet.createRow((short) headerIndex);
+		Cell widgetNameCell = widgetNameRow.createCell(0);
+		widgetNameCell.setCellValue(widgetName);
+		// set cell style
+		CellStyle widgetNameStyle = buildCellStyle(sheet, true, HorizontalAlignment.LEFT, VerticalAlignment.CENTER, (short) 14);
+		widgetNameCell.setCellStyle(widgetNameStyle);
+		
+		return headerIndex;
+	}
+	
+	public void drawBrandendHeaderImage(Sheet sheet, String imageB64, int pictureType, int startCol, int startRow,
+			int colspan, int rowspan) {
+		try {
+			Workbook wb = sheet.getWorkbook();
+			
+			// load the picture
+		    String encodingPrefix = "base64,";
+		    int contentStartIndex = imageB64.indexOf(encodingPrefix) + encodingPrefix.length();
+		    byte[] bytes = org.apache.commons.codec.binary.Base64.decodeBase64(imageB64.substring(contentStartIndex));			
+			int pictureIdx = wb.addPicture(bytes, pictureType);
+
+			// create an anchor with upper left cell startCol/startRow
+			CreationHelper helper = wb.getCreationHelper();
+			ClientAnchor anchor = helper.createClientAnchor();
+			anchor.setCol1(startCol);
+			anchor.setRow1(startRow);
+
+			Drawing drawing = sheet.createDrawingPatriarch();
+			Picture pict = drawing.createPicture(anchor, pictureIdx);
+
+			int pictWidthPx = pict.getImageDimension().width;
+			int pictHeightPx = pict.getImageDimension().height;
+			
+			// get the heights of all merged rows in px
+			float[] rowHeightsPx = new float[startRow+rowspan];
+			float rowsHeightPx = 0f;
+			for (int r = startRow; r < startRow+rowspan; r++) {
+				Row row = sheet.getRow(r);
+				float rowHeightPt = row.getHeightInPoints();
+				rowHeightsPx[r-startRow] = rowHeightPt * Units.PIXEL_DPI / Units.POINT_DPI;
+				rowsHeightPx += rowHeightsPx[r-startRow];
+			}
+
+			// get the widths of all merged cols in px
+			float[] colWidthsPx = new float[startCol + colspan];
+			float colsWidthPx = 0f;
+			for (int c = startCol; c < startCol + colspan; c++) {
+				colWidthsPx[c - startCol] = sheet.getColumnWidthInPixels(c);
+				colsWidthPx += colWidthsPx[c - startCol];
+			}
+
+			// calculate scale
+			float scale = 1;
+			if (pictHeightPx > rowsHeightPx) {
+				float tmpscale = rowsHeightPx / pictHeightPx;
+				if (tmpscale < scale)
+					scale = tmpscale;
+			}
+			if (pictWidthPx > colsWidthPx) {
+				float tmpscale = colsWidthPx / pictWidthPx;
+				if (tmpscale < scale)
+					scale = tmpscale;
+			}
+
+			// calculate the horizontal center position
+			int horCenterPosPx = Math.round(colsWidthPx / 2f - pictWidthPx * scale / 2f);
+			Integer col1 = null;
+			colsWidthPx = 0f;
+			for (int c = 0; c < colWidthsPx.length; c++) {
+				float colWidthPx = colWidthsPx[c];
+				if (colsWidthPx + colWidthPx > horCenterPosPx) {
+					col1 = c + startCol;
+					break;
+				}
+				colsWidthPx += colWidthPx;
+			}
+			
+			// set the horizontal center position as Col1 plus Dx1 of anchor
+			if (col1 != null) {
+				anchor.setCol1(col1);
+				anchor.setDx1(Math.round(horCenterPosPx - colsWidthPx) * Units.EMU_PER_PIXEL);
+			}
+
+			// calculate the vertical center position
+			int vertCenterPosPx = Math.round(rowsHeightPx / 2f - pictHeightPx * scale / 2f);
+			Integer row1 = null;
+			rowsHeightPx = 0f;
+			for (int r = 0; r < rowHeightsPx.length; r++) {
+				float rowHeightPx = rowHeightsPx[r];
+				if (rowsHeightPx + rowHeightPx > vertCenterPosPx) {
+					row1 = r + startRow;
+				    break;
+				}
+				rowsHeightPx += rowHeightPx;
+			}
+			  
+			if (row1 != null) {
+				anchor.setRow1(row1);
+				anchor.setDy1(Math.round(vertCenterPosPx - rowsHeightPx) * Units.EMU_PER_PIXEL); //in unit EMU for XSSF
+			}
+			 
+			anchor.setCol2(startCol+colspan);
+			anchor.setDx2(Math.round(colsWidthPx - Math.round(horCenterPosPx - colsWidthPx)) * Units.EMU_PER_PIXEL);
+			anchor.setRow2(startRow+rowspan);
+			anchor.setDy2(Math.round(rowsHeightPx - Math.round(vertCenterPosPx - rowsHeightPx)) * Units.EMU_PER_PIXEL);
+			
+		} catch (Exception e) {
+			throw new SpagoBIRuntimeException("Cannot write data to Excel file", e);
+		}
+	}
+	
+	public CellStyle buildCellStyle(Sheet sheet, boolean bold, HorizontalAlignment alignment, VerticalAlignment verticalAlignment, short headerFontSizeShort) {
+		
+		// CELL
+		CellStyle cellStyle = sheet.getWorkbook().createCellStyle();
+		
+		// alignment 
+		cellStyle.setAlignment(alignment);
+		cellStyle.setVerticalAlignment(verticalAlignment);
+
+		// foreground color
+//		String headerBGColor = (String) this.getProperty(PROPERTY_HEADER_BACKGROUND_COLOR);
+//		short backgroundColorIndex = headerBGColor != null ? IndexedColors.valueOf(headerBGColor).getIndex()
+//				: IndexedColors.valueOf(DEFAULT_HEADER_BACKGROUND_COLOR).getIndex();
+//		cellStyle.setFillForegroundColor(backgroundColorIndex);
+
+		// pattern
+//		cellStyle.setFillPattern(fp);
+
+		// borders
+//		cellStyle.setBorderBottom(borderBottom);
+//		cellStyle.setBorderLeft(borderLeft);
+//		cellStyle.setBorderRight(borderRight);
+//		cellStyle.setBorderTop(borderTop);
+
+//		String bordeBorderColor = (String) this.getProperty(PROPERTY_HEADER_BORDER_COLOR);
+//		short borderColorIndex = bordeBorderColor != null ? IndexedColors.valueOf(bordeBorderColor).getIndex()
+//				: IndexedColors.valueOf(DEFAULT_HEADER_BORDER_COLOR).getIndex();
+//		cellStyle.setLeftBorderColor(borderColorIndex);
+//		cellStyle.setRightBorderColor(borderColorIndex);
+//		cellStyle.setBottomBorderColor(borderColorIndex);
+//		cellStyle.setTopBorderColor(borderColorIndex);
+
+		// FONT
+		Font font = sheet.getWorkbook().createFont();
+
+		// size
+//		Short headerFontSize = (Short) this.getProperty(PROPERTY_HEADER_FONT_SIZE);
+//		short headerFontSizeShort = headerFontSize != null ? headerFontSize.shortValue() : DEFAULT_HEADER_FONT_SIZE;
+		font.setFontHeightInPoints(headerFontSizeShort);
+
+		// name
+//		String fontName = (String) this.getProperty(PROPERTY_FONT_NAME);
+//		fontName = fontName != null ? fontName : DEFAULT_FONT_NAME;
+//		font.setFontName(fontName);
+
+		// color
+//		String headerColor = (String) this.getProperty(PROPERTY_HEADER_COLOR);
+//		short headerColorIndex = headerColor != null ? IndexedColors.valueOf(headerColor).getIndex()
+//				: IndexedColors.valueOf(DEFAULT_HEADER_COLOR).getIndex();
+//		font.setColor(headerColorIndex);
+
+		// bold		
+		font.setBold(bold);
+		
+		cellStyle.setFont(font);
+		return cellStyle;
+	}
 }

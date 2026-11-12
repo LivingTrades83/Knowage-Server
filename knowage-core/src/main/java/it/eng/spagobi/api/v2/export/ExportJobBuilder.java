@@ -24,6 +24,7 @@ import static it.eng.spagobi.api.v2.export.AbstractExportJob.MAP_KEY_LOCALE;
 import static it.eng.spagobi.api.v2.export.AbstractExportJob.MAP_KEY_PARAMETERS;
 import static it.eng.spagobi.api.v2.export.AbstractExportJob.MAP_KEY_RESOURCE_PATH;
 import static it.eng.spagobi.api.v2.export.AbstractExportJob.MAP_KEY_USER_PROFILE;
+import static org.quartz.JobBuilder.newJob;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.apache.log4j.Logger;
+import org.quartz.JobBuilder;
 import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
 
@@ -44,10 +46,10 @@ import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
  */
 public class ExportJobBuilder {
 
-	private static final Logger logger = Logger.getLogger(ExportJobBuilder.class);
+	private static final Logger LOGGER = Logger.getLogger(ExportJobBuilder.class);
 
-	private static final String EXPORT_TYPE_XLS = "xls";
-
+	private static final String EXPORT_TYPE_XLSX = "xlsx";
+	private static final String EXPORT_TYPE_AVRO = "avro";
 	private static final String EXPORT_TYPE_CSV = "csv";
 
 	/**
@@ -123,7 +125,7 @@ public class ExportJobBuilder {
 	 */
 	public JobDetail build() {
 
-		logger.debug("Building export job for...");
+		LOGGER.debug("Building export job for...");
 
 		if (dataSetId == null) {
 			throw new IllegalArgumentException("Attribute dataSetId cannot be null");
@@ -144,18 +146,22 @@ public class ExportJobBuilder {
 		jobDataMap.put(MAP_KEY_RESOURCE_PATH, resoursePath);
 		jobDataMap.put(MAP_KEY_USER_PROFILE, userProfile);
 
-		logger.debug("\t- Dataset id: " +  String.valueOf(dataSetId));
-		logger.debug("\t- UUID: " +  String.valueOf(randomUUID));
-		logger.debug("\t- Resource path: " +  String.valueOf(resoursePath));
-		logger.debug("\t- Type: " +  String.valueOf(type));
+		LOGGER.debug("\t- Dataset id: " + dataSetId);
+		LOGGER.debug("\t- UUID: " + randomUUID);
+		LOGGER.debug("\t- Resource path: " + resoursePath);
+		LOGGER.debug("\t- Type: " + type);
 
-		JobDetail job = null;
+		JobBuilder newJob = newJob().withIdentity(jobName, EXPORT_GROUP).withDescription(jobDescription).usingJobData(jobDataMap).storeDurably(true);
+
 		switch (type) {
 		case EXPORT_TYPE_CSV:
-			job = new JobDetail(jobName, EXPORT_GROUP, CSVExportJob.class);
+			newJob = newJob.ofType(CSVExportJob.class);
 			break;
-		case EXPORT_TYPE_XLS:
-			job = new JobDetail(jobName, EXPORT_GROUP, ExcelExportJob.class);
+		case EXPORT_TYPE_XLSX:
+			newJob = newJob.ofType(ExcelExportJob.class);
+			break;
+		case EXPORT_TYPE_AVRO:
+			newJob = newJob.ofType(AvroExportJob.class);
 			break;
 
 		default:
@@ -163,11 +169,9 @@ public class ExportJobBuilder {
 			throw new IllegalArgumentException(msg);
 		}
 
-		job.setDescription(jobDescription);
-		job.setJobDataMap(jobDataMap);
-		job.setDurability(false);
+		JobDetail job = newJob.build();
 
-		logger.debug("Export job built!");
+		LOGGER.debug("Export job built!");
 
 		return job;
 	}
@@ -209,6 +213,16 @@ public class ExportJobBuilder {
 	}
 
 	/**
+	 * Specify Avro output.
+	 *
+	 * @return Current builder
+	 */
+	public ExportJobBuilder withTypeOfAvro() {
+		type = EXPORT_TYPE_AVRO;
+		return this;
+	}
+
+	/**
 	 * Specify Excel output.
 	 *
 	 * @return Current builder
@@ -225,8 +239,8 @@ public class ExportJobBuilder {
 	 *
 	 * @return Current builder
 	 */
-	public ExportJobBuilder withTypeOfXls() {
-		type = EXPORT_TYPE_XLS;
+	public ExportJobBuilder withTypeOfXlsx() {
+		type = EXPORT_TYPE_XLSX;
 		return this;
 	}
 }

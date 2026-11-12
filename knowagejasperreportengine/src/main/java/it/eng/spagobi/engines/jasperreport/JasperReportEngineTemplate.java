@@ -17,17 +17,13 @@
 */
 package it.eng.spagobi.engines.jasperreport;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
+import it.eng.spagobi.utilities.DynamicClassLoader;
+import it.eng.spagobi.utilities.SpagoBIAccessUtils;
+
+import java.io.*;
 import java.util.Enumeration;
 import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
-
-import it.eng.spagobi.utilities.DynamicClassLoader;
-import it.eng.spagobi.utilities.SpagoBIAccessUtils;
 
 /**
  * @author Andrea Gioia (andrea.gioia@eng.it)
@@ -59,39 +55,41 @@ public class JasperReportEngineTemplate {
 				FileOutputStream foZip = new FileOutputStream(fileZip);
 				foZip.write(content);
 				foZip.close();
-				util.unzip(fileZip, tempDir);
+				try {
+					util.unzip(fileZip, tempDir);
+				} catch (Exception e) {
+					throw new JasperReportEngineRuntimeException("Impossible to unzip template", e);
+				}
 				JarFile zipFile = new JarFile(fileZip);
 				Enumeration totalZipEntries = zipFile.entries();
-				File jarFile = null;
+				File jarFile;
 				while (totalZipEntries.hasMoreElements()) {
-					ZipEntry entry = (ZipEntry) totalZipEntries.nextElement();
-					if (entry.getName().endsWith(".jar")) {
-						jarFile = new File(tempDir, entry.getName());
-						// set classloader with jar
-						ClassLoader previous = Thread.currentThread().getContextClassLoader();
-						DynamicClassLoader dcl = new DynamicClassLoader(jarFile, previous);
-						Thread.currentThread().setContextClassLoader(dcl);
-					}
-					else if (entry.getName().endsWith(".jrxml")) {
-						// set InputStream with jrxml
-						File jrxmlFile = new File(tempDir, entry.getName());
-						InputStream isJrxml = new FileInputStream(jrxmlFile);
-						byte[] templateJrxml = new byte[0];
-						templateJrxml = util.getByteArrayFromInputStream(isJrxml);
-						is = new ByteArrayInputStream(templateJrxml);
-					}
-					
-					if (entry.getName().endsWith(".properties")) {
-						propertiesLoaded = true;
-					}					
+						ZipEntry entry = (ZipEntry) totalZipEntries.nextElement();
+						if (entry.getName().endsWith(".jar")) {
+							jarFile = new File(tempDir, entry.getName());
+							// set classloader with jar
+							ClassLoader previous = Thread.currentThread().getContextClassLoader();
+							DynamicClassLoader dcl = new DynamicClassLoader(jarFile, previous);
+							Thread.currentThread().setContextClassLoader(dcl);
+						}
+						else if (entry.getName().endsWith(".jrxml")) {
+							// set InputStream with jrxml
+							File jrxmlFile = new File(tempDir, entry.getName());
+							InputStream isJrxml = new FileInputStream(jrxmlFile);
+							byte[] templateJrxml = new byte[0];
+							templateJrxml = util.getByteArrayFromInputStream(isJrxml);
+							is = new ByteArrayInputStream(templateJrxml);
+						}
+						
+						if (entry.getName().endsWith(".properties")) {
+							propertiesLoaded = true;
+						}
 				}
 			} else {
 				is = new ByteArrayInputStream( content );
 			}
-		} catch(Throwable t) {
-			throw new JasperReportEngineRuntimeException("Impossible to load template", t);
-		} finally {
-			
+		} catch(Exception e) {
+			throw new JasperReportEngineRuntimeException("Impossible to load template", e);
 		}
 		
 		return is;

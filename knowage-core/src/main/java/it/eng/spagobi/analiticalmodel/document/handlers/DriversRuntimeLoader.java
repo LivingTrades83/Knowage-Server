@@ -1,6 +1,7 @@
 package it.eng.spagobi.analiticalmodel.document.handlers;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -26,7 +27,7 @@ import it.eng.spagobi.tools.dataset.dao.IDataSetDAO;
 
 public class DriversRuntimeLoader {
 
-	static private Logger logger = Logger.getLogger(DriversRuntimeLoader.class);
+	private static Logger logger = Logger.getLogger(DriversRuntimeLoader.class);
 
 	public BIObject loadBIObjectForExecutionByLabelAndRole(String label, String role) throws EMFUserError {
 		IBIObjectDAO dao = DAOFactory.getBIObjectDAO();
@@ -46,8 +47,8 @@ public class DriversRuntimeLoader {
 	}
 
 	private List<BIMetaModelParameter> getMetamodelDatasetDrivers(BIObject biObject, String role) {
-		List<BIMetaModelParameter> toReturn = new ArrayList<BIMetaModelParameter>();
-		List<BIMetaModelParameter> qbeDatasetDrivers = new ArrayList<BIMetaModelParameter>();
+		List<BIMetaModelParameter> toReturn = new ArrayList<>();
+		List<BIMetaModelParameter> qbeDatasetDrivers = new ArrayList<>();
 
 		IBIMetaModelParameterDAO driversDao = DAOFactory.getBIMetaModelParameterDAO();
 		IMetaModelsDAO businessModelsDAO = DAOFactory.getMetaModelsDAO();
@@ -55,13 +56,14 @@ public class DriversRuntimeLoader {
 		IDataSetDAO datasetDao = DAOFactory.getDataSetDAO();
 
 		try {
-			ArrayList<BIObjDataSet> biObjDataSetList = biObjDataSetDAO.getBiObjDataSets(biObject.getId());
+			List<BIObjDataSet> biObjDataSetList = biObjDataSetDAO.getBiObjDataSets(biObject.getId());
 			Iterator itDs = biObjDataSetList.iterator();
 			while (itDs.hasNext()) {
 				BIObjDataSet biObjDataSet = (BIObjDataSet) itDs.next();
 				Integer dsId = biObjDataSet.getDataSetId();
 				IDataSet dataset = datasetDao.loadDataSetById(dsId);
-				dataset = dataset instanceof VersionedDataSet ? ((VersionedDataSet) dataset).getWrappedDataset() : dataset;
+				dataset = dataset instanceof VersionedDataSet ? ((VersionedDataSet) dataset).getWrappedDataset()
+						: dataset;
 				if (dataset != null && dataset.getDsType() == "SbiQbeDataSet") {
 					JSONObject jsonConfig = new JSONObject(dataset.getConfiguration());
 					String businessModelName = jsonConfig.getString("qbeDatamarts");
@@ -81,32 +83,42 @@ public class DriversRuntimeLoader {
 	}
 
 	private List<BIObjectParameter> getDatasetDrivers(BIObject biObject, String role) {
-		List<BIObjectParameter> toReturn = new ArrayList<BIObjectParameter>();
-		List<BIMetaModelParameter> qbeDatasetDrivers = new ArrayList<BIMetaModelParameter>();
+		List<BIObjectParameter> toReturn = new ArrayList<>();
+		List<BIMetaModelParameter> qbeDatasetDrivers = new ArrayList<>();
 
-		IBIMetaModelParameterDAO driversDao = DAOFactory.getBIMetaModelParameterDAO();
-		IMetaModelsDAO businessModelsDAO = DAOFactory.getMetaModelsDAO();
 		IBIObjDataSetDAO biObjDataSetDAO = DAOFactory.getBIObjDataSetDAO();
+		List<BIObjectParameter> toAdd = null;
 		IDataSetDAO datasetDao = DAOFactory.getDataSetDAO();
+		IMetaModelsDAO businessModelsDAO = DAOFactory.getMetaModelsDAO();
+		IBIMetaModelParameterDAO driversDao = DAOFactory.getBIMetaModelParameterDAO();
 
 		try {
-			ArrayList<BIObjDataSet> biObjDataSetList = biObjDataSetDAO.getBiObjDataSets(biObject.getId());
+			List<BIObjDataSet> biObjDataSetList = biObjDataSetDAO.getBiObjDataSets(biObject.getId());
 			Iterator itDs = biObjDataSetList.iterator();
 			while (itDs.hasNext()) {
 				BIObjDataSet biObjDataSet = (BIObjDataSet) itDs.next();
 				Integer dsId = biObjDataSet.getDataSetId();
+
+				toAdd = Collections.emptyList();
+
 				IDataSet dataset = datasetDao.loadDataSetById(dsId);
-				dataset = dataset instanceof VersionedDataSet ? ((VersionedDataSet) dataset).getWrappedDataset() : dataset;
+				dataset = dataset instanceof VersionedDataSet ? ((VersionedDataSet) dataset).getWrappedDataset()
+						: dataset;
 				if (dataset != null && dataset.getDsType() == "SbiQbeDataSet") {
 					JSONObject jsonConfig = new JSONObject(dataset.getConfiguration());
 					String businessModelName = jsonConfig.getString("qbeDatamarts");
 					MetaModel businessModel = businessModelsDAO.loadMetaModelByName(businessModelName);
 					qbeDatasetDrivers = driversDao.loadBIMetaModelParameterByMetaModelId(businessModel.getId());
 					if (qbeDatasetDrivers != null && !qbeDatasetDrivers.isEmpty()) {
-						toReturn = toDocumentDrivers(qbeDatasetDrivers, biObject, role);
-						// in a document i can use only one qbe dataset WITH DRIVERS
-						break;
+						toAdd = toDocumentDrivers(qbeDatasetDrivers, biObject, role);
 					}
+				}
+
+				toReturn.addAll(toAdd);
+
+				// in a document i can use only one qbe dataset WITH DRIVERS
+				if (!toReturn.isEmpty()) {
+					break;
 				}
 			}
 		} catch (Exception e) {
@@ -115,8 +127,81 @@ public class DriversRuntimeLoader {
 		return toReturn;
 	}
 
-	private List<BIObjectParameter> toDocumentDrivers(List<BIMetaModelParameter> qbeDatasetDrivers, BIObject biObject, String role) {
-		List<BIObjectParameter> toReturn = new ArrayList<BIObjectParameter>();
+	/**
+	 * @deprecated Where possible, prefer {@link #getDatasetMetaModel(Integer, String)} or {@link #getBusinessModelDrivers(String, String)}
+	 */
+	@Deprecated
+	public List<BIMetaModelParameter> getDatasetDrivers(Integer dsId, String role) {
+		final List<BIMetaModelParameter> ret = new ArrayList<>();
+		List<BIMetaModelParameter> toAdd = new ArrayList<>();
+
+		try {
+			IDataSetDAO datasetDao = DAOFactory.getDataSetDAO();
+			IDataSet dataset = datasetDao.loadDataSetById(dsId);
+			dataset = dataset instanceof VersionedDataSet ? ((VersionedDataSet) dataset).getWrappedDataset() : dataset;
+			if (dataset != null && dataset.getDsType() == "SbiQbeDataSet") {
+				JSONObject jsonConfig = new JSONObject(dataset.getConfiguration());
+				String businessModelName = jsonConfig.getString("qbeDatamarts");
+				toAdd.addAll(getBusinessModelDrivers(businessModelName, role));
+			}
+
+			ret.addAll(toAdd);
+		} catch (Exception e) {
+			logger.error("Couldn't retrieve drivers from meta model", e);
+		}
+
+		return ret;
+	}
+
+	public List<BIMetaModelParameter> getBusinessModelDrivers(String businessModelName, String role) {
+		List<BIMetaModelParameter> toAdd2 = new ArrayList<>();
+		IMetaModelsDAO businessModelsDAO = DAOFactory.getMetaModelsDAO();
+		MetaModel businessModel = businessModelsDAO.loadMetaModelByName(businessModelName);
+		IBIMetaModelParameterDAO driversDao = DAOFactory.getBIMetaModelParameterDAO();
+		List<BIMetaModelParameter> qbeDatasetDrivers = driversDao
+				.loadBIMetaModelParameterByMetaModelId(businessModel.getId());
+		if (qbeDatasetDrivers != null && !qbeDatasetDrivers.isEmpty()) {
+			toAdd2.addAll(toMetamodelDrivers(qbeDatasetDrivers, role));
+		}
+		return toAdd2;
+	}
+
+	public MetaModel getDatasetMetaModel(Integer dsId, String role) {
+		IDataSetDAO datasetDao = DAOFactory.getDataSetDAO();
+		MetaModel businessModel = null;
+
+		try {
+			IDataSet dataset = datasetDao.loadDataSetById(dsId);
+			dataset = dataset instanceof VersionedDataSet ? ((VersionedDataSet) dataset).getWrappedDataset() : dataset;
+			if (dataset != null && dataset.getDsType() == "SbiQbeDataSet") {
+				IMetaModelsDAO businessModelsDAO = DAOFactory.getMetaModelsDAO();
+				IBIMetaModelParameterDAO driversDao = DAOFactory.getBIMetaModelParameterDAO();
+				List<BIMetaModelParameter> qbeDatasetDrivers = new ArrayList<>();
+				List<BIMetaModelParameter> toAdd = null;
+				List<BIMetaModelParameter> ret = new ArrayList<>();
+
+				JSONObject jsonConfig = new JSONObject(dataset.getConfiguration());
+				String businessModelName = jsonConfig.getString("qbeDatamarts");
+				businessModel = businessModelsDAO.loadMetaModelByName(businessModelName);
+				qbeDatasetDrivers = driversDao.loadBIMetaModelParameterByMetaModelId(businessModel.getId());
+				if (qbeDatasetDrivers != null && !qbeDatasetDrivers.isEmpty()) {
+					toAdd = toMetamodelDrivers(qbeDatasetDrivers, role);
+				}
+
+				businessModel.getDrivers().clear();
+				businessModel.getDrivers().addAll(toAdd);
+			}
+
+		} catch (Exception e) {
+			logger.error("Couldn't retrieve drivers from meta model", e);
+		}
+
+		return businessModel;
+	}
+
+	private List<BIObjectParameter> toDocumentDrivers(List<BIMetaModelParameter> qbeDatasetDrivers, BIObject biObject,
+			String role) {
+		List<BIObjectParameter> toReturn = new ArrayList<>();
 		for (BIMetaModelParameter d : qbeDatasetDrivers) {
 			toReturn.add(transformDSDrivertoBIObjectParameter(d, biObject, role));
 		}
@@ -124,14 +209,15 @@ public class DriversRuntimeLoader {
 	}
 
 	private List<BIMetaModelParameter> toMetamodelDrivers(List<BIMetaModelParameter> qbeDatasetDrivers, String role) {
-		List<BIMetaModelParameter> toReturn = new ArrayList<BIMetaModelParameter>();
+		List<BIMetaModelParameter> toReturn = new ArrayList<>();
 		for (BIMetaModelParameter d : qbeDatasetDrivers) {
 			toReturn.add(transformDSDrivertoBIMetaModelParameter(d, role));
 		}
 		return toReturn;
 	}
 
-	public BIMetaModelParameter transformDSDrivertoBIMetaModelParameter(BIMetaModelParameter datasetDriver, String role) {
+	public BIMetaModelParameter transformDSDrivertoBIMetaModelParameter(BIMetaModelParameter datasetDriver,
+			String role) {
 		BIMetaModelParameter docDriver = new BIMetaModelParameter();
 		IParameterDAO aParameterDAO = DAOFactory.getParameterDAO();
 		docDriver.setId(datasetDriver.getId());
@@ -147,14 +233,15 @@ public class DriversRuntimeLoader {
 		docDriver.setProg(datasetDriver.getProg());
 		docDriver.setColSpan(datasetDriver.getColSpan());
 		docDriver.setThickPerc(datasetDriver.getThickPerc());
-		docDriver.setParameterValues(datasetDriver.getParameterValues());	
+		docDriver.setParameterValues(datasetDriver.getParameterValues());
 		docDriver.setParameterValuesDescription(datasetDriver.getParameterValuesDescription());
-		
+
 		Parameter parameter = new Parameter();
 		try {
 			parameter = aParameterDAO.loadForExecutionByParameterIDandRoleName(docDriver.getParID(), role, false);
 		} catch (EMFUserError e) {
-			e.printStackTrace();
+			logger.info("Non fatal error during values loading for driver " + datasetDriver + " for the role " + role,
+					e);
 		}
 		parameter.setId(datasetDriver.getParameter().getId());
 		parameter.setType(datasetDriver.getParameter().getType());
@@ -162,7 +249,8 @@ public class DriversRuntimeLoader {
 		return docDriver;
 	}
 
-	public BIObjectParameter transformDSDrivertoBIObjectParameter(BIMetaModelParameter datasetDriver, BIObject biObject, String role) {
+	private BIObjectParameter transformDSDrivertoBIObjectParameter(BIMetaModelParameter datasetDriver,
+			BIObject biObject, String role) {
 		BIObjectParameter docDriver = new BIObjectParameter();
 		IParameterDAO aParameterDAO = DAOFactory.getParameterDAO();
 		docDriver.setId(biObject.getId());
@@ -179,15 +267,15 @@ public class DriversRuntimeLoader {
 		docDriver.setColSpan(datasetDriver.getColSpan());
 		docDriver.setThickPerc(datasetDriver.getThickPerc());
 
-		docDriver.setParameterValues(datasetDriver.getParameterValues());	
+		docDriver.setParameterValues(datasetDriver.getParameterValues());
 		docDriver.setParameterValuesDescription(datasetDriver.getParameterValuesDescription());
-		
-		
+
 		Parameter parameter = new Parameter();
 		try {
 			parameter = aParameterDAO.loadForExecutionByParameterIDandRoleName(docDriver.getParID(), role, false);
 		} catch (EMFUserError e) {
-			e.printStackTrace();
+			logger.info("Non fatal error during values loading for driver " + datasetDriver + " for the role " + role
+					+ " with object " + biObject, e);
 		}
 		parameter.setId(datasetDriver.getParameter().getId());
 		parameter.setType(datasetDriver.getParameter().getType());

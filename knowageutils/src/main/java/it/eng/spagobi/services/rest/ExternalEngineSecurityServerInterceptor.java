@@ -17,12 +17,16 @@
  */
 package it.eng.spagobi.services.rest;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.util.Base64;
+import java.util.Base64.Decoder;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 
-import org.apache.axis.encoding.Base64;
 import org.apache.log4j.Logger;
 
 import it.eng.spago.security.IEngUserProfile;
@@ -40,10 +44,12 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class ExternalEngineSecurityServerInterceptor extends AbstractSecurityServerInterceptor {
 
-	static private Logger logger = Logger.getLogger(ExternalEngineSecurityServerInterceptor.class);
+	private static Logger logger = Logger.getLogger(ExternalEngineSecurityServerInterceptor.class);
 
 	@Context
 	private HttpServletRequest servletRequest;
+
+	private final Decoder base64Decoder = Base64.getDecoder();
 
 	@Override
 	protected void notAuthenticated(ContainerRequestContext requestContext) {
@@ -62,9 +68,17 @@ public class ExternalEngineSecurityServerInterceptor extends AbstractSecuritySer
 				int position = auto.indexOf("Direct");
 				if (position > -1 && position < 5) {// Direct stay at the beginning of the header
 					String encodedUser = auto.replaceFirst("Direct ", "");
-					byte[] decodedBytes = Base64.decode(encodedUser);
-					String userId = new String(decodedBytes, "UTF-8");
+					byte[] decodedBytes = base64Decoder.decode(encodedUser);
+					String userId = new String(decodedBytes, UTF_8);
 					SecurityServiceProxy proxy = new SecurityServiceProxy(userId, servletRequest.getSession());
+					profile = (UserProfile) proxy.getUserProfile();
+				}
+			} else {
+				auto = servletRequest.getHeader("X-Kn-Authorization");
+				int position = auto.indexOf("Bearer");
+				if (position > -1 && position < 5) {// Bearer stay at the beginning of the header
+					String encodedUser = auto.replaceFirst("Bearer ", "");
+					SecurityServiceProxy proxy = new SecurityServiceProxy(encodedUser, servletRequest.getSession());
 					profile = (UserProfile) proxy.getUserProfile();
 				}
 			}
@@ -99,7 +113,8 @@ public class ExternalEngineSecurityServerInterceptor extends AbstractSecuritySer
 				authenticated = false;
 			}
 		} catch (Exception e) {
-			logger.debug("Error while attempt to find user profile in session or authenticate user. Returning [false]", e);
+			logger.debug("Error while attempt to find user profile in session or authenticate user. Returning [false]",
+					e);
 			authenticated = false;
 		}
 

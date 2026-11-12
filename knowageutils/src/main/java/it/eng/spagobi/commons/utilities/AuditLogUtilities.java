@@ -17,9 +17,6 @@
  */
 package it.eng.spagobi.commons.utilities;
 
-import it.eng.spago.security.IEngUserProfile;
-import it.eng.spagobi.commons.bo.UserProfile;
-
 import java.io.ByteArrayInputStream;
 import java.net.InetAddress;
 import java.security.DigestInputStream;
@@ -29,16 +26,17 @@ import java.text.SimpleDateFormat;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Formatter;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 
-import nl.bitwalker.useragentutils.UserAgent;
-
 import org.apache.log4j.Logger;
+
+import it.eng.spago.security.IEngUserProfile;
+import it.eng.spagobi.commons.bo.UserProfile;
+import nl.bitwalker.useragentutils.UserAgent;
 
 /**
  * @author Chiara Chiarelli (chiara.chiarelli@eng.it) , Monia Spinelli (monia.spinelli@eng.it)
@@ -64,22 +62,20 @@ public class AuditLogUtilities {
 	/**
 	 * Substitutes the profile attributes with sintax "${attribute_name}" with the correspondent value in the string passed at input.
 	 *
-	 * @param statement
-	 *            The string to be modified (tipically a query)
-	 * @param profile
-	 *            The IEngUserProfile object
+	 * @param statement The string to be modified (tipically a query)
+	 * @param profile   The IEngUserProfile object
 	 *
 	 * @return The statement with profile attributes replaced by their values.
 	 *
-	 * @throws Exception
-	 *             the exception
+	 * @throws Exception the exception
 	 */
-	public static void updateAudit(HttpServletRequest request, IEngUserProfile profile, String action_code, HashMap<String, String> parameters, String esito) {
+	public static void updateAudit(HttpServletRequest request, IEngUserProfile profile, String action_code,
+			Map<String, String> parameters, String esito) {
 		logger.debug("IN");
 
 		try {
 
-			StringBuffer strbuf = new StringBuffer();
+			StringBuilder strbuf = new StringBuilder();
 
 			String userName = "";
 			String userRoles = "";
@@ -226,8 +222,8 @@ public class AuditLogUtilities {
 		return rolesStr;
 	}
 
-	public static String calculateHash(StringBuffer str) throws Exception {
-		MessageDigest algorithm = MessageDigest.getInstance("MD5");
+	public static String calculateHash(StringBuilder str) throws Exception {
+		MessageDigest algorithm = MessageDigest.getInstance("SHA-512");
 		String is = new String(str);
 		DigestInputStream dis = new DigestInputStream(new ByteArrayInputStream(is.getBytes()), algorithm);
 		while (dis.read() != -1)

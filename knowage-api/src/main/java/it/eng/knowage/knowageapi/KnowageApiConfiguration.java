@@ -17,34 +17,27 @@
  */
 package it.eng.knowage.knowageapi;
 
-import javax.naming.Context;
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
-
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.transaction.ChainedTransactionManager;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalEntityManagerFactoryBean;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.web.context.annotation.RequestScope;
-import org.springframework.web.multipart.commons.CommonsMultipartResolver;
 
-import it.eng.knowage.knowageapi.context.BusinessRequestContext;
+import it.eng.knowage.boot.filter.JWTSecurityFilter;
 import it.eng.knowage.knowageapi.service.FunctionCatalogAPI;
 import it.eng.knowage.knowageapi.service.impl.FunctionCatalogAPIImpl;
 
 @Configuration
-@EnableAutoConfiguration(exclude={DataSourceAutoConfiguration.class})
+@EnableAutoConfiguration(exclude = { DataSourceAutoConfiguration.class })
 @Profile("production")
-@ComponentScan("it.eng.knowage.knowageapi")
+@ComponentScan({ "it.eng.knowage.knowageapi", "it.eng.knowage.resourcemanager", "it.eng.knowage.logmanager" })
 public class KnowageApiConfiguration {
 
 	@Primary /* just to prevent Spring error */
@@ -71,32 +64,27 @@ public class KnowageApiConfiguration {
 	}
 
 	@Bean
-	@RequestScope
-	public BusinessRequestContext businessRequestContext(@Value("${application.version}") String version) {
-		return new BusinessRequestContext(version);
-	}
-
-	@Lazy
-	@Bean
-	public SecurityServiceFactory securityService() {
-		return new SecurityServiceFactory();
-	}
-
-	@Bean
 	public FunctionCatalogAPI functionCatalogAPI() {
 		return new FunctionCatalogAPIImpl();
 	}
 
-	@Bean(name = "multipartResolver")
-	public CommonsMultipartResolver multipartResolver() {
-		CommonsMultipartResolver multipartResolver = new CommonsMultipartResolver();
-		multipartResolver.setMaxUploadSize(100000);
-		return multipartResolver;
+	@Bean(name = "JWTSecurityFilter")
+	public JWTSecurityFilter jwtSecurityFilter() {
+		return new JWTSecurityFilter();
 	}
 
 	@Bean
-	public Context context() throws NamingException {
-		return new InitialContext();
-	}
+	public FilterRegistrationBean<JWTSecurityFilter> jwtSecurityFilterRegistration() {
+		FilterRegistrationBean<JWTSecurityFilter> filter = new FilterRegistrationBean<>();
 
+		filter.setFilter(jwtSecurityFilter());
+		filter.setOrder(10);
+
+		/*
+		 * Add all filter's patterns here.
+		 */
+		filter.addUrlPatterns("/api/*");
+
+		return filter;
+	}
 }

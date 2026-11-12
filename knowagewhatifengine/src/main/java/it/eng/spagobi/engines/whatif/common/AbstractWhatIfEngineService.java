@@ -154,12 +154,12 @@ public class AbstractWhatIfEngineService extends AbstractEngineRestService {
 	public List<Member> getMembersFromBody() {
 		logger.debug("Getting the members from the request");
 		List<SbiMember> sbiMembers = null;
-		List<Member> members = new ArrayList<Member>();
+		List<Member> members = new ArrayList<>();
 		String membersString = null;
 
 		try {
 			membersString = RestUtilities.readBodyXSSUnsafe(getServletRequest());
-			TypeReference<List<SbiMember>> type = new TypeReference<List<SbiMember>>() {
+			TypeReference<List<SbiMember>> type = new TypeReference<>() {
 			};
 			sbiMembers = (List<SbiMember>) deserialize(membersString, type);
 			for (int i = 0; i < sbiMembers.size(); i++) {
@@ -181,7 +181,7 @@ public class AbstractWhatIfEngineService extends AbstractEngineRestService {
 	protected void applyConfiguration(ModelConfig modelConfig, SpagoBIPivotModel model) {
 		applySupperssEmptyConfiguration(modelConfig, model);
 		applySortConfiguration(modelConfig, model);
-	
+
 	}
 
 	private void applySortConfiguration(ModelConfig modelConfig, SpagoBIPivotModel model) {
@@ -191,11 +191,11 @@ public class AbstractWhatIfEngineService extends AbstractEngineRestService {
 		int axis = modelConfig.getAxis();
 		String sortMode = modelConfig.getSortMode();
 		if (shouldSort(sortingEnabled, sortingPositionUniqeName)) {
-	
+
 			model.sortModel(axisToSort, axis, sortingPositionUniqeName, sortMode);
-	
+
 		}
-	
+
 	}
 
 	private void applySupperssEmptyConfiguration(ModelConfig modelConfig, SpagoBIPivotModel model) {

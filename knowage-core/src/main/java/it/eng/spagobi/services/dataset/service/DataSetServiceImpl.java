@@ -26,22 +26,15 @@ import com.jamonapi.MonitorFactory;
 
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.utilities.GeneralUtilities;
 import it.eng.spagobi.services.common.AbstractServiceImpl;
 import it.eng.spagobi.services.dataset.DataSetService;
 import it.eng.spagobi.services.dataset.bo.SpagoBiDataSet;
-import it.eng.spagobi.utilities.assertion.Assert;
 
 /**
  * @author Andrea Gioia
  * @author Marco Libanori
  */
-@WebService(
-		name = "DataSetServiceService",
-		portName = "DataSetServicePort",
-		serviceName = "DataSetService",
-		targetNamespace = "http://dataset.services.spagobi.eng.it/"
-	)
+@WebService(name = "DataSetServiceService", portName = "DataSetServicePort", serviceName = "DataSetService", targetNamespace = "http://dataset.services.spagobi.eng.it/")
 public class DataSetServiceImpl extends AbstractServiceImpl implements DataSetService {
 
 	private final DataSetSupplier supplier = new DataSetSupplier();
@@ -52,7 +45,6 @@ public class DataSetServiceImpl extends AbstractServiceImpl implements DataSetSe
 	 * Instantiates a new data source service impl.
 	 */
 	public DataSetServiceImpl() {
-		super();
 	}
 
 	@Override
@@ -62,7 +54,7 @@ public class DataSetServiceImpl extends AbstractServiceImpl implements DataSetSe
 		try {
 			validateTicket(token, user);
 			IEngUserProfile profile = this.setTenantByUserId(user);
-			return supplier.getDataSet(documentId, (UserProfile)profile);
+			return supplier.getDataSet(documentId, (UserProfile) profile);
 		} catch (Exception e) {
 			logger.error("Error while getting dataset for document with id " + documentId, e);
 			return null;
@@ -80,7 +72,25 @@ public class DataSetServiceImpl extends AbstractServiceImpl implements DataSetSe
 		try {
 			validateTicket(token, user);
 			IEngUserProfile profile = this.setTenantByUserId(user);
-			return supplier.getDataSetByLabel(label,profile);
+			return supplier.getDataSetByLabel(label, profile);
+		} catch (Exception e) {
+			logger.error("Error while getting dataset with label " + label, e);
+			return null;
+		} finally {
+			this.unsetTenant();
+			monitor.stop();
+			logger.debug("OUT");
+		}
+	}
+
+	@Override
+	public SpagoBiDataSet getDataSetByLabelAndUserCategories(String token, String user, String label) {
+		logger.debug("IN");
+		Monitor monitor = MonitorFactory.start("spagobi.service.dataset.getDataSetByLabel");
+		try {
+			validateTicket(token, user);
+			IEngUserProfile profile = this.setTenantByUserId(user);
+			return supplier.loadDataSetByLabelAndUserCategories(label, profile);
 		} catch (Exception e) {
 			logger.error("Error while getting dataset with label " + label, e);
 			return null;
@@ -93,10 +103,8 @@ public class DataSetServiceImpl extends AbstractServiceImpl implements DataSetSe
 
 	/**
 	 *
-	 * @param token
-	 *            String
-	 * @param user
-	 *            String
+	 * @param token String
+	 * @param user  String
 	 * @return SpagoBiDataSet[]
 	 */
 	@Override
@@ -117,26 +125,5 @@ public class DataSetServiceImpl extends AbstractServiceImpl implements DataSetSe
 		}
 	}
 
-	@Override
-	public SpagoBiDataSet saveDataSet(String token, String user, SpagoBiDataSet dataset) {
-		logger.debug("IN");
-		Monitor monitor = MonitorFactory.start("spagobi.service.dataset.saveDataSet");
-		try {
-			validateTicket(token, user);
-			this.setTenantByUserId(user);
-
-			IEngUserProfile profile = GeneralUtilities.createNewUserProfile(user);
-			Assert.assertNotNull(profile, "Impossible to find the user profile");
-
-			return supplier.saveDataSet(dataset, profile, null);
-		} catch (Exception e) {
-			logger.error("Errors saving dataset " + dataset, e);
-			return null;
-		} finally {
-			this.unsetTenant();
-			monitor.stop();
-			logger.debug("OUT");
-		}
-	}
 
 }

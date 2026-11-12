@@ -17,19 +17,20 @@
  */
 package it.eng.spagobi.mapcatalogue.bo;
 
-import it.eng.spago.error.EMFInternalError;
-import it.eng.spago.error.EMFUserError;
-import it.eng.spagobi.commons.metadata.SbiDomains;
-import it.eng.spagobi.commons.metadata.SbiExtRoles;
-import it.eng.spagobi.mapcatalogue.metadata.SbiGeoLayers;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.apache.log4j.Logger;
+import it.eng.spago.error.EMFInternalError;
+import it.eng.spago.error.EMFUserError;
+import it.eng.spagobi.commons.dao.dto.SbiCategory;
+import it.eng.spagobi.commons.metadata.SbiExtRoles;
+import it.eng.spagobi.mapcatalogue.metadata.SbiGeoLayers;
 
 public class GeoLayer {
 
@@ -50,10 +51,12 @@ public class GeoLayer {
 	private String layerParams;
 	private Integer layerOrder;
 	private Integer category_id;
-	private SbiDomains category;
+	private SbiCategory category;
 	private List<SbiExtRoles> roles;
 	private List<String> properties;
 
+	private static Logger logger = Logger.getLogger(GeoLayer.class);
+	
 	public GeoLayer() {
 		super();
 	}
@@ -122,7 +125,7 @@ public class GeoLayer {
 		if (layerDef != null) {
 			try {
 
-				String layerDefString = new String(layerDef, "UTF-8");
+				String layerDefString = new String(layerDef, UTF_8);
 				JSONObject layerDefJson = new JSONObject(layerDefString);
 
 				this.setLayerIdentify(layerDefJson.getString("layerId"));
@@ -160,11 +163,11 @@ public class GeoLayer {
 					}
 				}
 			} catch (NumberFormatException e) {
-				e.printStackTrace();
+				//e.printStackTrace();
+				logger.error("NumberFormatException",e);
 			} catch (JSONException e) {
-				e.printStackTrace();
-			} catch (UnsupportedEncodingException e) {
-				e.printStackTrace();
+				//e.printStackTrace();
+				logger.error("JSONException",e);
 			}
 		} else {
 			this.setLayerIdentify(null);
@@ -245,11 +248,11 @@ public class GeoLayer {
 		this.layerOrder = layerOrder;
 	}
 
-	public SbiDomains getCategory() {
+	public SbiCategory getCategory() {
 		return category;
 	}
 
-	public void setCategory(SbiDomains category) {
+	public void setCategory(SbiCategory category) {
 		this.category = category;
 	}
 
@@ -287,8 +290,7 @@ public class GeoLayer {
 
 	public SbiGeoLayers toSpagoBiGeoLayers() throws EMFUserError, EMFInternalError {
 
-		SbiGeoLayers sbm = new SbiGeoLayers();
-		sbm.setLayerId(getLayerId());
+		SbiGeoLayers sbm = new SbiGeoLayers(getLayerId());
 		sbm.setLabel(getLabel());
 		sbm.setName(getName());
 		sbm.setDescr(getDescr());

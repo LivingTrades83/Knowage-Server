@@ -9,14 +9,17 @@ import java.util.Set;
 import org.apache.log4j.Logger;
 
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
+import it.eng.spagobi.commons.bo.Domain;
+import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.engines.config.bo.Engine;
 
 public class ProductProfiler {
 
-	static private Logger logger = Logger.getLogger(ProductProfiler.class);
+	private static Logger logger = Logger.getLogger(ProductProfiler.class);
 
 	private static boolean isCommunity;
-	private static Class licenseManager, productProfilerEE;
+	private static Class<?> licenseManager;
+	private static Class<?> productProfilerEE;
 
 	static {
 		try {
@@ -35,14 +38,15 @@ public class ProductProfiler {
 		}
 	}
 
-	public static List filterDocumentTypesByProduct(List types) {
+	public static List<Domain> filterDocumentTypesByProduct(List<Domain> types) {
 		if (isCommunity) {
 			return types;
 		} else {
-			List filteredTypes = new ArrayList();
+			List<Domain> filteredTypes = new ArrayList<>();
 			try {
-				Method filterDocumentTypesByProductMethod = productProfilerEE.getMethod("filterDocumentTypesByProduct", List.class);
-				filteredTypes = (List) filterDocumentTypesByProductMethod.invoke(productProfilerEE, types);
+				Method filterDocumentTypesByProductMethod = productProfilerEE.getMethod("filterDocumentTypesByProduct",
+						List.class);
+				filteredTypes = (List<Domain>) filterDocumentTypesByProductMethod.invoke(productProfilerEE, types);
 			} catch (Exception e) {
 				logger.error("Error while filtering document types by product: ", e);
 			}
@@ -54,7 +58,7 @@ public class ProductProfiler {
 		if (isCommunity) {
 			return engines;
 		} else {
-			List<Engine> filteredEngines = new ArrayList<Engine>();
+			List<Engine> filteredEngines = new ArrayList<>();
 			try {
 				Method filterEnginesByProductMethod = productProfilerEE.getMethod("filterEnginesByProduct", List.class);
 				filteredEngines = (List<Engine>) filterEnginesByProductMethod.invoke(productProfilerEE, engines);
@@ -80,14 +84,31 @@ public class ProductProfiler {
 		}
 	}
 
-	public static boolean canCreateDataset(String type) {
+	public static boolean canExecuteDocumentByLicenseExpiredOrAbsent(BIObject biObj) {
 		if (isCommunity) {
 			return true;
 		} else {
 			boolean toReturn = false;
 			try {
-				Method canCreateDatasetMethod = productProfilerEE.getMethod("canCreateDataset", String.class);
-				toReturn = (boolean) canCreateDatasetMethod.invoke(productProfilerEE, type);
+				Method canExecuteDocumentByLicenseExpiredOrAbsentMethod = productProfilerEE.getMethod("canExecuteDocumentByLicenseExpiredOrAbsent", BIObject.class);
+				toReturn = (boolean) canExecuteDocumentByLicenseExpiredOrAbsentMethod.invoke(productProfilerEE, biObj);
+			} catch (Exception e) {
+				logger.error("Error while filtering engines by product: ", e);
+			}
+			return toReturn;
+		}
+
+	}
+
+	public static boolean canCreateDataset(String type, UserProfile profile) {
+		if (isCommunity) {
+			return true;
+		} else {
+			boolean toReturn = false;
+			try {
+				Method canCreateDatasetMethod = productProfilerEE.getMethod("canCreateDataset", String.class,
+						UserProfile.class);
+				toReturn = (boolean) canCreateDatasetMethod.invoke(productProfilerEE, type, profile);
 			} catch (Exception e) {
 				logger.error("Error while filtering datasets by product: ", e);
 			}
@@ -95,14 +116,31 @@ public class ProductProfiler {
 		}
 	}
 
-	public static Set<String> filterAuthorizationsByProduct(List<String> authorizations) {
+        public static boolean canUseEngGPT() {
+            if (isCommunity) {
+                return false;
+            } else {
+                boolean toReturn = false;
+                try {
+                    Method canCreateDatasetMethod = productProfilerEE.getMethod("canUseEngGPT");
+                    toReturn = (boolean) canCreateDatasetMethod.invoke(productProfilerEE);
+                } catch (Exception e) {
+                    logger.error("Error while checking if user can access to Eng GPT: ", e);
+                }
+                return toReturn;
+            }
+        }
+
+        public static Set<String> filterAuthorizationsByProduct(List<String> authorizations) {
 		if (isCommunity) {
-			return new HashSet<String>(authorizations);
+			return new HashSet<>(authorizations);
 		} else {
-			Set<String> filteredAuthorizations = new HashSet<String>();
+			Set<String> filteredAuthorizations = new HashSet<>();
 			try {
-				Method filterAuthorizationsByProductMethod = productProfilerEE.getMethod("filterAuthorizationsByProduct", List.class);
-				filteredAuthorizations = (Set<String>) filterAuthorizationsByProductMethod.invoke(productProfilerEE, authorizations);
+				Method filterAuthorizationsByProductMethod = productProfilerEE
+						.getMethod("filterAuthorizationsByProduct", List.class);
+				filteredAuthorizations = (Set<String>) filterAuthorizationsByProductMethod.invoke(productProfilerEE,
+						authorizations);
 			} catch (Exception e) {
 				logger.error("Error while filtering authorizations by product: ", e);
 			}
@@ -140,4 +178,22 @@ public class ProductProfiler {
 		}
 	}
 
+	public static boolean canAddAUser(int numberOfUsers, boolean isAdmin) {
+		if (isCommunity) {
+			return true;
+		} else {
+			boolean toReturn = false;
+			try {
+				Method canAddAUser = productProfilerEE.getMethod("canAddAUser", int.class, boolean.class);
+				toReturn = (boolean) canAddAUser.invoke(productProfilerEE, numberOfUsers, isAdmin);
+			} catch (Exception e) {
+				logger.error("Error while adding a user: ", e);
+			}
+			return toReturn;
+		}
+	}
+
+	private ProductProfiler() {
+
+	}
 }

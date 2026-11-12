@@ -17,34 +17,54 @@
  */
 package it.eng.spagobi.tools.dataset.persist;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
+import java.util.zip.GZIPOutputStream;
 
+import org.apache.commons.lang3.SystemUtils;
 import org.apache.log4j.Logger;
-import org.safehaus.uuid.UUID;
-import org.safehaus.uuid.UUIDGenerator;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jamonapi.Monitor;
 import com.jamonapi.MonitorFactory;
 
 import it.eng.spago.security.IEngUserProfile;
+import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.tools.dataset.bo.AbstractJDBCDataset;
-import it.eng.spagobi.tools.dataset.bo.CkanDataSet;
 import it.eng.spagobi.tools.dataset.bo.FileDataSet;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
 import it.eng.spagobi.tools.dataset.bo.VersionedDataSet;
@@ -55,9 +75,11 @@ import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData.FieldType;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import it.eng.spagobi.tools.dataset.utils.DatasetMetadataParser;
+import it.eng.spagobi.tools.dataset.utils.OracleClobHashSupport;
 import it.eng.spagobi.tools.dataset.metasql.query.DatabaseDialect;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.database.CacheDataBase;
 import it.eng.spagobi.utilities.database.DataBaseException;
 import it.eng.spagobi.utilities.database.DataBaseFactory;
@@ -76,19 +98,20 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 
 public class PersistedTableManager implements IPersistedManager {
 
+	private static final Logger LOGGER = Logger.getLogger(PersistedTableManager.class);
 	private static final int BATCH_SIZE = 1000;
+	private static final Random RANDOM = new SecureRandom();
+	private static final String ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	private static final String COLUMN_SEPARATOR = "\t";
 
 	private DatabaseDialect dialect = null;
-	private String tableName = new String();
+	private String tableName = "";
 	private boolean rowCountColumIncluded = false;
-	private Map<String, Integer> columnSize = new HashMap<String, Integer>();
+	private Map<String, Integer> columnSize = new HashMap<>();
 	private int queryTimeout = -1;
+	private boolean appendOracleClobHashColumns = false;
 
 	private IEngUserProfile profile = null;
-
-	private static transient Logger logger = Logger.getLogger(PersistedTableManager.class);
-
-	static final String Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 	public PersistedTableManager() {
 
@@ -105,36 +128,39 @@ public class PersistedTableManager implements IPersistedManager {
 		// get data source for writing not only getDataSource
 		IDataSource dsPersist = dataset.getDataSourceForWriting();
 		if (dsPersist == null) {
-			logger.error("No data source for writing found: check the datasource associated to dataset " + dataset.getLabel()
-					+ " is read and write or there is one and only one datasource marked as write default");
+			LOGGER.error(
+					"No data source for writing found: check the datasource associated to dataset " + dataset.getLabel()
+							+ " is read and write or there is one and only one datasource marked as write default");
 			throw new SpagoBIServiceException("", "sbi.ds.noDataSourceForWriting");
 		}
 		persistDataSet(dataset, dsPersist, tableName);
 	}
 
 	public void persistDataSet(IDataSet dataset, IDataSource dsPersist, String tableName) throws Exception {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		IDataBase database = DataBaseFactory.getDataBase(dsPersist);
 		if (!database.isCacheSupported()) {
-			logger.error("Persistence management not implemented for dialect " + getDialect() + ".");
-			throw new SpagoBIRuntimeException("Persistence management not implemented for dialect " + getDialect() + ".");
+			LOGGER.error("Persistence management not implemented for dialect " + getDialect() + ".");
+			throw new SpagoBIRuntimeException(
+					"Persistence management not implemented for dialect " + getDialect() + ".");
 		}
 
 		setTableName(tableName);
-		logger.debug("Persisted table name is [" + getTableName() + "]");
+		LOGGER.debug("Persisted table name is [" + getTableName() + "]");
 
 		setDialect(database.getDatabaseDialect());
-		logger.debug("DataSource target dialect is [" + getDialect() + "]");
+		LOGGER.debug("DataSource target dialect is [" + getDialect() + "]");
 
 		String signature = dataset.getSignature();
-		logger.debug("Dataset signature : " + signature);
+		LOGGER.debug("Dataset signature : " + signature);
 		if (signature != null && signature.equals(TemporaryTableManager.getLastDataSetSignature(tableName))) {
 			// signature matches: no need to create a Persistent Table
-			logger.debug("Signature matches: no need to create a Persistent Table");
+			LOGGER.debug("Signature matches: no need to create a Persistent Table");
 			return;
 		}
 
+		this.appendOracleClobHashColumns = OracleClobHashSupport.shouldMaterializeHashColumns(dataset);
 		dataset.setPersisted(false);
 		if (dataset.isIterable()) {
 			persist(dataset, dsPersist, tableName);
@@ -148,11 +174,196 @@ public class PersistedTableManager implements IPersistedManager {
 		}
 	}
 
+	private void persistDoris(IDataSet dataSet, IDataSource datasource, String tableName) throws Exception {
+		LOGGER.debug("IN");
+		Path tempCsv = null;
+		Path gzPath = null;
+		try (DataIterator iterator = dataSet.iterator()) {
+			createTable(iterator.getMetaData(), datasource);
+
+			tempCsv = createSecureTempFile("doris_streamload_", ".csv");
+			LOGGER.debug("Serializing dataset to CSV: " + tempCsv);
+			serializeIteratorToCsvStreaming(iterator, tempCsv);
+
+			gzPath = createSecureTempFile("doris_streamload_", ".csv.gz");
+			LOGGER.debug("Compressing CSV to GZIP: " + gzPath);
+			gzipFile(tempCsv, gzPath);
+
+			callDoris(datasource, tableName, gzPath);
+
+		} finally {
+			Files.deleteIfExists(tempCsv);
+			Files.deleteIfExists(gzPath);
+		}
+	}
+
+	private void callDoris(IDataSource datasource, String tableName, Path gzPath) throws IOException, InterruptedException {
+		String label = "knowage_" + tableName + "_" + Instant.now().getEpochSecond();
+
+		String user = Optional.ofNullable(datasource.getUser()).filter(u -> !u.isEmpty())
+				.orElse(SingletonConfig.getInstance().getConfigValue("KNOWAGE.DORIS.USER"));
+		if (user == null || user.isEmpty()) {
+			LOGGER.error("Error : User doris is undefined");
+			throw new RuntimeException("Error : User doris is undefined");
+		}
+		String password = Optional.ofNullable(datasource.getPwd()).filter(u -> !u.isEmpty())
+				.or(() -> Optional.ofNullable(SingletonConfig.getInstance().getConfigValue("KNOWAGE.DORIS.PASSWORD")).filter(u -> !u.isEmpty())).orElse("");
+
+		String endpoint = SingletonConfig.getInstance().getConfigValue("KNOWAGE.DORIS.ENDPOINT");
+		if (endpoint == null || endpoint.isEmpty()) {
+			LOGGER.error("Error : Endpoint doris is undefined");
+			throw new RuntimeException("Error : Endpoint doris is undefined");
+		}
+		endpoint = endpoint.replace("{table}", tableName);
+
+		String basicAuth = Base64.getEncoder().encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
+
+		try {
+			HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(java.time.Duration.ofSeconds(10)).build();
+
+			HttpRequest request = HttpRequest.newBuilder().uri(URI.create(endpoint)).timeout(java.time.Duration.ofMinutes(10))
+					.header("Authorization", "Basic " + basicAuth).header("label", label).header("format", "csv").header("compress_type", "gz")
+					.header("column_separator", COLUMN_SEPARATOR).header("Content-Type", "text/csv; charset=UTF-8").expectContinue(true)
+					.PUT(HttpRequest.BodyPublishers.ofFile(gzPath))
+					.build();
+
+			LOGGER.info("Executing Stream Load: " + endpoint);
+			LOGGER.debug("Label: " + label);
+
+			HttpResponse<String> resp = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+			LOGGER.info("Stream Load HTTP status: " + resp.statusCode());
+			LOGGER.debug("Stream Load response body: " + resp.body());
+
+			ObjectMapper mapper = new ObjectMapper();
+			JsonNode node = mapper.readTree(resp.body());
+			String status = node.get("Status").asText();
+
+			if (resp.statusCode() == 200 && status != null && status.equalsIgnoreCase("Success")) {
+				LOGGER.info("Stream Load completed successfully for table " + tableName);
+
+			} else {
+				dropTableIfExists(datasource, tableName);
+				LOGGER.error("Error Doris body " + resp.body());
+				throw new RuntimeException("Stream Load failed: HTTP " + resp.statusCode() + " - " + resp.body());
+			}
+
+		} catch (Exception e) {
+			dropTableIfExists(datasource, tableName);
+			LOGGER.error("Error Communication Knowage/Doris " + endpoint, e);
+			throw e;
+		}
+	}
+
+	private void serializeIteratorToCsvStreaming(DataIterator iterator, Path tempCsv) throws Exception {
+		IMetaData metadata = iterator.getMetaData();
+		try (BufferedWriter bw = Files.newBufferedWriter(tempCsv, StandardCharsets.UTF_8)) {
+			long count = 0;
+			while (iterator.hasNext()) {
+				count++;
+				IRecord r = iterator.next();
+				bw.write(toCsvLine(r, metadata, count));
+				bw.write("\n");
+				if (count % 10000 == 0) {
+					LOGGER.debug("Serialized records " + count);
+				}
+			}
+			bw.flush();
+		}
+	}
+
+	private void serializeIteratorToCsvStreaming(List<IRecord> records, IMetaData metadata, Path tempCsv) throws Exception {
+		try (BufferedWriter bw = Files.newBufferedWriter(tempCsv, StandardCharsets.UTF_8)) {
+			long count = 0;
+            for (IRecord r : records) {
+				count++;
+				bw.write(toCsvLine(r, metadata, count));
+                bw.write("\n");
+                if (count % 10000 == 0) {
+                    LOGGER.debug("Serialized records " + count);
+                }
+            }
+			bw.flush();
+		}
+	}
+
+	private String toCsvLine(IRecord record, IMetaData metadata, long count) {
+		StringBuilder sb = new StringBuilder();
+
+		if (this.isRowCountColumIncluded()) {
+			sb.append(count);
+			sb.append(COLUMN_SEPARATOR);
+		}
+
+
+		for (int j = 0; j < record.getFields().size(); j++) {
+			IField field = record.getFieldAt(j);
+			Object fieldValue = field.getValue();
+			if (j > 0) {
+				sb.append(COLUMN_SEPARATOR);
+			}
+			sb.append(escapeCsv(fieldValue));
+		}
+
+		for (IFieldMetaData oracleClobField : getOracleClobSourceFields(metadata)) {
+			int sourceFieldIndex = metadata.getFieldIndex(oracleClobField.getName());
+			Object fieldValue = sourceFieldIndex >= 0 && sourceFieldIndex < record.getFields().size()
+					? record.getFieldAt(sourceFieldIndex).getValue()
+					: null;
+			sb.append(COLUMN_SEPARATOR);
+			sb.append(escapeCsv(OracleClobHashSupport.hashValue(fieldValue)));
+		}
+
+		return sb.toString();
+	}
+
+	private String escapeCsv(Object v) {
+		if (v == null) {
+			return "\\N";// convenzione Doris per NULL
+		}
+		String s = String.valueOf(v);
+		s = s.replace("\r", " ").replace("\n", " ");
+		return s;
+	}
+
+	private void gzipFile(Path src, Path dst) throws Exception {
+		try (var in = Files.newInputStream(src); var out = new GZIPOutputStream(Files.newOutputStream(dst))) {
+			in.transferTo(out);
+			// GZIPOutputStream chiude l'header/CRC su close()
+		}
+	}
+
+	/**
+	 * Creates a temp file with owner-only permissions (rw-------  on Unix,
+	 * owner-only read/write on Windows) to avoid publicly writable temp files.
+	 */
+	private Path createSecureTempFile(String prefix, String suffix) throws IOException {
+		if (SystemUtils.IS_OS_UNIX) {
+			FileAttribute<Set<PosixFilePermission>> attr =
+					PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
+			return Files.createTempFile(prefix, suffix, attr);
+		} else {
+			File f = Files.createTempFile(prefix, suffix).toFile();
+			f.setReadable(true, true);
+			f.setWritable(true, true);
+			return f.toPath();
+		}
+	}
+
 	public void persist(IDataSet dataSet, IDataSource datasource, String tableName) throws Exception {
-		logger.debug("IN");
+		if (datasource.getDialectName().contains(DatabaseDialect.DORIS.getValue())) {
+			persistDoris(dataSet, datasource, tableName);
+		} else {
+			persistJdbc(dataSet, datasource, tableName);
+		}
+
+	}
+
+	private void persistJdbc(IDataSet dataSet, IDataSource datasource, String tableName) throws Exception {
+		LOGGER.debug("IN");
 
 		Monitor monitor = MonitorFactory.start("spagobi.cache.sqldb.persist.paginated");
-		logger.debug("Starting iteration to transfer data");
+		LOGGER.debug("Starting iteration to transfer data");
 		try (DataIterator iterator = dataSet.iterator()) {
 			Connection connection = null;
 			PreparedStatement statement = null;
@@ -161,38 +372,39 @@ public class PersistedTableManager implements IPersistedManager {
 				connection.setAutoCommit(false);
 				statement = defineStatement(iterator.getMetaData(), datasource, connection);
 
-				logger.debug("Setting required column sizes");
+				LOGGER.debug("Setting required column sizes");
 				configureColumnSize(iterator.getMetaData());
 
-				logger.debug("Creating table to transfer data");
+				LOGGER.debug("Creating table to transfer data");
 				createTable(iterator.getMetaData(), datasource);
 
 				List<IRecord> records = new ArrayList<>(BATCH_SIZE);
 				int recordCount = 0;
 				while (iterator.hasNext()) {
-					logger.debug("ResultSet iteration number " + recordCount);
+					LOGGER.debug("ResultSet iteration number " + recordCount);
 					IRecord record = iterator.next();
 					records.add(record);
 					if (records.size() == BATCH_SIZE) {
-						logger.debug("Building batch to insert " + BATCH_SIZE + " records");
+						LOGGER.debug("Building batch to insert " + BATCH_SIZE + " records");
 						insertRecords(records, iterator.getMetaData(), statement);
 						records.clear();
 					}
 					recordCount++;
 				}
 				if (!records.isEmpty()) {
-					logger.debug("There are still " + records.size() + " records left that need to be copied into the cache");
+					LOGGER.debug("There are still " + records.size()
+							+ " records left that need to be copied into the cache");
 					insertRecords(records, iterator.getMetaData(), statement);
 					records.clear();
 				}
-				logger.debug("Committing inserts...");
+				LOGGER.debug("Committing inserts...");
 				connection.commit();
 			} catch (Exception e) {
-				logger.error("Error while trasferring data from source to cache");
+				LOGGER.error("Error while trasferring data from source to cache " + e);
 				if (connection != null) {
 					connection.rollback();
 				}
-				logger.debug("Removing the empty table from cache because no data has been copied");
+				LOGGER.debug("Removing the empty table from cache because no data has been copied");
 				dropTableIfExists(datasource, tableName);
 				throw e;
 			} finally {
@@ -203,57 +415,60 @@ public class PersistedTableManager implements IPersistedManager {
 					connection.close();
 				}
 				monitor.stop();
-				logger.debug("OUT");
+				LOGGER.debug("OUT");
 			}
 		}
 
 	}
 
-	public void persistDataset(IDataSet dataSet, IDataStore datastore, IDataSource datasource, String tableName) throws Exception {
+	public void persistDataset(IDataSet dataSet, IDataStore datastore, IDataSource datasource, String tableName)
+			throws Exception {
 		setTableNameAndDialect(datasource, tableName);
 
 		if (dataSet instanceof VersionedDataSet) {
 			dataSet = ((VersionedDataSet) dataSet).getWrappedDataset();
 		}
-		if (dataSet instanceof FileDataSet || dataSet instanceof CkanDataSet) {
+		if (dataSet instanceof FileDataSet) {
 			datastore = normalizeFileDataSet(dataSet, datastore);
 		}
-
+		this.appendOracleClobHashColumns = OracleClobHashSupport.shouldMaterializeHashColumns(dataSet);
 		persistDataset(datastore, datasource);
 	}
 
 	public void updateDataset(IDataSource datasource, IDataStore datastore, String tableName) throws Exception {
 		setTableNameAndDialect(datasource, tableName);
-
+		this.appendOracleClobHashColumns = OracleClobHashSupport.hasAllHashColumns(datasource, tableName,
+				datastore.getMetaData());
 		updateDataset(datastore, datasource);
 	}
 
 	private void setTableNameAndDialect(IDataSource datasource, String tableName) throws DataBaseException {
 		IDataBase database = DataBaseFactory.getDataBase(datasource);
 		if (!database.isCacheSupported()) {
-			logger.debug("Persistence management isn't implemented for " + getDialect() + ".");
+			LOGGER.debug("Persistence management isn't implemented for " + getDialect() + ".");
 			throw new SpagoBIServiceException("", "sbi.ds.dsCannotPersistDialect");
 		}
 
 		this.setTableName(tableName);
 		this.setDialect(database.getDatabaseDialect());
-		logger.debug("DataSource target dialect is [" + getDialect() + "]");
+		LOGGER.debug("DataSource target dialect is [" + getDialect() + "]");
 	}
 
 	private void updateDataset(IDataStore datastore, IDataSource datasource) throws Exception {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		Connection connection = null;
 		try {
-			logger.debug("The datastore metadata object contains # [" + datastore.getMetaData().getFieldCount() + "] fields");
+			LOGGER.debug("The datastore metadata object contains # [" + datastore.getMetaData().getFieldCount()
+					+ "] fields");
 			if (datastore.getMetaData().getFieldCount() == 0) {
-				logger.debug("The datastore has no fields. Unable to update dataset.");
+				LOGGER.debug("The datastore has no fields. Unable to update dataset.");
 				return;
 			}
 
 			int idFieldIndex = datastore.getMetaData().getIdFieldIndex();
 			if (idFieldIndex == -1) {
-				logger.debug("The datastore has no ID field. Unable to update dataset.");
+				LOGGER.debug("The datastore has no ID field. Unable to update dataset.");
 				return;
 			}
 
@@ -273,10 +488,10 @@ public class PersistedTableManager implements IPersistedManager {
 				statement.executeBatch();
 				statement.close();
 			}
-			logger.debug("Records updated on table successfully!");
+			LOGGER.debug("Records updated on table successfully!");
 		} catch (Exception e) {
 			String message = "Error updating the dataset on table";
-			logger.error(message, e);
+			LOGGER.error(message, e);
 			if (connection != null) {
 				connection.rollback();
 			}
@@ -287,7 +502,7 @@ public class PersistedTableManager implements IPersistedManager {
 			}
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 	private Set<Object> getIds(Connection connection, String idFieldAlias) throws SQLException {
@@ -314,10 +529,12 @@ public class PersistedTableManager implements IPersistedManager {
 		return ids;
 	}
 
-	private PreparedStatement[] getInsertOrUpdateStatements(IDataStore datastore, IDataSource datasource, Connection connection, Set<Object> insertIds) {
+	private PreparedStatement[] getInsertOrUpdateStatements(IDataStore datastore, IDataSource datasource,
+			Connection connection, Set<Object> insertIds) {
 		IMetaData storeMeta = datastore.getMetaData();
 		int fieldCount = storeMeta.getFieldCount();
 		int recordCount = (int) datastore.getRecordsCount();
+		List<IFieldMetaData> oracleClobFields = getOracleClobSourceFields(storeMeta);
 
 		if (fieldCount == 0 || recordCount == 0) {
 			return new PreparedStatement[0];
@@ -326,7 +543,7 @@ public class PersistedTableManager implements IPersistedManager {
 		try {
 			prefillColumnSizes(connection);
 		} catch (SQLException e1) {
-			logger.error("Unable to prefill column sizes");
+			LOGGER.error("Unable to prefill column sizes");
 		}
 
 		PreparedStatement[] toReturn = new PreparedStatement[recordCount];
@@ -383,20 +600,39 @@ public class PersistedTableManager implements IPersistedManager {
 				updateSeparator = ",";
 			}
 		}
+		for (IFieldMetaData oracleClobField : oracleClobFields) {
+			String hashColumnName = OracleClobHashSupport.getHashColumnName(oracleClobField);
+			String escapedHashColumnName = AbstractJDBCDataset.encapsulateColumnName(hashColumnName, datasource);
+
+			insertSB.append(insertSeparator);
+			insertSB.append(escapedHashColumnName);
+
+			insertValuesSB.append(insertSeparator);
+			insertValuesSB.append("?");
+
+			insertSeparator = ",";
+
+			updateSB.append(updateSeparator);
+			updateSB.append(escapedHashColumnName);
+			updateSB.append("=?");
+
+			updateSeparator = ",";
+		}
 
 		insertSB.append(") ");
 
 		insertValuesSB.append(") ");
 
 		updateSB.append(" WHERE ");
-		updateSB.append(AbstractJDBCDataset.encapsulateColumnName(getSQLColumnName(storeMeta.getFieldMeta(idFieldIndex)), datasource));
+		updateSB.append(AbstractJDBCDataset
+				.encapsulateColumnName(getSQLColumnName(storeMeta.getFieldMeta(idFieldIndex)), datasource));
 		updateSB.append("=?");
 
 		String insertQuery = insertSB.toString() + insertValuesSB.toString();
 		String updateQuery = updateSB.toString();
 
-		logger.debug("INSERT statement: " + insertQuery);
-		logger.debug("UPDATE statement: " + updateQuery);
+		LOGGER.debug("INSERT statement: " + insertQuery);
+		LOGGER.debug("UPDATE statement: " + updateQuery);
 
 		try {
 			for (int i = 0; i < recordCount; i++) {
@@ -417,6 +653,9 @@ public class PersistedTableManager implements IPersistedManager {
 						sortedIds.add(j);
 					}
 				}
+				for (int j = 0; j < oracleClobFields.size(); j++) {
+					sortedIds.add(fieldCount + j);
+				}
 				if (!doInsert) {
 					sortedIds.add(idFieldIndex);
 				}
@@ -424,192 +663,160 @@ public class PersistedTableManager implements IPersistedManager {
 				for (int j = 0; j < sortedIds.size(); j++) {
 					try {
 						int index = sortedIds.get(j);
-						IFieldMetaData fieldMeta = storeMeta.getFieldMeta(index);
-						IField field = record.getFieldAt(index);
-						Object fieldValue = field.getValue();
-						String alias = fieldMeta.getAlias();
-						String fieldMetaName = alias != null ? alias : fieldMeta.getName();
-						String fieldMetaTypeName = fieldMeta.getType().toString();
-						boolean isFieldMetaFieldTypeMeasure = fieldMeta.getFieldType().equals(FieldType.MEASURE);
-
-						Map<String, Integer> newColumnSizes = new HashMap<>();
 						int fieldIndex = isRowCountColumIncluded() ? j + 1 : j;
-						PersistedTableHelper.addField(statement, fieldIndex, fieldValue, fieldMetaName, fieldMetaTypeName, isFieldMetaFieldTypeMeasure,
-								newColumnSizes);
+						if (index < fieldCount) {
+							IFieldMetaData fieldMeta = storeMeta.getFieldMeta(index);
+							IField field = record.getFieldAt(index);
+							Object fieldValue = field.getValue();
+							String alias = fieldMeta.getAlias();
+							String fieldMetaName = alias != null ? alias : fieldMeta.getName();
+							String fieldMetaTypeName = fieldMeta.getType().toString();
+							boolean isFieldMetaFieldTypeMeasure = fieldMeta.getFieldType().equals(FieldType.MEASURE);
 
-						Integer oldColumnSize = columnSize.get(fieldMetaName);
-						Integer newColumnSize = newColumnSizes.get(fieldMetaName);
-						if (oldColumnSize != null && newColumnSize != null && newColumnSize > oldColumnSize) {
-							columnSize.remove(fieldMetaName);
-							columnSize.put(fieldMetaName, newColumnSize);
-							try (Statement stmt = connection.createStatement()) {
-								String query = "ALTER TABLE " + tableName + " MODIFY COLUMN " + fieldMetaName + " "
-										+ getDBFieldTypeFromAlias(datasource, fieldMeta);
-								stmt.executeUpdate(query);
+							Map<String, Integer> newColumnSizes = new HashMap<>();
+							PersistedTableHelper.addField(statement, fieldIndex, fieldValue, fieldMetaName,
+									fieldMetaTypeName, isFieldMetaFieldTypeMeasure, newColumnSizes);
+
+							Integer oldColumnSize = columnSize.get(fieldMetaName);
+							Integer newColumnSize = newColumnSizes.get(fieldMetaName);
+							if (oldColumnSize != null && newColumnSize != null && newColumnSize > oldColumnSize) {
+								columnSize.remove(fieldMetaName);
+								columnSize.put(fieldMetaName, newColumnSize);
+								try (Statement stmt = connection.createStatement()) {
+									String query = String.format("ALTER TABLE %s MODIFY COLUMN %s %s",
+											tableName, AbstractJDBCDataset.encapsulateColumnName(fieldMetaName, datasource), getDBFieldTypeFromAlias(datasource, fieldMeta));
+									stmt.executeUpdate(query);
+								}
 							}
+						} else {
+							IFieldMetaData oracleClobField = oracleClobFields.get(index - fieldCount);
+							addOracleClobHashField(statement, fieldIndex, record, storeMeta, oracleClobField);
 						}
 					} catch (Exception e) {
-						throw new RuntimeException("An unexpected error occurred while preparing statement for record [" + i + "]", e);
+						throw new SpagoBIRuntimeException(
+								"An unexpected error occurred while preparing statement for record [" + i + "]", e);
 					}
 				}
 				statement.addBatch();
 			}
 		} catch (Exception e) {
 			String message = "Error updating dataset into table";
-			logger.error(message, e);
+			LOGGER.error(message, e);
 			throw new SpagoBIEngineRuntimeException(message, e);
 		}
 		return toReturn;
 	}
 
 	private IDataStore normalizeFileDataSet(IDataSet dataSet, IDataStore datastore) {
-		if (dataSet instanceof FileDataSet || dataSet instanceof CkanDataSet) {
-			// Change dataStore fields type according to the metadata specified
-			// on the DataSet metadata
-			// because FileDataSet has all dataStore field set as String by
-			// default
-			IMetaData dataStoreMetaData = datastore.getMetaData();
-			IMetaData dataSetMetaData = dataSet.getMetadata();
-
-			int filedNo = dataStoreMetaData.getFieldCount();
-			for (int i = 0, l = filedNo; i < l; i++) {
-				// Apply DataSet FieldType to DataStore FieldType
-				IFieldMetaData dataStoreFieldMetaData = dataStoreMetaData.getFieldMeta(i);
-				dataStoreFieldMetaData.setFieldType(dataSetMetaData.getFieldMeta(i).getFieldType());
-				dataStoreFieldMetaData.setType(dataSetMetaData.getFieldMeta(i).getType());
-
-			}
-
-			// Change Object Type of field records according to metadata's field
-			// type
-			for (int i = 0; i < Integer.parseInt(String.valueOf(datastore.getRecordsCount())); i++) {
-				IRecord rec = datastore.getRecordAt(i);
-				for (int j = 0; j < rec.getFields().size(); j++) {
-					IFieldMetaData fmd = dataStoreMetaData.getFieldMeta(j);
-					IField field = rec.getFieldAt(j);
-					// change content type
-					if (fmd.getType().toString().contains("Integer")) {
-						try {
-							Integer intValue;
-							Object rawField = field.getValue();
-							if (rawField instanceof BigDecimal) {
-								intValue = ((BigDecimal) rawField).intValueExact();
-							} else {
-								intValue = Integer.valueOf(rawField.toString());
-							}
-							field.setValue(intValue);
-						} catch (Throwable t) {
-							logger.error("Error trying to convert value [" + field.getValue() + "] into an Integer value. Considering it as null...");
-							field.setValue(null);
-						}
-					} else if (fmd.getType().toString().contains("Double")) {
-						try {
-							Double doubleValue;
-							Object rawField = field.getValue();
-							if (rawField instanceof BigDecimal) {
-								doubleValue = ((BigDecimal) rawField).doubleValue();
-							} else {
-								doubleValue = Double.valueOf(rawField.toString());
-							}
-							field.setValue(doubleValue);
-
-						} catch (Throwable t) {
-							logger.error("Error trying to convert value [" + field.getValue() + "] into a Double value. Considering it as null...");
-							field.setValue(null);
-						}
-					} else if (fmd.getType().toString().contains("String")) {
-						try {
-							String stringValue = field.getValue().toString();
-							field.setValue(stringValue);
-						} catch (Throwable t) {
-							logger.error("Error trying to convert value [" + field.getValue() + "] into a String value. Considering it as null...");
-							field.setValue(null);
-						}
-					}
-
-				}
-			}
+		if (dataSet instanceof FileDataSet) {
+			alignFileDatasetMetadata(datastore, dataSet);
 		}
 		return datastore;
 	}
 
 	public void persistDataset(IDataStore datastore, IDataSource datasource) throws Exception {
-		logger.debug("IN");
-		Connection connection = null;
-		String dialect = datasource.getHibDialectClass();
-		try {
-			logger.debug("The datastore metadata object contains # [" + datastore.getMetaData().getFieldCount() + "] fields");
-			if (datastore.getMetaData().getFieldCount() == 0) {
-				logger.debug("The datastore metadata object hasn't fields. Dataset doesn't persisted!!");
-				return;
-			}
-			connection = getConnection(datasource);
+		if (datasource.getDialectName().contains(DatabaseDialect.DORIS.getValue())) {
+			LOGGER.debug("IN");
+			Path tempCsv = null;
+			Path gzPath = null;
+			try {
+				createTable(datastore.getMetaData(), datasource);
 
-			// VoltDB does not allow explicit commit/rollback actions.
-			// It uses an internal transaction committing mechanism.
-			// More tests to see the consistency has to be done on this.
-			if (!dialect.contains("VoltDB")) {
-				connection.setAutoCommit(false);
+				tempCsv = createSecureTempFile("doris_streamload_", ".csv");
+				LOGGER.debug("Serializing dataset to CSV: " + tempCsv);
+				serializeIteratorToCsvStreaming(datastore.getRecords(), datastore.getMetaData(), tempCsv);
+
+				gzPath = createSecureTempFile("doris_streamload_", ".csv.gz");
+				LOGGER.debug("Compressing CSV to GZIP: " + gzPath);
+				gzipFile(tempCsv, gzPath);
+
+				callDoris(datasource, tableName, gzPath);
+
+			} finally {
+				Files.deleteIfExists(tempCsv);
+				Files.deleteIfExists(gzPath);
 			}
-			// Steps #1: define prepared statement (and max column size for
-			// strings type)
-			PreparedStatement[] statements = defineStatements(datastore, datasource, connection);
-			// Steps #2: set query timeout (if necessary)
-			if (queryTimeout > 0) {
-				for (int i = 0; i < statements.length; i++) {
-					statements[i].setQueryTimeout(queryTimeout);
+		} else {
+
+			LOGGER.debug("IN");
+			Connection connection = null;
+			String dialect = datasource.getHibDialectClass();
+			try {
+				LOGGER.debug("The datastore metadata object contains # [" + datastore.getMetaData().getFieldCount()
+						+ "] fields");
+				if (datastore.getMetaData().getFieldCount() == 0) {
+					LOGGER.debug("The datastore metadata object hasn't fields. Dataset doesn't persisted!!");
+					return;
 				}
+				connection = getConnection(datasource);
+
+				// VoltDB does not allow explicit commit/rollback actions.
+				// It uses an internal transaction committing mechanism.
+				// More tests to see the consistency has to be done on this.
+				if (!dialect.contains("VoltDB")) {
+					connection.setAutoCommit(false);
+				}
+				// Steps #1: define prepared statement (and max column size for
+				// strings type)
+				PreparedStatement[] statements = defineStatements(datastore, datasource, connection);
+				// Steps #2: set query timeout (if necessary)
+				if (queryTimeout > 0) {
+					for (int i = 0; i < statements.length; i++) {
+						statements[i].setQueryTimeout(queryTimeout);
+					}
+				}
+				// Steps #3,4: define create table statement
+				createTable(datastore.getMetaData(), datasource);
+				// Step #5: execute batch with insert statements
+				for (int i = 0; i < statements.length; i++) {
+					PreparedStatement statement = statements[i];
+					statement.executeBatch();
+					statement.close();
+				}
+				if (!dialect.contains("VoltDB")) {
+					connection.commit();
+				}
+				LOGGER.debug("Insertion of records on persistable table executed successfully!");
+			} catch (Exception e) {
+				LOGGER.error("Error persisting the dataset into table", e);
+				if (connection != null && !dialect.contains("VoltDB")) {
+					connection.rollback();
+				}
+				throw new SpagoBIEngineRuntimeException("Error persisting the dataset into table", e);
+			} finally {
+				if (connection != null && !connection.isClosed()) {
+					connection.close();
+				}
+				LOGGER.debug("OUT");
 			}
-			// Steps #3,4: define create table statement
-			createTable(datastore.getMetaData(), datasource);
-			// Step #5: execute batch with insert statements
-			for (int i = 0; i < statements.length; i++) {
-				PreparedStatement statement = statements[i];
-				statement.executeBatch();
-				statement.close();
-			}
-			if (!dialect.contains("VoltDB")) {
-				connection.commit();
-			}
-			logger.debug("Insertion of records on persistable table executed successfully!");
-		} catch (Exception e) {
-			logger.error("Error persisting the dataset into table", e);
-			if (connection != null && !dialect.contains("VoltDB")) {
-				connection.rollback();
-			}
-			throw new SpagoBIEngineRuntimeException("Error persisting the dataset into table", e);
-		} finally {
-			if (connection != null && !connection.isClosed()) {
-				connection.close();
-			}
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
-		logger.debug("OUT");
 	}
 
-	private PreparedStatement[] defineStatements(IDataStore datastore, IDataSource datasource, Connection connection) throws DataBaseException {
+	private PreparedStatement[] defineStatements(IDataStore datastore, IDataSource datasource, Connection connection)
+			throws DataBaseException {
 		int batchCount = (int) ((datastore.getRecordsCount() + BATCH_SIZE - 1) / BATCH_SIZE);
 		PreparedStatement[] toReturn = new PreparedStatement[batchCount];
 
 		IMetaData storeMeta = datastore.getMetaData();
 		int fieldCount = storeMeta.getFieldCount();
+		List<IFieldMetaData> oracleClobFields = getOracleClobSourceFields(storeMeta);
 
-		if (fieldCount == 0)
+		if (fieldCount == 0) {
 			return new PreparedStatement[0];
+		}
 
-		String insertQuery = "insert into " + getTableName();
-		String values = " values ";
+		String insertQuery = String.format("insert into %s (", getTableName());
+		String values = " values  (";
 		// createQuery used only for HSQL at this time
-		String createQuery = "create table " + getTableName() + " (";
-
-		insertQuery += " (";
-		values += " (";
+		String createQuery = String.format("create table %s (", getTableName());
 		String separator = "";
 
 		if (this.isRowCountColumIncluded()) {
 			CacheDataBase dataBase = DataBaseFactory.getCacheDataBase(datasource);
 			insertQuery += separator + AbstractJDBCDataset.encapsulateColumnName(getRowCountColumnName(), datasource);
-			createQuery += separator + AbstractJDBCDataset.encapsulateColumnName(getRowCountColumnName(), datasource) + dataBase.getDataBaseType(Long.class);
+			createQuery += separator + AbstractJDBCDataset.encapsulateColumnName(getRowCountColumnName(), datasource)
+					+ dataBase.getDataBaseType(Long.class);
 			values += separator + "?";
 			separator = ",";
 		}
@@ -624,18 +831,26 @@ public class PersistedTableManager implements IPersistedManager {
 			createQuery += separator + escapedColumnName + getDBFieldType(datasource, fieldMeta);
 			separator = ",";
 		}
+		for (IFieldMetaData oracleClobField : oracleClobFields) {
+			String hashColumnName = OracleClobHashSupport.getHashColumnName(oracleClobField);
+			String escapedHashColumnName = AbstractJDBCDataset.encapsulateColumnName(hashColumnName, datasource);
+			insertQuery += separator + escapedHashColumnName;
+			values += separator + "?";
+			createQuery += separator + escapedHashColumnName + getHashDBFieldType(datasource);
+			separator = ",";
+		}
 		values += ") ";
 		createQuery += ") ";
 		insertQuery += ") ";
 
-		String totalQuery = insertQuery + values;
-		logger.debug("create table statement: " + createQuery);
+		String totalQuery = String.format("%s%s", insertQuery, values);
+		LOGGER.debug("create table statement: " + createQuery);
 		try {
 			for (int i = 0; i < batchCount; i++) {
 				toReturn[i] = connection.prepareStatement(totalQuery);
 			}
 
-			logger.debug("Prepared statement for persist dataset as : " + totalQuery);
+			LOGGER.debug("Prepared statement for persist dataset as : " + totalQuery);
 
 			for (int i = 0; i < datastore.getRecordsCount(); i++) {
 				int currentBatch = i / BATCH_SIZE;
@@ -655,34 +870,53 @@ public class PersistedTableManager implements IPersistedManager {
 						String fieldMetaTypeName = fieldMeta.getType().toString();
 						boolean isfieldMetaFieldTypeMeasure = fieldMeta.getFieldType().equals(FieldType.MEASURE);
 						if (this.isRowCountColumIncluded()) {
-							PersistedTableHelper.addField(statement, j + 1, fieldValue, fieldMetaName, fieldMetaTypeName, isfieldMetaFieldTypeMeasure,
-									columnSize);
+							PersistedTableHelper.addField(statement, j + 1, fieldValue, fieldMetaName,
+									fieldMetaTypeName, isfieldMetaFieldTypeMeasure, columnSize);
 						} else {
-							PersistedTableHelper.addField(statement, j, fieldValue, fieldMetaName, fieldMetaTypeName, isfieldMetaFieldTypeMeasure, columnSize);
+							PersistedTableHelper.addField(statement, j, fieldValue, fieldMetaName, fieldMetaTypeName,
+									isfieldMetaFieldTypeMeasure, columnSize);
 						}
-					} catch (Throwable t) {
-						throw new RuntimeException("An unexpecetd error occured while preparing insert statemenet for record [" + i + "]", t);
+					} catch (Exception e) {
+						throw new SpagoBIRuntimeException(
+								"An unexpecetd error occured while preparing insert statemenet for record [" + i + "]",
+								e);
+					}
+				}
+				int hashFieldIndex = record.getFields().size();
+				for (IFieldMetaData oracleClobField : oracleClobFields) {
+					try {
+						if (this.isRowCountColumIncluded()) {
+							addOracleClobHashField(statement, hashFieldIndex + 1, record, storeMeta, oracleClobField);
+						} else {
+							addOracleClobHashField(statement, hashFieldIndex, record, storeMeta, oracleClobField);
+						}
+						hashFieldIndex++;
+					} catch (Exception e) {
+						throw new SpagoBIRuntimeException(
+								"An unexpecetd error occured while preparing insert statemenet for record [" + i + "]",
+								e);
 					}
 				}
 				statement.addBatch();
 			}
 		} catch (Exception e) {
-			logger.error("Error persisting the dataset into table", e);
+			LOGGER.error("Error persisting the dataset into table", e);
 			throw new SpagoBIEngineRuntimeException("Error persisting the dataset into table", e);
 		}
 		return toReturn;
 	}
 
 	private void prefillColumnSizes(Connection connection) throws SQLException {
-		try (PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM " + getTableName())) {
+		try (PreparedStatement preparedStatement = connection.prepareStatement(String.format("SELECT * FROM %s", getTableName()))) {
 			if (queryTimeout > 0) {
 				preparedStatement.setQueryTimeout(queryTimeout);
 			}
 			try (ResultSet rs = preparedStatement.executeQuery()) {
 				ResultSetMetaData rsmd = rs.getMetaData();
 				while (rs.next()) {
-					for (int i = 1; i <= rsmd.getColumnCount(); i++)
+					for (int i = 1; i <= rsmd.getColumnCount(); i++) {
 						columnSize.put(rsmd.getColumnName(i), rsmd.getColumnDisplaySize(i));
+					}
 				}
 			}
 		}
@@ -696,117 +930,99 @@ public class PersistedTableManager implements IPersistedManager {
 			String fieldMetaName = fieldMeta.getName();
 			String fieldMetaTypeName = fieldMeta.getType().toString();
 			boolean isfieldMetaFieldTypeMeasure = fieldMeta.getFieldType().equals(FieldType.MEASURE);
-			PersistedTableHelper.addField(statement, j, fieldValue, fieldMetaName, fieldMetaTypeName, isfieldMetaFieldTypeMeasure, getColumnSize());
+			PersistedTableHelper.addField(statement, j, fieldValue, fieldMetaName, fieldMetaTypeName,
+					isfieldMetaFieldTypeMeasure, getColumnSize());
+		}
+		int hashFieldIndex = record.getFields().size();
+		for (IFieldMetaData oracleClobField : getOracleClobSourceFields(storeMeta)) {
+			addOracleClobHashField(statement, hashFieldIndex, record, storeMeta, oracleClobField);
+			hashFieldIndex++;
 		}
 	}
 
-	public boolean createIndexesOnTable(IDataSet dataset, IDataSource datasource, String tablename, Set<String> columns) {
+	public boolean createIndexesOnTable(IDataSet dataset, IDataSource datasource, String tablename,
+			Set<String> columns) {
 		boolean result = false;
 		/* INDEXES CREATION */
-		if (columns != null && columns.size() > 0) {
+		if (columns != null && !columns.isEmpty()) {
 			try {
 				createIndexes(dataset, datasource, tablename, columns);
 				result = true;
 			} catch (Exception e) {
-				logger.error(e.getStackTrace(), e);
+				LOGGER.error("createIndexesOnTable", e);
 			}
 		}
 
 		return result;
 	}
 
-	private boolean indexAlreadyOnTable(Connection conn, IDataSource datasource, String tableName, Set<String> columns, String indexName) {
+	private boolean indexAlreadyOnTable(IDataSource datasource, String tableName, Set<String> columns,
+			String indexName) {
 		boolean result = false;
 
-		Statement stmt = null;
-		ResultSet rs3 = null;
-
-		try {
+		try (Connection conn = getConnection(datasource)) {
 			String query = buildGetIndexOnTable(conn, tableName, columns, indexName);
-			stmt = conn.createStatement();
-			int count = -1;
-			if (query != null) {
-				rs3 = stmt.executeQuery(query);
-
-				while (rs3.next()) {
-					count = rs3.getInt("cnt");
+			try (Statement stmt = conn.createStatement()) {
+				int count = -1;
+				if (query != null) {
+					try (ResultSet rs3 = stmt.executeQuery(query)) {
+						while (rs3.next()) {
+							count = rs3.getInt("cnt");
+						}
+					}
 				}
-			}
 
-			result = count > 0;
+				result = count > 0;
+			}
 		} catch (SQLException e) {
-			logger.debug("Impossible to retrieve index for table [" + tableName + "] and columns [" + columns.iterator().next() + "]", e);
-			if (stmt != null) {
-				try {
-					stmt.close();
-				} catch (SQLException e1) {
-					logger.debug(e1);
-				}
-			}
-			if (conn != null) {
-				try {
-					conn.close();
-				} catch (SQLException e2) {
-					logger.debug(e2);
-				}
-			}
+			LOGGER.debug("Impossible to retrieve index for table [" + tableName + "] and columns ["
+					+ columns.iterator().next() + "]", e);
 		}
 
 		return result;
 	}
 
-	public void createIndexes(IDataSet dataset, IDataSource datasource, String tableName, Set<String> columns) throws Exception {
-		logger.debug("IN - Dataset label " + tableName);
+	public void createIndexes(IDataSet dataset, IDataSource datasource, String tableName, Set<String> columns)
+			throws Exception {
+		LOGGER.debug("IN - Dataset label " + tableName);
 		String signature = tableName;
-		logger.debug("Retrieve table name for signature " + signature);
+		LOGGER.debug("Retrieve table name for signature " + signature);
 
-		Connection conn = getConnection(datasource);
-		Statement stmt = null;
+		try (Connection conn = getConnection(datasource)) {
+			try {
+				Iterator<String> it = columns.iterator();
+				while (it.hasNext()) {
+					String currInd = it.next();
+					Set<String> currIndSet = new HashSet<>();
+					currIndSet.add(currInd);
 
-		try {
-			Iterator<String> it = columns.iterator();
-			while (it.hasNext()) {
-				String currInd = it.next();
-				Set<String> currIndSet = new HashSet<String>();
-				currIndSet.add(currInd);
+					if (!indexAlreadyOnTable(datasource, tableName, currIndSet, "fed" + Math.abs(columns.hashCode()))) {
+						String query = buildIndexStatement(datasource, tableName, currIndSet);
 
-				if (!indexAlreadyOnTable(conn, datasource, tableName, currIndSet, "fed" + Math.abs(columns.hashCode()))) {
-					String query = buildIndexStatement(conn, tableName, currIndSet);
-
-					if (query != null) {
-						stmt = conn.createStatement();
-						stmt.executeUpdate(query);
+						if (query != null) {
+							try (Statement stmt = conn.createStatement()) {
+								stmt.executeUpdate(query);
+							}
+						} else {
+							LOGGER.debug(
+									"Impossible to build the index statement and thus creating the index. Tablename and/or column are null or empty.");
+						}
 					} else {
-						logger.debug("Impossible to build the index statement and thus creating the index. Tablename and/or column are null or empty.");
+						LOGGER.debug("Index on table " + tableName + " (" + columns.iterator().next()
+								+ ")already present in database");
 					}
-				} else {
-					logger.debug("Index on table " + tableName + " (" + columns.iterator().next() + ")already present in database");
 				}
-			}
-		} catch (SQLException e) {
-			logger.debug("Impossible to build index for table [" + tableName + "] and columns [" + columns + "]", e);
-		} finally {
-			if (stmt != null) {
-				try {
-					stmt.close();
-				} catch (SQLException e) {
-					logger.debug(e);
-				}
-			}
-			if (conn != null) {
-				try {
-					conn.close();
-				} catch (SQLException e) {
-					logger.debug(e);
-				}
+			} catch (SQLException e) {
+				LOGGER.debug("Impossible to build index for table [" + tableName + "] and columns [" + columns + "]",
+						e);
 			}
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 	private String buildGetIndexOnTable(Connection conn, String tableName, Set<String> columns, String indexName) {
-		logger.debug("IN - Table [" + tableName + "], Column [" + columns + "]");
+		LOGGER.debug("IN - Table [" + tableName + "], Column [" + columns + "]");
 
 		String column = columns.iterator().next();
 		String statement = null;
@@ -864,16 +1080,15 @@ public class PersistedTableManager implements IPersistedManager {
 					statement = sb.toString();
 				}
 			} catch (SQLException e) {
-				// TODO Auto-generated catch block
-				logger.error(e.getMessage(), e);
+				LOGGER.error(e.getMessage(), e);
 			}
 		}
 
 		return statement;
 	}
 
-	private String buildIndexStatement(Connection conn, String tableName, Set<String> columns) {
-		logger.debug("IN - Table [" + tableName + "], Column [" + columns + "]");
+	private String buildIndexStatement(IDataSource datasource, String tableName, Set<String> columns) {
+		LOGGER.debug("IN - Table [" + tableName + "], Column [" + columns + "]");
 
 		String statement = null;
 		if (tableName != null && !tableName.isEmpty() && columns != null && !columns.isEmpty()) {
@@ -888,7 +1103,7 @@ public class PersistedTableManager implements IPersistedManager {
 				columnsSTring.setLength(columnsSTring.length() - 1);
 
 				if (tableName != null && !tableName.isEmpty() && columns != null && !columns.isEmpty()) {
-					try {
+					try (Connection conn = getConnection(datasource)) {
 						if (conn.getMetaData().getDatabaseProductName().toLowerCase().contains("oracle")) {
 							StringBuilder sb = new StringBuilder();
 							sb.append("CREATE INDEX");
@@ -919,8 +1134,7 @@ public class PersistedTableManager implements IPersistedManager {
 							statement = sb.toString();
 						}
 					} catch (SQLException e) {
-						// TODO Auto-generated catch block
-						logger.error(e.getMessage(), e);
+						LOGGER.error(e.getMessage(), e);
 					}
 				}
 			}
@@ -928,21 +1142,21 @@ public class PersistedTableManager implements IPersistedManager {
 		return statement;
 	}
 
-	public PreparedStatement defineStatement(IMetaData storeMeta, IDataSource datasource, Connection connection) throws DataBaseException {
+	public PreparedStatement defineStatement(IMetaData storeMeta, IDataSource datasource, Connection connection)
+			throws DataBaseException {
 		PreparedStatement statement;
 
 		int fieldCount = storeMeta.getFieldCount();
+		List<IFieldMetaData> oracleClobFields = getOracleClobSourceFields(storeMeta);
 
-		if (fieldCount == 0)
+		if (fieldCount == 0) {
 			return null;
+		}
 
-		String insertQuery = "insert into " + getTableName();
-		String values = " values ";
+		String insertQuery = String.format("insert into %s (", getTableName());
+		String values = " values  (";
 		// createQuery used only for HSQL at this time
-		String createQuery = "create table " + getTableName() + " (";
-
-		insertQuery += " (";
-		values += " (";
+		String createQuery = String.format("create table %s (", getTableName());
 		String separator = "";
 
 		for (int i = 0; i < fieldCount; i++) {
@@ -955,12 +1169,20 @@ public class PersistedTableManager implements IPersistedManager {
 			createQuery += separator + escapedColumnName + getDBFieldType(datasource, fieldMeta);
 			separator = ",";
 		}
+		for (IFieldMetaData oracleClobField : oracleClobFields) {
+			String hashColumnName = OracleClobHashSupport.getHashColumnName(oracleClobField);
+			String escapedHashColumnName = AbstractJDBCDataset.encapsulateColumnName(hashColumnName, datasource);
+			insertQuery += separator + escapedHashColumnName;
+			values += separator + "?";
+			createQuery += separator + escapedHashColumnName + getHashDBFieldType(datasource);
+			separator = ",";
+		}
 		values += ") ";
 		createQuery += ") ";
 		insertQuery += ") ";
 
-		String totalQuery = insertQuery + values;
-		logger.debug("create table statement: " + createQuery);
+		String totalQuery = String.format("%s%s", insertQuery, values);
+		LOGGER.debug("create table statement: " + createQuery);
 		try {
 			statement = connection.prepareStatement(totalQuery);
 
@@ -969,7 +1191,7 @@ public class PersistedTableManager implements IPersistedManager {
 				statement.setQueryTimeout(queryTimeout);
 			}
 
-			logger.debug("Prepared statement for persist record as : " + totalQuery);
+			LOGGER.debug("Prepared statement for persist record as : " + totalQuery);
 		} catch (Exception e) {
 			throw new SpagoBIEngineRuntimeException("Error persisting the dataset into table", e);
 		}
@@ -978,8 +1200,31 @@ public class PersistedTableManager implements IPersistedManager {
 
 	private String getSQLColumnName(IFieldMetaData fmd) {
 		String columnName = fmd.getAlias() != null ? fmd.getAlias() : fmd.getName();
-		logger.debug("Column name is " + columnName);
+		LOGGER.debug("Column name is " + columnName);
 		return columnName;
+	}
+
+	private List<IFieldMetaData> getOracleClobSourceFields(IMetaData metadata) {
+		if (!appendOracleClobHashColumns) {
+			return Collections.emptyList();
+		}
+		return OracleClobHashSupport.getClobFields(metadata);
+	}
+
+	private String getHashDBFieldType(IDataSource dataSource) throws DataBaseException {
+		CacheDataBase dataBase = DataBaseFactory.getCacheDataBase(dataSource);
+		dataBase.setVarcharLength(OracleClobHashSupport.HASH_COLUMN_LENGTH);
+		return dataBase.getDataBaseType(String.class);
+	}
+
+	private void addOracleClobHashField(PreparedStatement statement, int fieldIndex, IRecord record, IMetaData storeMeta,
+			IFieldMetaData sourceField) {
+		int sourceFieldIndex = storeMeta.getFieldIndex(sourceField.getName());
+		Object fieldValue = sourceFieldIndex >= 0 && sourceFieldIndex < record.getFields().size()
+				? record.getFieldAt(sourceFieldIndex).getValue()
+				: null;
+		PersistedTableHelper.addField(statement, fieldIndex, OracleClobHashSupport.hashValue(fieldValue),
+				OracleClobHashSupport.getHashColumnName(sourceField), String.class.toString(), false, columnSize);
 	}
 
 	private String getDBFieldType(IDataSource dataSource, IFieldMetaData fieldMetaData) throws DataBaseException {
@@ -989,14 +1234,15 @@ public class PersistedTableManager implements IPersistedManager {
 		}
 		Class type = fieldMetaData.getType();
 		if (fieldMetaData.getFieldType().equals(FieldType.MEASURE) && type == String.class) {
-			logger.debug("Column type is string but the field is measure: converting it into a double");
+			LOGGER.debug("Column type is string but the field is measure: converting it into a double");
 			type = Double.class;
 		}
 
 		return dataBase.getDataBaseType(type);
 	}
 
-	private String getDBFieldTypeFromAlias(IDataSource dataSource, IFieldMetaData fieldMetaData) throws DataBaseException {
+	private String getDBFieldTypeFromAlias(IDataSource dataSource, IFieldMetaData fieldMetaData)
+			throws DataBaseException {
 		CacheDataBase dataBase = DataBaseFactory.getCacheDataBase(dataSource);
 		Integer alias = getColumnSize().get(fieldMetaData.getAlias());
 		if (alias != null) {
@@ -1004,7 +1250,7 @@ public class PersistedTableManager implements IPersistedManager {
 		}
 		Class type = fieldMetaData.getType();
 		if (fieldMetaData.getFieldType().equals(FieldType.MEASURE) && type == String.class) {
-			logger.debug("Column type is string but the field is measure: converting it into a double");
+			LOGGER.debug("Column type is string but the field is measure: converting it into a double");
 			type = Double.class;
 		}
 
@@ -1013,6 +1259,7 @@ public class PersistedTableManager implements IPersistedManager {
 
 	private String getCreateTableQuery(IMetaData md, IDataSource dataSource) throws DataBaseException {
 		String toReturn = null;
+		List<IFieldMetaData> oracleClobFields = getOracleClobSourceFields(md);
 
 		// creates the table only when metadata has fields
 		if (md.getFieldCount() > 0) {
@@ -1020,22 +1267,37 @@ public class PersistedTableManager implements IPersistedManager {
 
 			if (this.isRowCountColumIncluded()) {
 				CacheDataBase dataBase = DataBaseFactory.getCacheDataBase(dataSource);
-				toReturn += " " + AbstractJDBCDataset.encapsulateColumnName(PersistedTableManager.getRowCountColumnName(), dataSource) + " "
+				toReturn += " " + AbstractJDBCDataset
+						.encapsulateColumnName(PersistedTableManager.getRowCountColumnName(), dataSource) + " "
 						+ dataBase.getDataBaseType(Long.class) + " , ";
 			}
 
-			logger.debug("Create table cmd : it will manage #" + md.getFieldCount() + " fields...");
+			LOGGER.debug("Create table cmd : it will manage #" + md.getFieldCount() + " fields...");
 			for (int i = 0, l = md.getFieldCount(); i < l; i++) {
 				IFieldMetaData fmd = md.getFieldMeta(i);
 				String columnName = getSQLColumnName(fmd);
-				logger.debug("Adding field #" + i + " with column name [" + columnName + "]");
-				toReturn += " " + AbstractJDBCDataset.encapsulateColumnName(columnName, dataSource) + getDBFieldType(dataSource, fmd);
+				LOGGER.debug("Adding field #" + i + " with column name [" + columnName + "]");
+				toReturn += " " + AbstractJDBCDataset.encapsulateColumnName(columnName, dataSource)
+						+ getDBFieldType(dataSource, fmd);
 				toReturn += " " + (md.getIdFieldIndex() == i ? "NOT NULL PRIMARY KEY" : "");
 				toReturn += ((i < l - 1) ? " , " : "");
 			}
+			if (!oracleClobFields.isEmpty()) {
+				toReturn += md.getFieldCount() > 0 ? " , " : "";
+				for (int i = 0; i < oracleClobFields.size(); i++) {
+					IFieldMetaData oracleClobField = oracleClobFields.get(i);
+					String hashColumnName = OracleClobHashSupport.getHashColumnName(oracleClobField);
+					toReturn += " " + AbstractJDBCDataset.encapsulateColumnName(hashColumnName, dataSource)
+							+ getHashDBFieldType(dataSource);
+					toReturn += ((i < oracleClobFields.size() - 1) ? " , " : "");
+				}
+			}
 			toReturn += " )";
+			if (dataSource.getDialectName().contains(DatabaseDialect.DORIS.getValue())) {
+				toReturn = toReturn + " ENGINE=OLAP";
+			}
 		} else {
-			logger.debug("Metadata fields object not found! Doesn't create temporary table.");
+			LOGGER.debug("Metadata fields object not found! Doesn't create temporary table.");
 		}
 
 		return toReturn;
@@ -1046,7 +1308,7 @@ public class PersistedTableManager implements IPersistedManager {
 	}
 
 	private void executeStatement(String sql, IDataSource dataSource) throws Exception {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Connection connection = null;
 		String dialect = dataSource.getHibDialectClass();
 		try {
@@ -1055,13 +1317,13 @@ public class PersistedTableManager implements IPersistedManager {
 			if (!dialect.contains("VoltDB")) {
 				connection.setAutoCommit(false);
 			}
-			Statement stmt = connection.createStatement();
-			logger.debug("Executing sql " + sql);
-			stmt.execute(sql);
+			PreparedStatement stmt = connection.prepareStatement(sql);
+			LOGGER.debug("Executing sql " + sql);
+			stmt.execute();
 			if (!dialect.contains("VoltDB")) {
 				connection.commit();
 			}
-			logger.debug("Sql " + sql + " executed successfully");
+			LOGGER.debug("Sql " + sql + " executed successfully");
 		} catch (Exception e) {
 			if (connection != null && !dialect.contains("VoltDB")) {
 				connection.rollback();
@@ -1071,17 +1333,17 @@ public class PersistedTableManager implements IPersistedManager {
 			if (connection != null && !connection.isClosed()) {
 				connection.close();
 			}
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
 	private void dropTableIfExists(IDataSource datasource) {
 		// drop the persisted table if one exists
 		try {
-			logger.debug("Signature does not match: dropping PersistedTable " + getTableName() + " if it exists...");
+			LOGGER.debug("Signature does not match: dropping PersistedTable " + getTableName() + " if it exists...");
 			TemporaryTableManager.dropTableIfExists(getTableName(), datasource);
 		} catch (Exception e) {
-			logger.error("Impossible to drop the temporary table with name " + getTableName(), e);
+			LOGGER.error("Impossible to drop the temporary table with name " + getTableName(), e);
 			throw new SpagoBIEngineRuntimeException("Impossible to drop the persisted table with name " + tableName, e);
 		}
 	}
@@ -1089,16 +1351,26 @@ public class PersistedTableManager implements IPersistedManager {
 	public void dropTableIfExists(IDataSource datasource, String tableName) {
 		// drop the persisted table if one exists
 		try {
-			logger.debug("Dropping PersistedTable " + tableName + " if it exists...");
+			LOGGER.debug("Dropping PersistedTable " + tableName + " if it exists...");
 			TemporaryTableManager.dropTableIfExists(tableName, datasource);
 		} catch (Exception e) {
-			logger.error("Impossible to drop the table with name " + tableName, e);
+			LOGGER.error("Impossible to drop the table with name " + tableName, e);
 			throw new SpagoBIEngineRuntimeException("Impossible to drop the persisted table with name " + tableName, e);
 		}
 	}
 
+	public void renameTable(String tableNameOld, String tableNameNew, IDataSource datasource) {
+		try {
+			LOGGER.debug("Rename PersistedTable from " + tableNameOld + " to " + tableNameNew);
+			TemporaryTableManager.renameTable(tableNameOld, tableNameNew, datasource);
+		} catch (Exception e) {
+			LOGGER.error("Impossible rename the table  " + tableNameOld, e);
+			throw new SpagoBIEngineRuntimeException("Impossible rename the table " + tableNameOld, e);
+		}
+	}
+
 	public void dropTablesWithPrefix(IDataSource datasource, String prefix) {
-		logger.debug("Dropping Tables with name prefix " + prefix + " if they exists...");
+		LOGGER.debug("Dropping Tables with name prefix " + prefix + " if they exists...");
 
 		DatabaseDialect dialect = DatabaseDialect.get(datasource.getHibDialectClass());
 
@@ -1106,10 +1378,12 @@ public class PersistedTableManager implements IPersistedManager {
 
 		// get the list of tables names
 		if (dialect.equals(DatabaseDialect.ORACLE) || dialect.equals(DatabaseDialect.ORACLE_9I10G)) {
-			statement = "SELECT TABLE_NAME " + "FROM USER_TABLES " + "WHERE TABLE_NAME LIKE '" + prefix.toUpperCase() + "%'";
-		} else if (dialect.equals(DatabaseDialect.SQLSERVER) || dialect.equals(DatabaseDialect.MYSQL) || dialect.equals(DatabaseDialect.MYSQL_INNODB)
-				|| dialect.equals(DatabaseDialect.POSTGRESQL)) {
-			statement = "SELECT TABLE_NAME " + "FROM INFORMATION_SCHEMA.TABLES " + "WHERE TABLE_NAME LIKE '" + prefix.toLowerCase() + "%'";
+			statement = "SELECT TABLE_NAME " + "FROM USER_TABLES " + "WHERE TABLE_NAME LIKE '" + prefix.toUpperCase()
+					+ "%'";
+		} else if (dialect.equals(DatabaseDialect.SQLSERVER) || dialect.equals(DatabaseDialect.MYSQL)
+				|| dialect.equals(DatabaseDialect.MYSQL_INNODB) || dialect.equals(DatabaseDialect.POSTGRESQL) || dialect.equals(DatabaseDialect.DORIS)) {
+			statement = "SELECT TABLE_NAME " + "FROM INFORMATION_SCHEMA.TABLES " + "WHERE TABLE_NAME LIKE '"
+					+ prefix.toLowerCase() + "%'";
 		}
 
 		if ((statement != null) && (!statement.isEmpty())) {
@@ -1134,7 +1408,7 @@ public class PersistedTableManager implements IPersistedManager {
 			}
 
 		}
-		logger.debug("Dropped Tables with name prefix " + prefix);
+		LOGGER.debug("Dropped Tables with name prefix " + prefix);
 
 	}
 
@@ -1144,11 +1418,10 @@ public class PersistedTableManager implements IPersistedManager {
 	 * @param prefix an optional prefix to use for the generated table name
 	 */
 	public static String generateRandomTableName(String prefix) {
-		UUIDGenerator uuidGen = UUIDGenerator.getInstance();
-		UUID uuidObj = uuidGen.generateTimeBasedUUID();
+		UUID uuidObj = UUID.randomUUID();
 		String generatedId = uuidObj.toString();
 		generatedId = generatedId.replaceAll("-", "");
-		generatedId = StringUtils.convertNonAscii(generatedId);
+		generatedId = KnowageStringUtils.convertNonAscii(generatedId);
 		if ((prefix != null) && (!prefix.isEmpty())) {
 			generatedId = prefix + generatedId;
 		}
@@ -1169,11 +1442,9 @@ public class PersistedTableManager implements IPersistedManager {
 	}
 
 	private static String randomAlphabetString(int len) {
-		Random random = new Random();
-
 		StringBuilder sb = new StringBuilder(len);
 		for (int i = 0; i < len; i++) {
-			sb.append(Alphabet.charAt(random.nextInt(Alphabet.length())));
+			sb.append(ALPHABET.charAt(RANDOM.nextInt(ALPHABET.length())));
 		}
 		return sb.toString();
 	}
@@ -1235,7 +1506,7 @@ public class PersistedTableManager implements IPersistedManager {
 	}
 
 	public void createTable(IMetaData md, IDataSource dataSource) throws Exception {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		// Steps #1: define create table statement
 		String createStmtQuery = getCreateTableQuery(md, dataSource);
 		if (createStmtQuery != null) {
@@ -1243,7 +1514,7 @@ public class PersistedTableManager implements IPersistedManager {
 			// Step #2: execute create table statement
 			executeStatement(createStmtQuery, dataSource);
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 	public boolean insertRecord(IRecord record, IMetaData metadata, PreparedStatement statement) throws SQLException {
@@ -1253,17 +1524,18 @@ public class PersistedTableManager implements IPersistedManager {
 
 	}
 
-	public void insertRecords(List<IRecord> records, IMetaData metadata, PreparedStatement statement) throws SQLException {
-		logger.debug("IN");
+	public void insertRecords(List<IRecord> records, IMetaData metadata, PreparedStatement statement)
+			throws SQLException {
+		LOGGER.debug("IN");
 		statement.clearBatch();
 		for (IRecord record : records) {
-			logger.debug("Setting records to be insert into statement batch");
+			LOGGER.debug("Setting records to be insert into statement batch");
 			statement.clearParameters();
 			initializeStatement(statement, record, metadata);
 			statement.addBatch();
 		}
 		statement.executeBatch();
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 
 	}
 
@@ -1277,61 +1549,268 @@ public class PersistedTableManager implements IPersistedManager {
 	}
 
 	public void ajustMetaDataFromFrontend(IDataStore datastore, IDataSet dataset) {
-		IMetaData storeMeta = datastore.getMetaData();
-		IMetaData dataSetMeta = dataset.getMetadata();
+		alignFileDatasetMetadata(datastore, dataset);
+	}
 
-		for (int i = 0; i < storeMeta.getFieldCount(); i++) {
+	public void changeFieldValueType(IDataStore datastore, int index, Class targetType) {
+		for (int i = 0; i < datastore.getRecordsCount(); i++) {
+			IRecord record = datastore.getRecordAt(i);
+			IField field = record.getFieldAt(index);
 			try {
-				IFieldMetaData storeFieldMeta = storeMeta.getFieldMeta(i);
-				String storeFieldMetaName = storeFieldMeta.getName();
-				String storeFieldMetaTypeName = storeFieldMeta.getType().toString();
-				for (int j = 0; j < dataSetMeta.getFieldCount(); j++) {
-					try {
-						IFieldMetaData dataSetFieldMeta = dataSetMeta.getFieldMeta(j);
-						String dataSetFieldMetaName = dataSetFieldMeta.getName();
-						String dataSetFieldMetaTypeName = dataSetFieldMeta.getType().toString();
-
-						if (dataSetFieldMetaName.equals(storeFieldMetaName)) {
-							if (!dataSetFieldMetaTypeName.equals(storeFieldMetaTypeName)) {
-								storeFieldMeta.setType(dataSetFieldMeta.getType());
-								changeFieldValueType(datastore, dataSetFieldMeta, j, dataSetFieldMeta.getType());
-							}
-						}
-
-					} catch (Throwable t) {
-						logger.error("An unexpecetd error occured while ajusting metadata for record [" + j + "]", t);
-						throw new RuntimeException("An unexpecetd error occured while ajusting metadata for record [" + j + "]", t);
-					}
+				Object value = field.getValue();
+				if (value == null || value instanceof String stringValue && (stringValue.isBlank() || stringValue.equals("null"))) {
+					continue;
+				} else {
+					field.setValue(convertFieldValue(value, targetType));
 				}
-			} catch (Throwable t) {
-				logger.error("An unexpecetd error occured while ajusting metadata for record [" + i + "]", t);
-				throw new RuntimeException("An unexpecetd error occured while ajusting metadata for record [" + i + "]", t);
+			} catch (Exception e) {
+			    // KNOWAGE-9987 START: Improved diagnostics for dataset field type conversion errors.
+			    String columnName = datastore.getMetaData().getFieldName(index);
+			    Object invalidValue = field.getValue();
+			 
+			    LOGGER.error(
+			            "[KNOWAGE-9987] Dataset field type conversion failed. "
+			                    + "Column: " + columnName
+			                    + ", column index: " + index
+			                    + ", record index: " + i
+			                    + ", expected type: " + targetType.getName()
+			                    + ", actual value type: "
+			                    + (invalidValue != null ? invalidValue.getClass().getName() : "null"),
+			            e);
+			    // KNOWAGE-9987 END
+			 
+			    throw new SpagoBIEngineRuntimeException(
+			            "Error while changing field value to different type that is comming from data set wizard. Table name:"
+			                    + tableName,
+			            e);
 			}
 		}
 	}
 
-	public void changeFieldValueType(IDataStore datastore, IFieldMetaData dataSetFieldMeta, int index, Class c) {
+	private void alignFileDatasetMetadata(IDataStore datastore, IDataSet dataset) {
+		IMetaData storeMeta = datastore.getMetaData();
+		IMetaData dataSetMeta = dataset.getMetadata();
+		if (storeMeta == null || dataSetMeta == null) {
+			return;
+		}
 
-		for (int i = 0; i < datastore.getRecordsCount(); i++) {
-			IRecord record = datastore.getRecordAt(i);
-			IField field = record.getFieldAt(index);
-			Constructor<?> cons;
+		boolean metadataChanged = false;
+		Map<String, IFieldMetaData> dataSetFieldsByName = new HashMap<>();
+		for (int i = 0; i < dataSetMeta.getFieldCount(); i++) {
+			IFieldMetaData dataSetFieldMeta = dataSetMeta.getFieldMeta(i);
+			dataSetFieldsByName.put(dataSetFieldMeta.getName(), dataSetFieldMeta);
+		}
+
+		for (int i = 0; i < storeMeta.getFieldCount(); i++) {
 			try {
-				cons = c.getConstructor(String.class);
-			} catch (NoSuchMethodException | SecurityException e) {
-				logger.error("Error while creating construnctor for dynamically instancing class type", e);
-				throw new SpagoBIEngineRuntimeException("Error while creating construnctor for dynamically instancing class type. Table name:" + tableName, e);
-			}
-			try {
-				Object value = field.getValue();
-				if (value != null) {
-					field.setValue(cons.newInstance(String.valueOf(value)));
+				IFieldMetaData storeFieldMeta = storeMeta.getFieldMeta(i);
+				IFieldMetaData dataSetFieldMeta = dataSetFieldsByName.get(storeFieldMeta.getName());
+				if (dataSetFieldMeta == null) {
+					continue;
 				}
-			} catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-				logger.error("Error while changing field value to different type that is comming from data set wizard", e);
-				throw new SpagoBIEngineRuntimeException(
-						"Error while changing field value to different type that is comming from data set wizard. Table name:" + tableName, e);
+
+				storeFieldMeta.setFieldType(dataSetFieldMeta.getFieldType());
+				Class resolvedType = resolveFieldType(storeFieldMeta.getType(), dataSetFieldMeta.getType());
+				if (resolvedType == null) {
+					continue;
+				}
+
+				if (!sameFieldType(storeFieldMeta.getType(), resolvedType) || !sameFieldType(dataSetFieldMeta.getType(), resolvedType)) {
+					changeFieldValueType(datastore, i, resolvedType);
+					metadataChanged = true;
+				}
+
+				storeFieldMeta.setType(resolvedType);
+				dataSetFieldMeta.setType(resolvedType);
+			} catch (Exception e) {
+				LOGGER.error("An unexpecetd error occured while ajusting metadata for record [" + i + "]", e);
+				throw new SpagoBIRuntimeException("An unexpecetd error occured while ajusting metadata for record [" + i + "]",
+						e);
 			}
 		}
+		if (metadataChanged) {
+			dataset.setDsMetadata(new DatasetMetadataParser().metadataToXML(dataSetMeta));
+		}
+	}
+
+	private Class resolveFieldType(Class storeType, Class dataSetType) {
+		Class normalizedStoreType = normalizeFieldType(storeType);
+		Class normalizedDataSetType = normalizeFieldType(dataSetType);
+
+		if (normalizedStoreType == null) {
+			return normalizedDataSetType;
+		}
+		if (normalizedDataSetType == null) {
+			return normalizedStoreType;
+		}
+		if (isNumericType(normalizedStoreType) && isNumericType(normalizedDataSetType)) {
+			return resolveNumericFieldType(normalizedStoreType, normalizedDataSetType);
+		}
+		if (isDateType(normalizedStoreType) && isDateType(normalizedDataSetType)) {
+			return resolveDateFieldType(normalizedStoreType, normalizedDataSetType);
+		}
+		return normalizedDataSetType;
+	}
+
+	private boolean sameFieldType(Class leftType, Class rightType) {
+		Class normalizedLeftType = normalizeFieldType(leftType);
+		Class normalizedRightType = normalizeFieldType(rightType);
+		return normalizedLeftType == normalizedRightType;
+	}
+
+	private Class normalizeFieldType(Class type) {
+		if (type == null) {
+			return null;
+		}
+		if (!type.isPrimitive()) {
+			return type;
+		}
+		if (type == Integer.TYPE) {
+			return Integer.class;
+		}
+		if (type == Long.TYPE) {
+			return Long.class;
+		}
+		if (type == Double.TYPE) {
+			return Double.class;
+		}
+		if (type == Float.TYPE) {
+			return Float.class;
+		}
+		if (type == Short.TYPE) {
+			return Short.class;
+		}
+		if (type == Byte.TYPE) {
+			return Byte.class;
+		}
+		if (type == Boolean.TYPE) {
+			return Boolean.class;
+		}
+		return type;
+	}
+
+	private boolean isNumericType(Class type) {
+		return type == Byte.class || type == Short.class || type == Integer.class || type == Long.class
+				|| type == BigInteger.class || type == Float.class || type == Double.class || type == BigDecimal.class;
+	}
+
+	private boolean isDateType(Class type) {
+		return type == java.util.Date.class || type == java.sql.Date.class || type == java.sql.Timestamp.class;
+	}
+
+	private Class resolveNumericFieldType(Class leftType, Class rightType) {
+		if (leftType == BigDecimal.class || rightType == BigDecimal.class) {
+			return BigDecimal.class;
+		}
+		if (leftType == Double.class || rightType == Double.class) {
+			return Double.class;
+		}
+		if (leftType == Float.class || rightType == Float.class) {
+			return Float.class;
+		}
+		if (leftType == BigInteger.class || rightType == BigInteger.class) {
+			return BigInteger.class;
+		}
+		if (leftType == Long.class || rightType == Long.class) {
+			return Long.class;
+		}
+		if (leftType == Integer.class || rightType == Integer.class) {
+			return Integer.class;
+		}
+		if (leftType == Short.class || rightType == Short.class) {
+			return Short.class;
+		}
+		return Byte.class;
+	}
+
+	private Class resolveDateFieldType(Class leftType, Class rightType) {
+		if (leftType == java.sql.Timestamp.class || rightType == java.sql.Timestamp.class) {
+			return java.sql.Timestamp.class;
+		}
+		if (leftType == java.util.Date.class || rightType == java.util.Date.class) {
+			return java.util.Date.class;
+		}
+		return java.sql.Date.class;
+	}
+
+	private Object convertFieldValue(Object value, Class targetType) {
+		Class normalizedTargetType = normalizeFieldType(targetType);
+		if (normalizedTargetType == null || value == null || normalizedTargetType.isInstance(value)) {
+			return value;
+		}
+		if (normalizedTargetType == String.class) {
+			return String.valueOf(value);
+		}
+		if (normalizedTargetType == Integer.class) {
+			return toBigDecimal(value).intValueExact();
+		}
+		if (normalizedTargetType == Long.class) {
+			return toBigDecimal(value).longValueExact();
+		}
+		if (normalizedTargetType == Short.class) {
+			return toBigDecimal(value).shortValueExact();
+		}
+		if (normalizedTargetType == Byte.class) {
+			return toBigDecimal(value).byteValueExact();
+		}
+		if (normalizedTargetType == BigInteger.class) {
+			return toBigDecimal(value).toBigIntegerExact();
+		}
+		if (normalizedTargetType == Double.class) {
+			return toBigDecimal(value).doubleValue();
+		}
+		if (normalizedTargetType == Float.class) {
+			return toBigDecimal(value).floatValue();
+		}
+		if (normalizedTargetType == BigDecimal.class) {
+			return toBigDecimal(value);
+		}
+		if (normalizedTargetType == Boolean.class) {
+			return value instanceof Boolean ? value : Boolean.valueOf(String.valueOf(value));
+		}
+		if (normalizedTargetType == java.sql.Timestamp.class) {
+			if (value instanceof java.sql.Timestamp) {
+				return value;
+			}
+			if (value instanceof java.util.Date dateValue) {
+				return new java.sql.Timestamp(dateValue.getTime());
+			}
+			return java.sql.Timestamp.valueOf(String.valueOf(value));
+		}
+		if (normalizedTargetType == java.sql.Time.class) {
+			if (value instanceof java.sql.Time) {
+				return value;
+			}
+			if (value instanceof java.util.Date dateValue) {
+				return new java.sql.Time(dateValue.getTime());
+			}
+			return java.sql.Time.valueOf(String.valueOf(value));
+		}
+		if (normalizedTargetType == java.sql.Date.class) {
+			if (value instanceof java.sql.Date) {
+				return value;
+			}
+			if (value instanceof java.util.Date dateValue) {
+				return new java.sql.Date(dateValue.getTime());
+			}
+			return java.sql.Date.valueOf(String.valueOf(value));
+		}
+		if (normalizedTargetType == java.util.Date.class) {
+			if (value instanceof java.util.Date dateValue) {
+				return new java.util.Date(dateValue.getTime());
+			}
+			return new java.util.Date(String.valueOf(value));
+		}
+		throw new IllegalArgumentException("Unsupported metadata type [" + normalizedTargetType.getName() + "]");
+	}
+
+	private BigDecimal toBigDecimal(Object value) {
+		if (value instanceof BigDecimal decimalValue) {
+			return decimalValue;
+		}
+		if (value instanceof BigInteger integerValue) {
+			return new BigDecimal(integerValue);
+		}
+		return new BigDecimal(String.valueOf(value));
 	}
 }

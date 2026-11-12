@@ -88,7 +88,7 @@ angular.module("cockpitModule").service("cockpitModule_widgetServices",function(
 		}
 		// cycles for already preset values
 		for (var j in modelColumns) {
-			if(modelColumns[j].isCalculated){
+			if(modelColumns[j].isCalculated || modelColumns[j].isFunction){
 				columnsMap[modelColumns[j].name] = modelColumns[j]
 			}
 			if (columnsMap[modelColumns[j].name]) {
@@ -637,7 +637,7 @@ angular.module("cockpitModule").service("cockpitModule_widgetServices",function(
 					}
 					else {
 						if(categoryTag.groupby=="" && categoryTag.column!=""){
-							if (categoryTag.drillOrder) {
+							if (categoryTag.drillOrder && Object.keys(categoryTag.drillOrder).length != 0) {
 								categories.push({column:categoryTag.column,groupby:"", groupbyNames:"",name:categoryTag.name, orderColumn:categoryTag.drillOrder[categoryTag.column].orderColumn,orderType:categoryTag.drillOrder[categoryTag.column].orderType,stacked:"",stackedType:""});
 							} else {
 								categories.push({column:categoryTag.column,groupby:"", groupbyNames:"",name:categoryTag.name, orderColumn:categoryTag.orderColumn,orderType:categoryTag.orderType,stacked:"",stackedType:""});
@@ -647,16 +647,16 @@ angular.module("cockpitModule").service("cockpitModule_widgetServices",function(
 							 if(categoryTag.name=="" && categoryTag.column!=""){
 								 categories.push({column:categoryTag.column,groupby:"", groupbyNames:"",name:categoryTag.name, orderColumn:"",orderType:"",stacked:"",stackedType:""});
 								 } else if(categoryTag.name!="" && categoryTag.column!="") {
-									 if (categoryTag.drillOrder) {
-										 categories.push({column:categoryTag.column,groupby:"", groupbyNames:"",name:categoryTag.name, orderColumn:categoryTag.drillOrder[categoryTag.column].orderColumn,orderType:categoryTag.drillOrder[categoryTag.column].orderType,stacked:"",stackedType:""});
+									 if (categoryTag.drillOrder && Object.keys(categoryTag.drillOrder).length != 0) {
+										 categories.push({column:categoryTag.column,groupby:"", groupbyNames:"",name:categoryTag.name, orderColumn:categoryTag.drillOrder[categoryTag.column]?categoryTag.drillOrder[categoryTag.column].orderColumn:"",orderType:categoryTag.drillOrder[categoryTag.column]?categoryTag.drillOrder[categoryTag.column].orderType:"",stacked:"",stackedType:""});
 									 } else {
 										 categories.push({column:categoryTag.column,groupby:"", groupbyNames:"",name:categoryTag.name, orderColumn:categoryTag.orderColumn,orderType:categoryTag.orderType,stacked:"",stackedType:""});
 									 }
 								 }
 
 							 if(categoryTag.groupbyNames!="") {
-								 if (categoryTag.drillOrder) {
-									 categories.push({column:categoryTag.groupby,groupby:"", groupbyNames:"",name:categoryTag.groupbyNames, orderColumn:categoryTag.drillOrder[categoryTag.groupby].orderColumn,orderType:categoryTag.drillOrder[categoryTag.groupby].orderType,stacked:"",stackedType:""});
+								 if (categoryTag.drillOrder && Object.keys(categoryTag.drillOrder).length != 0) {
+									 categories.push({column:categoryTag.groupby,groupby:"", groupbyNames:"",name:categoryTag.groupbyNames, orderColumn:categoryTag.drillOrder[categoryTag.groupby] ? categoryTag.drillOrder[categoryTag.groupby].orderColumn:"",orderType:categoryTag.drillOrder[categoryTag.groupby]? categoryTag.drillOrder[categoryTag.groupby].orderType:"",stacked:"",stackedType:""});
 								 } else {
 									 categories.push({column:categoryTag.groupby,groupby:"", groupbyNames:"",name:categoryTag.groupbyNames, orderColumn:"",orderType:"",stacked:"",stackedType:""});
 								 }

@@ -23,7 +23,7 @@ import it.eng.spagobi.tools.catalogue.metadata.SbiMetaModel;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO implements IBIMetaModelParameterDAO {
-	static private Logger logger = Logger.getLogger(BIMetaModelParameterDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(BIMetaModelParameterDAOHibImpl.class);
 
 	@Override
 	public SbiMetaModelParameter loadById(Integer id) throws HibernateException {
@@ -36,14 +36,10 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			metaModel = (SbiMetaModelParameter) session.load(SbiMetaModelParameter.class, id);
 		} catch (HibernateException he) {
 			logException(he);
-			if (transaction != null)
-				transaction.rollback();
+			rollbackIfActive(transaction);
 			throw new SpagoBIRuntimeException(he.getLocalizedMessage(), he);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 		return metaModel;
 	}
@@ -62,14 +58,10 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			transaction.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (transaction != null)
-				transaction.rollback();
+			rollbackIfActive(transaction);
 			throw new SpagoBIRuntimeException(he.getMessage(), he);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 		return metaModel;
 	}
@@ -81,13 +73,16 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 		try {
 			session = getSession();
 			transaction = session.beginTransaction();
-			SbiMetaModelParameter hibBIMetaModelParameter = (SbiMetaModelParameter) session.load(SbiMetaModelParameter.class, aBIMetaModelParameter.getId());
+			SbiMetaModelParameter hibBIMetaModelParameter = (SbiMetaModelParameter) session
+					.load(SbiMetaModelParameter.class, aBIMetaModelParameter.getId());
 			if (hibBIMetaModelParameter == null) {
 				logger.error("The MetaModelParameter with id=" + aBIMetaModelParameter.getId() + " does not exist.");
 			}
 
-			SbiMetaModel hibMetaModel = (SbiMetaModel) session.load(SbiMetaModel.class, aBIMetaModelParameter.getBiMetaModelID());
-			SbiParameters aSbiParameter = (SbiParameters) session.load(SbiParameters.class, aBIMetaModelParameter.getParID());
+			SbiMetaModel hibMetaModel = (SbiMetaModel) session.load(SbiMetaModel.class,
+					aBIMetaModelParameter.getBiMetaModelID());
+			SbiParameters aSbiParameter = (SbiParameters) session.load(SbiParameters.class,
+					aBIMetaModelParameter.getParID());
 
 			hibBIMetaModelParameter.setSbiMetaModel(hibMetaModel);
 			hibBIMetaModelParameter.setSbiParameter(aSbiParameter);
@@ -110,13 +105,18 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			if (!oldPriority.equals(newPriority)) {
 				Query query = null;
 				if (oldPriority.intValue() > newPriority.intValue()) {
-					String hqlUpdateShiftRight = "update SbiMetaModelParameter s set s.priority = (s.priority + 1) where s.priority >= " + newPriority
-							+ " and s.priority < " + oldPriority + "and s.sbiMetaModel.id = " + hibMetaModel.getId();
+					String hqlUpdateShiftRight = "update SbiMetaModelParameter s set s.priority = (s.priority + 1) where s.priority >=  :newPriority"
+							+ " and s.priority <  :oldPriority and s.sbiMetaModel.id = :hibMetaModelId";
 					query = session.createQuery(hqlUpdateShiftRight);
+					query.setParameter("oldPriority", oldPriority);
+					query.setParameter("newPriority", newPriority);
+					query.setParameter("hibMetaModelId", hibMetaModel.getId());
 				} else {
-					String hqlUpdateShiftLeft = "update SbiMetaModelParameter s set s.priority = (s.priority - 1) where s.priority > " + oldPriority
-							+ " and s.priority <= " + newPriority + "and s.sbiMetaModel.id = " + hibMetaModel.getId();
+					String hqlUpdateShiftLeft = "update SbiMetaModelParameter s set s.priority = (s.priority - 1) where s.priority >  :oldPriority"
+							+ " and s.priority <= :newPriority and s.sbiMetaModel.id = :hibMetaModelId";
 					query = session.createQuery(hqlUpdateShiftLeft);
+					query.setParameter("newPriority", newPriority);
+					query.setParameter("hibMetaModelId", hibMetaModel.getId());
 				}
 				query.executeUpdate();
 			}
@@ -129,14 +129,10 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			transaction.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (transaction != null)
-				transaction.rollback();
+			rollbackIfActive(transaction);
 			throw new HibernateException(he.getLocalizedMessage(), he);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 	}
 
@@ -148,8 +144,10 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			session = getSession();
 			transaction = session.beginTransaction();
 
-			SbiMetaModel hibMetaModel = (SbiMetaModel) session.load(SbiMetaModel.class, aBIMetaModelParameter.getBiMetaModelID());
-			SbiParameters aSbiParameter = (SbiParameters) session.load(SbiParameters.class, aBIMetaModelParameter.getParID());
+			SbiMetaModel hibMetaModel = (SbiMetaModel) session.load(SbiMetaModel.class,
+					aBIMetaModelParameter.getBiMetaModelID());
+			SbiParameters aSbiParameter = (SbiParameters) session.load(SbiParameters.class,
+					aBIMetaModelParameter.getParID());
 
 			SbiMetaModelParameter newHibMetaModelParameter = new SbiMetaModelParameter();
 
@@ -170,9 +168,10 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			newHibMetaModelParameter.setColSpan(aBIMetaModelParameter.getColSpan());
 			newHibMetaModelParameter.setThickPerc(aBIMetaModelParameter.getThickPerc());
 
-			String hqlUpdateShiftRight = "update SbiMetaModelParameter s set s.priority = (s.priority + 1) where s.priority >= "
-					+ aBIMetaModelParameter.getPriority();// + " and s.sbiMetaModel.id = " + hibMetaModel.getId();
+			String hqlUpdateShiftRight = "update SbiMetaModelParameter s set s.priority = (s.priority + 1) where s.priority >= :aBIMetaModelParameterPriority";
+			// + " and s.sbiMetaModel.id = " + hibMetaModel.getId();
 			Query query = session.createQuery(hqlUpdateShiftRight);
+			query.setParameter("aBIMetaModelParameterPriority", aBIMetaModelParameter.getPriority());
 			query.executeUpdate();
 			setTenant(getTenant());
 			newHibMetaModelParameter.setPriority(aBIMetaModelParameter.getPriority());
@@ -185,18 +184,12 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (transaction != null)
-				transaction.rollback();
+			rollbackIfActive(transaction);
 
 			throw new SpagoBIRuntimeException(he.getLocalizedMessage(), he);
 
 		} finally {
-
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
-
+			closeSessionIfOpen(session);
 		}
 
 	}
@@ -206,7 +199,8 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 		Session session = getSession();
 		Transaction transaction = session.beginTransaction();
 
-		SbiMetaModelParameter hibMetaModelParameter = (SbiMetaModelParameter) session.load(SbiMetaModelParameter.class, aBIMetaModelParameter.getId());
+		SbiMetaModelParameter hibMetaModelParameter = (SbiMetaModelParameter) session.load(SbiMetaModelParameter.class,
+				aBIMetaModelParameter.getId());
 
 		if (hibMetaModelParameter == null) {
 			logger.error("the BIMetaModelParameter with id=" + aBIMetaModelParameter.getId() + " does not exist.");
@@ -221,7 +215,8 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 		}
 
 		// deletes all MetaModelParuse object (dependencies) of the biMetaModelParameter that have a father relationship
-		List metaModelParusesFather = metaModelParuseDAO.loadMetaModelParusesFather(hibMetaModelParameter.getMetaModelParId());
+		List metaModelParusesFather = metaModelParuseDAO
+				.loadMetaModelParusesFather(hibMetaModelParameter.getMetaModelParId());
 		Iterator itMetaModelParusesFather = metaModelParusesFather.iterator();
 		while (itMetaModelParusesFather.hasNext()) {
 			MetaModelParuse aMetaModelParuseFather = (MetaModelParuse) itMetaModelParusesFather.next();
@@ -238,7 +233,8 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 		}
 
 		// delete also all MetaModelParView (visibility dependencies) of the biMetaModelParameter father
-		List metaModelParviewFather = metaModelParviewDAO.loadMetaModelParviewsFather(hibMetaModelParameter.getMetaModelParId());
+		List metaModelParviewFather = metaModelParviewDAO
+				.loadMetaModelParviewsFather(hibMetaModelParameter.getMetaModelParId());
 		Iterator itMetaModelParviewsFather = metaModelParviewFather.iterator();
 		while (itMetaModelParviewsFather.hasNext()) {
 			MetaModelParview aMetaMOdelParviewFather = (MetaModelParview) itMetaModelParviewsFather.next();
@@ -249,9 +245,11 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 
 		Integer metaModelId = hibMetaModelParameter.getSbiMetaModel().getId();
 
-		String hqlUpdateShiftRight = "update SbiMetaModelParameter s set s.priority = (s.priority - 1) where s.priority >= "
-				+ hibMetaModelParameter.getPriority() + " and s.sbiMetaModel.id = " + metaModelId;
+		String hqlUpdateShiftRight = "update SbiMetaModelParameter s set s.priority = (s.priority - 1) where s.priority >= :hibMetaModelParameterPriority"
+				+ " and s.sbiMetaModel.id = :metaModelId";
 		Query query = session.createQuery(hqlUpdateShiftRight);
+		query.setParameter("hibMetaModelParameterPriority", hibMetaModelParameter.getPriority());
+		query.setParameter("metaModelId", metaModelId);
 		query.executeUpdate();
 		transaction.commit();
 	}
@@ -262,9 +260,10 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 		Transaction transaction = session.beginTransaction();
 		List resultList = new ArrayList();
 		try {
-			String hql = "from SbiMetaModelParameter s where s.sbiMetaModel.id = " + metaModelID + " order by s.priority asc";
+			String hql = "from SbiMetaModelParameter s where s.sbiMetaModel.id = :metaModelID order by s.priority asc";
 
 			Query hqlQuery = session.createQuery(hql);
+			hqlQuery.setParameter("metaModelID", metaModelID);
 			List hibMetaModelParameters = hqlQuery.list();
 
 			Iterator it = hibMetaModelParameters.iterator();
@@ -278,8 +277,8 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 				// if the priority is different from the value expected,
 				// recalculates it for all the parameter of the document
 				if (priority == null || priority.intValue() != count) {
-					logger.error(
-							"The priorities of the biparameters for the document with id = " + metaModelID + " are not sorted. Priority recalculation starts.");
+					logger.error("The priorities of the biparameters for the document with id = " + metaModelID
+							+ " are not sorted. Priority recalculation starts.");
 					recalculateBiParametersPriority(metaModelID, session);
 					// restarts this method in order to load updated priorities
 					metaModelParameter.setPriority(new Integer(count));
@@ -293,14 +292,10 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			transaction.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (transaction != null)
-				transaction.rollback();
+			rollbackIfActive(transaction);
 			throw new SpagoBIRuntimeException(he.getLocalizedMessage(), he);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 		return resultList;
 	}
@@ -322,21 +317,21 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			for (Iterator iterator = metaModelParameters.iterator(); iterator.hasNext();) {
 				SbiMetaModelParameter HibMetaModelParameter = (SbiMetaModelParameter) iterator.next();
 				BIMetaModelParameter biMetaModelParameter = toBIMetaModelParameter(HibMetaModelParameter);
-				logger.debug("delete biMetaModelPar with label " + HibMetaModelParameter.getLabel() + " and url name " + HibMetaModelParameter.getParurlNm());
+				logger.debug("delete biMetaModelPar with label " + HibMetaModelParameter.getLabel() + " and url name "
+						+ HibMetaModelParameter.getParurlNm());
 				eraseBIMetaModelParameter(biMetaModelParameter);
 			}
 		} catch (Exception he) {
-			logger.error("Erro while deleting MetaModel pars associated to document with label = " + hibMetaModel != null ? hibMetaModel.getName() : "null",
+			logger.error(
+					"Erro while deleting MetaModel pars associated to document with label = " + hibMetaModel != null
+							? hibMetaModel.getName()
+							: "null",
 					he);
 			logException(he);
-			if (transaction != null)
-				transaction.rollback();
+			rollbackIfActive(transaction);
 			throw new SpagoBIRuntimeException(he.getMessage(), he);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 	}
 
@@ -344,7 +339,8 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 	public void eraseBIMetaModelParameterDependencies(BIMetaModelParameter aBIMetaModelParameter, Session aSession) {
 		logger.debug("IN");
 		logger.debug("Delete dependencies for meta model parameter with id " + aBIMetaModelParameter.getId());
-		SbiMetaModelParameter hibMetaModelPar = (SbiMetaModelParameter) aSession.load(SbiMetaModelParameter.class, aBIMetaModelParameter.getId());
+		SbiMetaModelParameter hibMetaModelPar = (SbiMetaModelParameter) aSession.load(SbiMetaModelParameter.class,
+				aBIMetaModelParameter.getId());
 
 		if (hibMetaModelPar == null) {
 			logger.error("the BIMetaModelParameter with id=" + aBIMetaModelParameter.getId() + " does not exist.");
@@ -372,8 +368,9 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 	}
 
 	public void recalculateBiParametersPriority(Integer MetaModelId, Session aSession) {
-		String hql = "from SbiMetaModelParameter s where s.sbiMetaModel.id = " + MetaModelId + " order by s.priority asc";
+		String hql = "from SbiMetaModelParameter s where s.sbiMetaModel.id =  :MetaModelId order by s.priority asc";
 		Query hqlQuery = aSession.createQuery(hql);
+		hqlQuery.setParameter("MetaModelId", MetaModelId);
 		List hibMetaModelParameters = hqlQuery.list();
 		Iterator it = hibMetaModelParameters.iterator();
 		int count = 1;
@@ -438,8 +435,9 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 
 			paramId = sbiMetaModelParam.getSbiParameter().getParId();
 
-			String hQuery = "from SbiParameters sp where sp.parId = " + paramId;
+			String hQuery = "from SbiParameters sp where sp.parId = :paramId";
 			Query q = session.createQuery(hQuery);
+			q.setParameter("paramId", paramId);
 			SbiParameters sbiParam = (SbiParameters) q.uniqueResult();
 
 			return sbiParam;
@@ -448,10 +446,7 @@ public class BIMetaModelParameterDAOHibImpl extends AbstractHibernateDAO impleme
 			logger.error("Error getting parameters");
 			throw new SpagoBIRuntimeException(e.getMessage(), e);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 
 	}

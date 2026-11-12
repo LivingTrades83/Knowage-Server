@@ -17,6 +17,7 @@
  */
 package it.eng.spagobi.tools.dataset.bo;
 
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -132,9 +133,9 @@ public interface IDataSet extends Iterable<IRecord> {
 	// --------------------------------------------------------------------------------------------------
 
 	// profilation ...
-	public Map getUserProfileAttributes();
+	Map getUserProfileAttributes();
 
-	public void setUserProfileAttributes(Map<String, Object> attributes);
+	void setUserProfileAttributes(Map<String, Object> attributes);
 
 	// execution ...
 	// --------------------------------------------------------------------------------------------------
@@ -164,33 +165,9 @@ public interface IDataSet extends Iterable<IRecord> {
 
 	void setTransformerCd(String transfomerCd);
 
-	String getPivotColumnName();
-
-	void setPivotColumnName(String pivotColumnName);
-
-	String getPivotRowName();
-
-	void setPivotRowName(String pivotRowName);
-
-	boolean isNumRows();
-
-	void setNumRows(boolean numRows);
-
-	String getPivotColumnValue();
-
-	void setPivotColumnValue(String pivotColumnValue);
-
-	boolean hasDataStoreTransformer();
-
-	void removeDataStoreTransformer();
-
 	void setAbortOnOverflow(boolean abortOnOverflow);
 
 	void addBinding(String bindingName, Object bindingValue);
-
-	void setDataStoreTransformer(IDataStoreTransformer transformer);
-
-	IDataStoreTransformer getDataStoreTransformer();
 
 	boolean isPersisted();
 
@@ -206,7 +183,11 @@ public interface IDataSet extends Iterable<IRecord> {
 
 	boolean isFlatDataset();
 
+	boolean isPreparedDataSet();
+
 	String getFlatTableName();
+
+	String getPreparedTableName();
 
 	List getNoActiveVersions();
 
@@ -239,74 +220,70 @@ public interface IDataSet extends Iterable<IRecord> {
 	/**
 	 * Get the values for a certain dataset's field, considering a optional filter.
 	 *
-	 * @param fieldName
-	 *            The dataset's field
-	 * @param start
-	 *            The offset on results
-	 * @param limit
-	 *            The limit on result
-	 * @param filter
-	 *            The optional filter
+	 * @param fieldName The dataset's field
+	 * @param start     The offset on results
+	 * @param limit     The limit on result
+	 * @param filter    The optional filter
 	 * @return The datastore containing the values for the dataset's field
 	 */
-	public IDataStore getDomainValues(String fieldName, Integer start, Integer limit, IDataStoreFilter filter);
+	IDataStore getDomainValues(String fieldName, Integer start, Integer limit, IDataStoreFilter filter);
 
-	public IDataStore decode(IDataStore datastore);
+	IDataStore decode(IDataStore datastore);
 
 	boolean isCalculateResultNumberOnLoadEnabled();
 
 	void setCalculateResultNumberOnLoad(boolean enabled);
 
-	public void setDataSource(IDataSource dataSource);
+	void setDataSource(IDataSource dataSource);
 
-	public IDataSource getDataSource();
+	IDataSource getDataSource();
 
-	public String getTableNameForReading();
+	String getTableNameForReading();
 
-	public IDataSource getDataSourceForReading();
+	IDataSource getDataSourceForReading();
 
-	public void setDataSourceForReading(IDataSource dataSource);
+	void setDataSourceForReading(IDataSource dataSource);
 
-	public String getOrganization();
+	String getOrganization();
 
-	public void setOrganization(String organization);
+	void setOrganization(String organization);
 
-	public IDataSource getDataSourceForWriting();
+	IDataSource getDataSourceForWriting();
 
-	public void setDataSourceForWriting(IDataSource dataSource);
+	void setDataSourceForWriting(IDataSource dataSource);
 
-	public FederationDefinition getDatasetFederation();
+	FederationDefinition getDatasetFederation();
 
-	public void setDatasetFederation(FederationDefinition datasetFederation);
+	void setDatasetFederation(FederationDefinition datasetFederation);
 
-	public String getStartDateField();
+	String getStartDateField();
 
-	public void setStartDateField(String startDateField);
+	void setStartDateField(String startDateField);
 
-	public String getEndDateField();
+	String getEndDateField();
 
-	public void setEndDateField(String endDateField);
+	void setEndDateField(String endDateField);
 
-	public String getSchedulingCronLine();
+	String getSchedulingCronLine();
 
-	public void setSchedulingCronLine(String schedulingCronLine);
+	void setSchedulingCronLine(String schedulingCronLine);
 
-	public Map<String, ?> getDefaultValues();
+	Map<String, ?> getDefaultValues();
 
 	@Override
-	public DataIterator iterator();
+	DataIterator iterator();
 
-	public boolean isIterable();
+	boolean isIterable();
 
-	public boolean isRealtime();
+	boolean isRealtime();
 
-	public boolean isCachingSupported();
+	boolean isCachingSupported();
 
-	public DatasetEvaluationStrategyType getEvaluationStrategy(boolean isNearRealtime);
+	DatasetEvaluationStrategyType getEvaluationStrategy(boolean isNearRealtime);
 
 	UserProfile getUserProfile();
 
-	public void setUserProfile(UserProfile profile);
+	void setUserProfile(UserProfile profile);
 
 	void resolveParameters();
 
@@ -314,6 +291,20 @@ public interface IDataSet extends Iterable<IRecord> {
 
 	Set getTags();
 
-	public void setTags(Set tags);
+	void setTags(Set tags);
 
+	// Data store transformer
+	boolean hasDataStoreTransformers();
+
+	void clearDataStoreTransformers();
+
+	List<IDataStoreTransformer> getDataStoreTransformers();
+
+	void addDataStoreTransformer(IDataStoreTransformer transformer);
+
+	void addDataStoreTransformers(Collection<IDataStoreTransformer> transformers);
+
+	void executeDataStoreTransformers(IDataStore dataStore);
+
+	DataIterator iterator(IMetaData dsMetadata);
 }

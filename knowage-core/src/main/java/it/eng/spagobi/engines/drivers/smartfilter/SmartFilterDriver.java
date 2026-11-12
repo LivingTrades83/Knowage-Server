@@ -26,7 +26,7 @@ import java.util.Locale;
 import java.util.Locale.Builder;
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -63,7 +63,7 @@ import it.eng.spagobi.utilities.engines.EngineConstants;
  */
 public class SmartFilterDriver extends AbstractEngineDriver implements IEngineDriver {
 
-	static private Logger logger = Logger.getLogger(SmartFilterDriver.class);
+	private static Logger logger = Logger.getLogger(SmartFilterDriver.class);
 
 	/**
 	 * Returns a map of parameters which will be send in the request to the engine application.
@@ -376,9 +376,9 @@ public class SmartFilterDriver extends AbstractEngineDriver implements IEngineDr
 		return engineURL;
 	}
 
-	private final static String PARAM_SERVICE_NAME = "ACTION_NAME";
-	private final static String PARAM_NEW_SESSION = "NEW_SESSION";
-	private final static String PARAM_MODALITY = "MODALITY";
+	private static final String PARAM_SERVICE_NAME = "ACTION_NAME";
+	private static final String PARAM_NEW_SESSION = "NEW_SESSION";
+	private static final String PARAM_MODALITY = "MODALITY";
 
 	private Map applyService(Map parameters, BIObject biObject) {
 		logger.debug("IN");

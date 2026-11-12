@@ -17,7 +17,14 @@
  */
 package it.eng.spagobi.engines.jasperreport.services;
 
-import it.eng.spagobi.commons.utilities.StringUtilities;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import it.eng.spagobi.engines.jasperreport.JasperReportEngine;
 import it.eng.spagobi.engines.jasperreport.JasperReportEngineInstance;
 import it.eng.spagobi.engines.jasperreport.JasperReportEngineTemplate;
@@ -29,23 +36,19 @@ import it.eng.spagobi.utilities.engines.EngineConstants;
 import it.eng.spagobi.utilities.engines.EngineStartServletIOManager;
 import it.eng.spagobi.utilities.engines.SpagoBIEngineException;
 
-import java.io.File;
-
-import org.apache.log4j.Logger;
-
 /**
  * @authors Andrea Gioia (andrea.gioia@eng.it) Davide Zerbetto (davide.zerbetto@eng.it)
  */
 public class JasperReportEngineStartAction extends AbstractEngineStartServlet {
 
-	private static String CONNECTION_NAME = "connectionName";
-	private static String OUTPUT_TYPE = "outputType";
+	private static final String CONNECTION_NAME = "connectionName";
+	private static final String OUTPUT_TYPE = "outputType";
 
 	/** Logger component. */
-	private static transient Logger logger = Logger.getLogger(JasperReportEngineStartAction.class);
+	private static final Logger LOGGER = LogManager.getLogger(JasperReportEngineStartAction.class);
 
 	@Override
-	public void doService(EngineStartServletIOManager servletIOManager) throws SpagoBIEngineException {
+	public void service(EngineStartServletIOManager servletIOManager) throws SpagoBIEngineException {
 
 		IDataSource dataSource;
 		IDataSet dataSet;
@@ -55,62 +58,65 @@ public class JasperReportEngineStartAction extends AbstractEngineStartServlet {
 		JasperReportEngineTemplate template;
 		JasperReportEngineInstance engineInstance;
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
-			// log some contextual infos
-			logger.debug("User: [" + servletIOManager.getUserId() + "]");
-			logger.debug("Document: [" + servletIOManager.getDocumentId() + "]");
+			LOGGER.debug("User: [{}]", servletIOManager.getUserId());
+			LOGGER.debug("Document: [{}]", servletIOManager.getDocumentId());
 
 			dataSource = servletIOManager.getDataSource();
-			logger.debug("Datasource: [" + (dataSource == null ? dataSource : dataSource.getLabel()) + "]");
+			LOGGER.debug("Datasource: [{}]", (dataSource == null ? dataSource : dataSource.getLabel()));
 			if (dataSource == null) {
-				logger.warn("This document doesn't have the Data Source");
+				LOGGER.warn("This document doesn't have the Data Source");
 			}
 
 			dataSet = servletIOManager.getDataSet();
-			logger.debug("Dataset: [" + (dataSet == null ? dataSource : dataSet.getName()) + "]");
+			LOGGER.debug("Dataset: [{}]", (dataSet == null ? dataSource : dataSet.getName()));
 
 			// read and log builtin parameters
 			connectionName = servletIOManager.getParameterAsString(CONNECTION_NAME);
-			logger.debug("Parameter [" + CONNECTION_NAME + "] is equal to [" + connectionName + "]");
+			LOGGER.debug("Parameter [{}] is equal to [{}]", CONNECTION_NAME, connectionName);
 
 			outputType = servletIOManager.getParameterAsString(OUTPUT_TYPE);
-			logger.debug("Parameter [" + OUTPUT_TYPE + "] is equal to [" + outputType + "]");
-			if (StringUtilities.isEmpty(outputType)) {
+			LOGGER.debug("Parameter [{}] is equal to [{}]", OUTPUT_TYPE, outputType);
+			if (StringUtils.isEmpty(outputType)) {
 				outputType = JasperReportEngine.getConfig().getDefaultOutputType();
 				servletIOManager.getEnv().put(OUTPUT_TYPE, outputType);
-				logger.debug("Parameter [" + OUTPUT_TYPE + "] has been set to the default value [" + servletIOManager.getEnv().get(OUTPUT_TYPE) + "]");
+				LOGGER.debug("Parameter [{}] has been set to the default value [{}]", OUTPUT_TYPE, servletIOManager.getEnv().get(OUTPUT_TYPE));
 			}
 
 			// this proxy is used by ScriptletChart to execute and embed external chart into report
-			servletIOManager.getEnv().put(EngineConstants.ENV_DOCUMENT_EXECUTE_SERVICE_PROXY, servletIOManager.getDocumentExecuteServiceProxy());
+			servletIOManager.getEnv().put(EngineConstants.ENV_DOCUMENT_EXECUTE_SERVICE_PROXY,
+					servletIOManager.getDocumentExecuteServiceProxy());
 
 			servletIOManager.auditServiceStartEvent();
 
-			template = new JasperReportEngineTemplate(servletIOManager.getTemplateName(), servletIOManager.getTemplate(false));
+			template = new JasperReportEngineTemplate(servletIOManager.getTemplateName(),
+					servletIOManager.getTemplate(false));
 
-			File reportOutputDir = JasperReportEngine.getConfig().getReportOutputDir();
-			File reportFile = File.createTempFile("report", "." + outputType, reportOutputDir);
+			Path reportOutputDir = JasperReportEngine.getConfig().getReportOutputDir();
+			Path reportFile = reportOutputDir.resolve(Paths.get("report" + "." + outputType).normalize());
 			DataSetServiceProxy proxyDataset = servletIOManager.getDataSetServiceProxy();
 
 			engineInstance = JasperReportEngine.createInstance(template, servletIOManager.getEnv(), proxyDataset);
 			engineInstance.setId(servletIOManager.getParameterAsString("SBI_EXECUTION_ID"));
-			servletIOManager.getHttpSession().setAttribute(engineInstance.getId(), engineInstance);
+			// servletIOManager.getHttpSession().setAttribute(engineInstance.getId(), engineInstance);
 			engineInstance.setOutputType(outputType);
 
-			engineInstance.runReport(reportFile, servletIOManager.getRequest());
+			engineInstance.runReport(reportFile.toFile(), servletIOManager.getRequest());
 
-			servletIOManager.writeBackToClient(200, reportFile, true, "report." + outputType, JasperReportEngine.getConfig().getMIMEType(outputType));
+			servletIOManager.writeBackToClient(200, reportFile.toFile(), true, "report." + outputType,
+					JasperReportEngine.getConfig().getMIMEType(outputType));
 
 			// instant cleaning
-			reportFile.delete();
+			Files.delete(reportFile);
 
 			servletIOManager.auditServiceEndEvent();
-		} catch (Throwable t) {
-			throw new SpagoBIEngineException("An error occurred while executing report. Check log file for more information", t);
+		} catch (Exception e) {
+			throw new SpagoBIEngineException(
+					"An error occurred while executing report. Check log file for more information", e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 
 	}

@@ -66,7 +66,7 @@
          </md-card-content>
          <md-subheader ng-if="ngModel.cross.enable && outputParametersList.length > 0">{{::translate.load("sbi.cockpit.cross.outputParameters")}}</md-subheader>
          <md-card-content ng-if="ngModel.cross.enable && outputParametersList.length > 0">
-            <div layout="row" class="filterRow" ng-show="ngModel.cross.outputParameter != outputParameter.name" ng-repeat="outputParameter in outputParametersList">
+            <div layout="row" class="filterRow" ng-show="ngModel.cross.outputParameter != outputParameter.name" ng-repeat="outputParameter in outputParametersList" style="align-items: center;">
                <!-- enable -->
                <md-input-container class="md-block" flex=20>
                   <md-checkbox ng-model="ngModel.cross.outputParametersList[outputParameter.name].enabled">
@@ -88,7 +88,13 @@
                <md-input-container class="md-block" flex=25 ng-if="ngModel.cross.outputParametersList[outputParameter.name].type == 'static' && ngModel.cross.outputParametersList[outputParameter.name].enabled==true
                   && (outputParameter.dataType == 'number' || outputParameter.dataType == 'text' || outputParameter.dataType == 'date')">
                   <label>{{::translate.load("sbi.cockpit.cross.outputParameter.value")}}</label>
-                  <input ng-model="ngModel.cross.outputParametersList[outputParameter.name].value" type="text">
+                  <md-chips class="dense" ng-model="ngModel.cross.outputParametersList[outputParameter.name].value">
+                     <md-chip-template>
+                         {{$chip}}
+                     </md-chip-template>
+                  </md-chips> 
+                  <div class="hint">Press Enter to add a value</div>
+
                </md-input-container>
                <input ng-model="ngModel.cross.outputParametersList[outputParameter.name].dateValue" type="hidden">
                <!-- column if dynamic -->
@@ -140,6 +146,10 @@
                      </md-optgroup>
                   </md-select>
                </md-input-container>
+               <!-- HTML -->
+               <div ng-if="ngModel.cross.outputParametersList[outputParameter.name].type == 'dynamic' && crossHtml == true" flex layout="row" layout-align="center center">
+             		<div class="kn-info" flex>{{::translate.load('sbi.cockpit.cross.outputParameter.htmldynamicoutput')}}</div>
+               </div>
                <!-- dataset and column if selection -->
                <md-input-container class="md-block" flex=25
                   ng-if="ngModel.cross.outputParametersList[outputParameter.name].type == 'selection' && ngModel.cross.outputParametersList[outputParameter.name].enabled==true">
@@ -162,6 +172,7 @@
             </div>
          </md-card-content>
       </md-card>
+      
       <md-card  ng-if="!crossImage && !crossMap && !crossPivot && !crossText">
          <md-subheader class="switchSubheader">
             <md-switch ng-model="ngModel.preview.enable" ng-change="toggleEnabled('preview')"></md-switch>
@@ -182,7 +193,7 @@
                   {{::translate.load('kn.crossconfigurator.interactiontype.choose')}}
                </div>
             </div>
-            <dataset-selector ng-show="ngModel.preview.previewType || crossChart || crossHtml || crossPython || crossR" flex ng-model="ngModel.preview.dataset" no-parameters="true" on-change="changePreviewDataset(dsId);" dataset-type-exclusion="[{type:'SbiSolrDataSet'}]" is-disabled="!ngModel.preview.enable"></dataset-selector>
+            <dataset-selector ng-show="ngModel.preview.previewType || crossChart || crossCustom || crossHtml || crossPython || crossR" flex ng-model="ngModel.preview.dataset" no-parameters="true" on-change="changePreviewDataset(dsId);" dataset-type-exclusion="[{type:'SbiSolrDataSet'}]" is-disabled="!ngModel.preview.enable"></dataset-selector>
             <md-input-container ng-if="ngModel.preview.previewType && ngModel.preview.previewType !='allRow' && ngModel.preview.previewType !='icon'" ng-show="crossTable" class="md-block" flex>
                <label>{{translate.load("sbi.cockpit.cross.column")}}</label>
                <md-select ng-model="ngModel.preview.column" ng-disabled="!ngModel.preview.enable">
@@ -198,6 +209,14 @@
             <md-checkbox ng-model="ngModel.preview.background" ng-disabled="!ngModel.preview.enable">
                Direct download
             </md-checkbox>
+            <md-input-container ng-if="ngModel.preview.background" class="md-block" flex="20">
+               <label>{{translate.load("sbi.cockpit.style.format")}}</label>
+               <md-select ng-model="ngModel.preview.backgroundFormat">
+                  <md-option value="csv">CSV</md-option>
+                  <md-option value="xls">XLS</md-option>
+               </md-select>
+               <div class="hint" ng-if="ngModel.preview.previewType != 'singleColumn'">{{::translate.load('kn.crossconfigurator.hint.column')}}</div>
+            </md-input-container>
          </md-card-content>
          <md-subheader ng-if="ngModel.preview.enable && ngModel.preview.parameters.length > 0">{{::translate.load('kn.crossconfigurator.datasetparameters')}}</md-subheader>
          <md-card-content ng-if="ngModel.preview.enable && ngModel.preview.parameters.length > 0">
@@ -403,6 +422,25 @@
                </div>
             </div>
          </div>
+         </md-card-content>
+      </md-card>
+      
+      
+      <!-- MESSAGE -->
+      <md-card ng-if="crossHtml || crossCustom">
+         <md-subheader class="switchSubheader">
+            <md-switch ng-model="ngModel.message.enable" ng-change="toggleEnabled('message')"></md-switch>
+            <span flex>{{translate.load("kn.cockpit.cross.message.title")}}</span>
+         </md-subheader>
+         <md-card-content ng-if="ngModel.message.enable">
+         	<div layout="row" layout-align="center center">
+         		<div class="kn-info" flex="80">
+         			{{translate.load("kn.cockpit.cross.message.hint")}}
+         		</div>
+         	</div>
+            <div class="smallCodeMirror">
+               <textarea id="json" ui-codemirror="editorOptionsMessageJSON" ng-model="ngModel.message.json" ui-refresh="reloadCodemirror" style="border: 1px solid #ccc"></textarea>
+            </div>
          </md-card-content>
       </md-card>
    </div>

@@ -17,14 +17,20 @@
  */
 package it.eng.spagobi.workspace.dao;
 
-import it.eng.spagobi.commons.dao.ISpagoBIDao;
-import it.eng.spagobi.workspace.metadata.SbiFunctionsOrganizer;
-
 import java.util.List;
 
+import it.eng.spagobi.commons.dao.ISpagoBIDao;
+import it.eng.spagobi.workspace.bo.FunctionsOrganizer;
+import it.eng.spagobi.workspace.metadata.SbiFunctionsOrganizer;
+
+/**
+ * @deprecated Replaced by KNOWAGE_TM-513
+ * TODO : Delete
+ */
+@Deprecated
 public interface IFunctionsOrganizerDAO extends ISpagoBIDao {
 
-	public List loadFolderByUser();
+	public List<FunctionsOrganizer> loadFolderByUser();
 
 	public SbiFunctionsOrganizer createFolder(SbiFunctionsOrganizer folder);
 

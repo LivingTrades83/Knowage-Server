@@ -27,6 +27,9 @@ import java.util.Map;
 import java.util.Vector;
 import java.util.regex.Matcher;
 
+import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
+import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -36,7 +39,6 @@ import it.eng.spago.base.SourceBean;
 import it.eng.spago.base.SourceBeanException;
 import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.utilities.StringUtilities;
 import it.eng.spagobi.container.ObjectUtils;
 import it.eng.spagobi.services.common.EnginConf;
 import it.eng.spagobi.services.dataset.bo.SpagoBiDataSet;
@@ -47,9 +49,7 @@ import it.eng.spagobi.tools.dataset.constants.RESTDataSetConstants;
 import it.eng.spagobi.tools.dataset.exceptions.ParametersNotValorizedException;
 import it.eng.spagobi.tools.dataset.listener.DataSetListenerManager;
 import it.eng.spagobi.tools.dataset.listener.DataSetListenerManagerFactory;
-import it.eng.spagobi.tools.dataset.notifier.NotifierServlet;
 import it.eng.spagobi.tools.dataset.notifier.fiware.OAuth2Utils;
-import it.eng.spagobi.tools.dataset.notifier.fiware.OrionContextSubscriber;
 import it.eng.spagobi.tools.dataset.utils.ParametersResolver;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.user.UserProfileManager;
@@ -110,17 +110,6 @@ public class RESTDataSet extends ConfigurableDataSet {
 	public void loadData(int offset, int fetchSize, int maxResults) {
 
 		super.loadData(offset, fetchSize, maxResults);
-
-		if (isNgsi()) {
-			// notify for all listeners
-			notifyListeners();
-
-			// after the first datastore initialization
-			if (NotifierServlet.isNotifiable()) {
-				logger.info(String.format("Subscribe NGSI dataset with label %s to orion notifications.", getLabel()));
-				subscribeNGSI();
-			}
-		}
 	}
 
 	private void notifyListeners() {
@@ -138,20 +127,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 			logger.debug("Label is null, returning null");
 			return;
 		}
-		manager.addCometListenerIfInitializedAndAbsent(uuid, label, "1");
 		manager.changedDataSet(uuid, label, this);
 		logger.debug("OUT");
-	}
-
-	public void subscribeNGSI() {
-		try {
-			OrionContextSubscriber subscriber = new OrionContextSubscriber(this, getCurrentUserProfile());
-			subscriber.subscribeNGSI();
-			notifiable = true;
-		} catch (Exception e) {
-			logger.error("Errror in Orion subscription", e);
-			notifiable = false;
-		}
 	}
 
 	public boolean isNotifiable() {
@@ -184,13 +161,15 @@ public class RESTDataSet extends ConfigurableDataSet {
 		String jsonPathItems = getProp(RESTDataSetConstants.REST_JSON_PATH_ITEMS, jsonConf, true, resolveParams);
 		List<JSONPathAttribute> jsonPathAttributes;
 		try {
-			jsonPathAttributes = getJsonPathAttributes(RESTDataSetConstants.REST_JSON_PATH_ATTRIBUTES, jsonConf, resolveParams);
+			jsonPathAttributes = getJsonPathAttributes(RESTDataSetConstants.REST_JSON_PATH_ATTRIBUTES, jsonConf,
+					resolveParams);
 		} catch (JSONException e) {
 			throw new ConfigurationException("Problems in configuration of data reader", e);
 		}
 
 		String directlyAttributes = getProp(RESTDataSetConstants.REST_JSON_DIRECTLY_ATTRIBUTES, jsonConf, true, false);
-		setDataReader(new JSONPathDataReader(jsonPathItems, jsonPathAttributes, Boolean.parseBoolean(directlyAttributes), this.ngsi));
+		setDataReader(new JSONPathDataReader(jsonPathItems, jsonPathAttributes,
+				Boolean.parseBoolean(directlyAttributes), this.ngsi));
 	}
 
 	private void initDataProxy(JSONObject jsonConf, boolean resolveParams) {
@@ -206,17 +185,20 @@ public class RESTDataSet extends ConfigurableDataSet {
 		try {
 			methodEnum = HttpMethod.valueOf(method.substring(0, 1).toUpperCase() + method.substring(1));
 		} catch (Exception e) {
-			throw new ConfigurationException(String.format("HTTP Method is not valid in configuration: %s", jsonConf.toString()), e);
+			throw new ConfigurationException(
+					String.format("HTTP Method is not valid in configuration: %s", jsonConf.toString()), e);
 		}
 
 		// no request body with get
 		if (HttpMethod.Get.equals(methodEnum) && requestBody != null) {
-			throw new ConfigurationException(String.format("A get request can't have request body: %s", jsonConf.toString()));
+			throw new ConfigurationException(
+					String.format("A get request can't have request body: %s", jsonConf.toString()));
 		}
 
 		Map<String, String> requestHeaders;
 		try {
-			requestHeaders = getRequestHeadersPropMap(RESTDataSetConstants.REST_REQUEST_HEADERS, jsonConf, resolveParams);
+			requestHeaders = getRequestHeadersPropMap(RESTDataSetConstants.REST_REQUEST_HEADERS, jsonConf,
+					resolveParams);
 
 			// add bearer token for OAuth Fiware
 			if (resolveParams && OAuth2Utils.isOAuth2() && !OAuth2Utils.containsOAuth2(requestHeaders)) {
@@ -236,7 +218,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 
 		String maxResults = getProp(RESTDataSetConstants.REST_MAX_RESULTS, jsonConf, true, resolveParams);
 
-		setDataProxy(new RESTDataProxy(address, methodEnum, requestBody, requestHeaders, offset, fetchSize, maxResults, isNgsi()));
+		setDataProxy(new RESTDataProxy(address, methodEnum, requestBody, requestHeaders, offset, fetchSize, maxResults,
+				isNgsi()));
 	}
 
 	public String getOAuth2Token() {
@@ -255,20 +238,23 @@ public class RESTDataSet extends ConfigurableDataSet {
 		return jsonConf;
 	}
 
-	protected List<JSONPathAttribute> getJsonPathAttributes(String propName, JSONObject conf, boolean resolveParams) throws JSONException {
+	protected List<JSONPathAttribute> getJsonPathAttributes(String propName, JSONObject conf, boolean resolveParams)
+			throws JSONException {
 		checkPropExists(propName, conf);
 
 		Object sub = conf.get(propName);
 		if (!(sub instanceof JSONArray)) {
-			throw new ConfigurationException(String.format("%s is not a json array in configuration: %s", propName, conf.toString()));
+			throw new ConfigurationException(
+					String.format("%s is not a json array in configuration: %s", propName, conf.toString()));
 		}
 		Assert.assertNotNull(sub, "property is null");
 		JSONArray subs = (JSONArray) sub;
-		List<JSONPathAttribute> res = new ArrayList<JSONPathDataReader.JSONPathAttribute>(subs.length());
+		List<JSONPathAttribute> res = new ArrayList<>(subs.length());
 		for (int i = 0; i < subs.length(); i++) {
 			Object o = subs.get(i);
 			if (!(o instanceof JSONObject)) {
-				throw new ConfigurationException(String.format("The configuration for %s is not correct: %s", propName, conf.toString()));
+				throw new ConfigurationException(
+						String.format("The configuration for %s is not correct: %s", propName, conf.toString()));
 			}
 			JSONObject ojson = (JSONObject) o;
 			String name = getProp(NAME_JSON_PATH_ATTRIBUTE_PROP_NAME, ojson, false, resolveParams);
@@ -279,19 +265,21 @@ public class RESTDataSet extends ConfigurableDataSet {
 		return res;
 	}
 
-	protected Map<String, String> getRequestHeadersPropMap(String propName, JSONObject conf, boolean resolveParams) throws JSONException {
+	protected Map<String, String> getRequestHeadersPropMap(String propName, JSONObject conf, boolean resolveParams)
+			throws JSONException {
 		if (!conf.has(propName) || conf.getString(propName).isEmpty()) {
 			// optional property
-			return Collections.emptyMap();
+			return new HashMap<>();
 		}
 
 		Object c = conf.get(propName);
 		if (!(c instanceof JSONObject)) {
-			throw new ConfigurationException(String.format("%s is not another json object in configuration: %s", propName, conf.toString()));
+			throw new ConfigurationException(
+					String.format("%s is not another json object in configuration: %s", propName, conf.toString()));
 		}
 		Assert.assertNotNull(c, "property is null");
 		JSONObject r = (JSONObject) c;
-		Map<String, String> res = new HashMap<String, String>(r.length());
+		Map<String, String> res = new HashMap<>(r.length());
 		Iterator<String> it = r.keys();
 		while (it.hasNext()) {
 			String key = it.next();
@@ -305,7 +293,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 		return res;
 	}
 
-	protected List<Couple<String, String>> getListProp(String propName, JSONObject conf, boolean resolveParams) throws JSONException {
+	protected List<Couple<String, String>> getListProp(String propName, JSONObject conf, boolean resolveParams)
+			throws JSONException {
 		if (!conf.has(propName) || conf.getString(propName).isEmpty()) {
 			// optional property
 			return Collections.emptyList();
@@ -313,11 +302,12 @@ public class RESTDataSet extends ConfigurableDataSet {
 
 		Object c = conf.get(propName);
 		if (!(c instanceof JSONArray)) {
-			throw new ConfigurationException(String.format("%s is not another json object in configuration: %s", propName, conf.toString()));
+			throw new ConfigurationException(
+					String.format("%s is not another json object in configuration: %s", propName, conf.toString()));
 		}
 		Assert.assertNotNull(c, "property is null");
 		JSONArray r = (JSONArray) c;
-		List<Couple<String, String>> res = new ArrayList<Couple<String, String>>(r.length());
+		List<Couple<String, String>> res = new ArrayList<>(r.length());
 
 		for (int i = 0; i < r.length(); i++) {
 			JSONObject jo = r.getJSONObject(i);
@@ -326,13 +316,14 @@ public class RESTDataSet extends ConfigurableDataSet {
 			if (resolveParams) {
 				key = resolveAll(key, this);
 				value = resolveAll(value, this);
-				res.add(new Couple<String, String>(key, value));
+				res.add(new Couple<>(key, value));
 			}
 		}
 		return res;
 	}
 
-	protected List<Couple<String, String>> getListProp(String propName, JSONObject conf, boolean resolveParams, UserProfile userProfile) throws JSONException {
+	protected List<Couple<String, String>> getListProp(String propName, JSONObject conf, boolean resolveParams,
+			UserProfile userProfile) throws JSONException {
 		this.setUserProfile(userProfile);
 		this.setUserProfileAttributes(userProfile.getUserAttributes());
 		if (!conf.has(propName) || conf.getString(propName).isEmpty()) {
@@ -342,11 +333,12 @@ public class RESTDataSet extends ConfigurableDataSet {
 
 		Object c = conf.get(propName);
 		if (!(c instanceof JSONArray)) {
-			throw new ConfigurationException(String.format("%s is not another json object in configuration: %s", propName, conf.toString()));
+			throw new ConfigurationException(
+					String.format("%s is not another json object in configuration: %s", propName, conf.toString()));
 		}
 		Assert.assertNotNull(c, "property is null");
 		JSONArray r = (JSONArray) c;
-		List<Couple<String, String>> res = new ArrayList<Couple<String, String>>(r.length());
+		List<Couple<String, String>> res = new ArrayList<>(r.length());
 
 		for (int i = 0; i < r.length(); i++) {
 			JSONObject jo = r.getJSONObject(i);
@@ -355,7 +347,7 @@ public class RESTDataSet extends ConfigurableDataSet {
 			if (resolveParams) {
 				key = resolveAll(key, this);
 				value = resolveAll(value, this);
-				res.add(new Couple<String, String>(key, value));
+				res.add(new Couple<>(key, value));
 			}
 		}
 		return res;
@@ -381,7 +373,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 		try {
 			Object res = conf.get(propName);
 			if (!(res instanceof String)) {
-				throw new ConfigurationException(String.format("%s is not a string in configuration: %s", propName, conf.toString()));
+				throw new ConfigurationException(
+						String.format("%s is not a string in configuration: %s", propName, conf.toString()));
 			}
 			Assert.assertNotNull(res, "property is null");
 			String r = (String) res;
@@ -390,7 +383,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 				if (optional) {
 					return null;
 				}
-				throw new ConfigurationException(String.format("%s is empty in configuration: %s", propName, conf.toString()));
+				throw new ConfigurationException(
+						String.format("%s is empty in configuration: %s", propName, conf.toString()));
 			}
 			// resolve parameters and profile attributes
 			if (resolveParams) {
@@ -404,7 +398,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 
 	private static void checkPropExists(String propName, JSONObject conf) {
 		if (!conf.has(propName)) {
-			throw new ConfigurationException(String.format("%s is not present in configuration: %s", propName, conf.toString()));
+			throw new ConfigurationException(
+					String.format("%s is not present in configuration: %s", propName, conf.toString()));
 		}
 	}
 
@@ -456,6 +451,11 @@ public class RESTDataSet extends ConfigurableDataSet {
 		return isNgsi();
 	}
 
+	@Override
+	public DataIterator iterator(IMetaData dsMetadata) {
+		return null;
+	}
+
 	/*
 	 * These snippets of code come from a common utilities logic, now the logic behind parameters handling is inside each type of dataset
 	 */
@@ -464,7 +464,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 		List<JSONObject> parameters = getDataSetParameters();
 		if (parameters.size() > paramValues.size()) {
 			String parameterNotValorizedStr = getParametersNotValorized(parameters, paramValues);
-			throw new ParametersNotValorizedException("The following parameters have no value [" + parameterNotValorizedStr + "]");
+			throw new ParametersNotValorizedException(
+					"The following parameters have no value [" + parameterNotValorizedStr + "]");
 		}
 
 		if (paramValues.size() > 0) {
@@ -488,7 +489,7 @@ public class RESTDataSet extends ConfigurableDataSet {
 		String paramValue = paramValues.get(paramName);
 		String[] values = null;
 		if (isMultiValue) {
-			List<String> list = new ArrayList<String>();
+			List<String> list = new ArrayList<>();
 			boolean paramValueConsumed = false;
 			try {
 				JSONArray jsonArray = new JSONArray(paramValue);
@@ -518,7 +519,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 		return values;
 	}
 
-	private static String getParametersNotValorized(List<JSONObject> parameters, Map<String, String> parametersValues) throws JSONException {
+	private static String getParametersNotValorized(List<JSONObject> parameters, Map<String, String> parametersValues)
+			throws JSONException {
 		String toReturn = "";
 
 		for (Iterator<JSONObject> iterator = parameters.iterator(); iterator.hasNext();) {
@@ -570,8 +572,9 @@ public class RESTDataSet extends ConfigurableDataSet {
 						String newValuesFromArray = "";
 						for (int i = 0; i < valuesArray.length; i++) {
 							String temp = valuesArray[i];
-							if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim))
+							if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim)) {
 								temp = temp.substring(1, temp.length() - 1);
+							}
 							temp = temp.replaceAll("'", "''");
 							if (i == 0) {
 								if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim)) {
@@ -623,7 +626,7 @@ public class RESTDataSet extends ConfigurableDataSet {
 
 			// if a parameter has value '' put null!
 			Map parameterValues = targetDataSet.getParamsMap();
-			Vector<String> parsToChange = new Vector<String>();
+			Vector<String> parsToChange = new Vector<>();
 
 			for (Iterator iterator = parameterValues.keySet().iterator(); iterator.hasNext();) {
 				String parName = (String) iterator.next();
@@ -702,7 +705,7 @@ public class RESTDataSet extends ConfigurableDataSet {
 
 			logger.debug("Dataset parameters string is equals to [" + parametersXML + "]");
 
-			if (!StringUtilities.isEmpty(parametersXML)) {
+			if (!StringUtils.isEmpty(parametersXML)) {
 				parameters = DataSetParametersList.fromXML(parametersXML).getItems();
 				logger.debug("Dataset have  [" + parameters.size() + "] parameters");
 
@@ -724,8 +727,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 	}
 
 	/**
-	 * Substitutes parameters with sintax "$P{parameter_name}" whose value is set in the map. This is only for dataset, had to duplicate to handle null values,
-	 * in case ogf null does not throw an exception but substitute null!
+	 * Substitutes parameters with sintax "$P{parameter_name}" whose value is set in the map. This is only for dataset, had to duplicate to handle null values, in
+	 * case ogf null does not throw an exception but substitute null!
 	 *
 	 * @param statement          The string to be modified (tipically a query)
 	 * @param valuesMap          Map name-value
@@ -735,17 +738,20 @@ public class RESTDataSet extends ConfigurableDataSet {
 	 *
 	 * @throws Exception the exception
 	 */
-	public static String substituteDatasetParametersInString(String statement, IDataSet dataset, Map parType, boolean surroundWithQuotes) throws Exception {
+	public static String substituteDatasetParametersInString(String statement, IDataSet dataset, Map parType,
+			boolean surroundWithQuotes) throws Exception {
 		logger.debug("IN");
 
 		boolean changePars = true;
 		while (changePars) {
 			// int profileAttributeStartIndex = statement.indexOf("$P{");
 			int profileAttributeStartIndex = statement.indexOf("$P{");
-			if (profileAttributeStartIndex != -1)
-				statement = substituteDatasetParametersInString(statement, dataset, parType, profileAttributeStartIndex, surroundWithQuotes);
-			else
+			if (profileAttributeStartIndex != -1) {
+				statement = substituteDatasetParametersInString(statement, dataset, parType, profileAttributeStartIndex,
+						surroundWithQuotes);
+			} else {
 				changePars = false;
+			}
 
 		}
 		logger.debug("OUT");
@@ -753,8 +759,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 	}
 
 	/**
-	 * Substitutes the parameters with sintax "$P{attribute_name}" with the correspondent value in the string passed at input. Only for dataset parameters, had
-	 * to duplicate to handle null values, not throw an exception but put null!
+	 * Substitutes the parameters with sintax "$P{attribute_name}" with the correspondent value in the string passed at input. Only for dataset parameters, had to
+	 * duplicate to handle null values, not throw an exception but put null!
 	 *
 	 * @param statement                  The string to be modified (tipically a query)
 	 * @param userProfile                The IEngUserProfile object
@@ -764,15 +770,17 @@ public class RESTDataSet extends ConfigurableDataSet {
 	 * @return The statement with parameters replaced by their values.
 	 * @throws Exception
 	 */
-	private static String substituteDatasetParametersInString(String statement, IDataSet dataset, Map parTypeMap, int profileAttributeStartIndex,
-			boolean surroundWithQuotes) throws Exception {
+	private static String substituteDatasetParametersInString(String statement, IDataSet dataset, Map parTypeMap,
+			int profileAttributeStartIndex, boolean surroundWithQuotes) throws Exception {
 		logger.debug("IN");
 		Map valuesMap = dataset.getParamsMap();
 		int profileAttributeEndIndex = statement.indexOf("}", profileAttributeStartIndex);
-		if (profileAttributeEndIndex == -1)
+		if (profileAttributeEndIndex == -1) {
 			throw new Exception("Not closed profile attribute: '}' expected.");
-		if (profileAttributeEndIndex < profileAttributeEndIndex)
+		}
+		if (profileAttributeEndIndex < profileAttributeStartIndex) {
 			throw new Exception("Not opened profile attribute: '$P{' expected.");
+		}
 		String attribute = statement.substring(profileAttributeStartIndex + 3, profileAttributeEndIndex).trim();
 
 		String dequotePrefix = "_dequoted";
@@ -791,21 +799,26 @@ public class RESTDataSet extends ConfigurableDataSet {
 			// the parameter is expected to be multivalue
 			attributeExcpetedToBeMultiValue = true;
 			int endConfigIndex = attribute.length() - 1;
-			if (attribute.charAt(endConfigIndex) != ')')
-				throw new Exception("Sintax error: \")\" missing. The expected sintax for " + "parameter is  $P{parameters} for singlevalue parameters. ");
+			if (attribute.charAt(endConfigIndex) != ')') {
+				throw new Exception("Sintax error: \")\" missing. The expected sintax for "
+						+ "parameter is  $P{parameters} for singlevalue parameters. ");
+			}
 			String configuration = attribute.substring(startConfigIndex + 1, endConfigIndex);
 			// check the configuration content and add empty prefix/suffix as default if they are null
-			if (configuration.equals(";,;"))
+			if (configuration.equals(";,;")) {
 				configuration = " ;,; ";
+			}
 			String[] configSplitted = configuration.split(";");
-			if (configSplitted == null || configSplitted.length != 3)
+			if (configSplitted == null || configSplitted.length != 3) {
 				throw new Exception("Sintax error. The expected sintax for parameters"
 						+ "or $P{parameter} for singlevalue parameter. 'parameterName' must not contain '(' characters. "
 						+ "The (prefix;split;suffix) is not properly configured");
+			}
 			prefix = configSplitted[0];
 			split = configSplitted[1];
 			suffix = configSplitted[2];
-			logger.debug("Multi-value parameter configuration found: prefix: '" + prefix + "'; split: '" + split + "'; suffix: '" + suffix + "'.");
+			logger.debug("Multi-value parameter configuration found: prefix: '" + prefix + "'; split: '" + split
+					+ "'; suffix: '" + suffix + "'.");
 			attributeName = attribute.substring(0, startConfigIndex);
 			logger.debug("Expected multi-value parameter name: '" + attributeName + "'");
 		} else {
@@ -820,10 +833,12 @@ public class RESTDataSet extends ConfigurableDataSet {
 			value = "null";
 		}
 
-		if (value.startsWith("' {"))
+		if (value.startsWith("' {")) {
 			value = value.substring(1);
-		if (value.endsWith("}'"))
+		}
+		if (value.endsWith("}'")) {
 			value = value.substring(0, value.indexOf("}'") + 1);
+		}
 		value = value.trim();
 		logger.debug("Parameter value found: " + value);
 		String replacement = null;
@@ -834,8 +849,9 @@ public class RESTDataSet extends ConfigurableDataSet {
 		if (parTypeMap != null) {
 			parType = (String) parTypeMap.get(attributeName);
 		}
-		if (parType == null)
+		if (parType == null) {
 			parType = new String("");
+		}
 
 		if (attributeExcpetedToBeMultiValue) {
 			if (value.startsWith("{")) {
@@ -843,15 +859,18 @@ public class RESTDataSet extends ConfigurableDataSet {
 				String[] values = findAttributeValues(value);
 				logger.debug("N. " + values.length + " parameter values found: '" + values + "'");
 				// newListOfValues = values[0];
-				newListOfValues = ((values[0].startsWith(prefix))) ? "" : prefix + values[0] + ((values[0].endsWith(suffix)) ? "" : suffix);
+				newListOfValues = ((values[0].startsWith(prefix))) ? ""
+						: prefix + values[0] + ((values[0].endsWith(suffix)) ? "" : suffix);
 				for (int i = 1; i < values.length; i++) {
 					// newListOfValues = newListOfValues + split + values[i];
-					String singleValue = ((values[i].startsWith(prefix))) ? "" : prefix + values[i] + ((values[i].endsWith(suffix)) ? "" : suffix);
+					String singleValue = ((values[i].startsWith(prefix))) ? ""
+							: prefix + values[i] + ((values[i].endsWith(suffix)) ? "" : suffix);
 					singleValue = checkParType(singleValue, parType, attribute);
 					newListOfValues = newListOfValues + split + singleValue;
 				}
 			} else {
-				logger.warn("The attribute value has not the sintax of a multi value parameter; considering it as a single value.");
+				logger.warn(
+						"The attribute value has not the sintax of a multi value parameter; considering it as a single value.");
 				newListOfValues = value;
 			}
 
@@ -868,7 +887,9 @@ public class RESTDataSet extends ConfigurableDataSet {
 						newListOfValues = newListOfValues + value.charAt(1) + values[i];
 					}
 				} catch (Exception e) {
-					logger.error("The attribute value does not respect the sintax of a multi value attribute; considering it as a single value.", e);
+					logger.error(
+							"The attribute value does not respect the sintax of a multi value attribute; considering it as a single value.",
+							e);
 					newListOfValues = value;
 				}
 			} else {
@@ -885,7 +906,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 			} catch (Throwable e) {
 				// try to read engine_config settings
 				if ((SourceBean) EnginConf.getInstance().getConfig().getAttribute("DATA_SET_NULL_VALUE") != null) {
-					nullValueString = ((SourceBean) EnginConf.getInstance().getConfig().getAttribute("DATA_SET_NULL_VALUE")).getCharacters();
+					nullValueString = ((SourceBean) EnginConf.getInstance().getConfig()
+							.getAttribute("DATA_SET_NULL_VALUE")).getCharacters();
 				}
 				if (nullValueString != null) {
 					newListOfValues = "'" + nullValueString + "'";
@@ -894,22 +916,47 @@ public class RESTDataSet extends ConfigurableDataSet {
 			}
 
 		}
-		replacement = ((newListOfValues.startsWith(prefix)) ? "" : prefix) + newListOfValues + ((newListOfValues.endsWith(suffix)) ? "" : suffix);
+		replacement = ((newListOfValues.startsWith(prefix)) ? "" : prefix) + newListOfValues
+				+ ((newListOfValues.endsWith(suffix)) ? "" : suffix);
 
-		if (!attributeExcpetedToBeMultiValue)
+		if (!attributeExcpetedToBeMultiValue) {
 			replacement = checkParType(replacement, parType, attribute);
+		}
 
 		if (surroundWithQuotes || parType.equalsIgnoreCase("DATE")) {
 			if (!isNullValue) {
-				if (!replacement.startsWith("'"))
+				if (!replacement.startsWith("'")) {
 					replacement = "'" + replacement;
-				if (!replacement.endsWith("'"))
+				}
+				if (!replacement.endsWith("'")) {
 					replacement = replacement + "'";
+				}
 			}
 		}
 
 		attribute = quote(attribute);
 		statement = statement.replaceAll("\\$P\\{" + attribute + "\\}", replaceSpecials(replacement));
+
+		/*
+		 * Workaround in case of multivalue parameters with spaces TODO: See if there is the possibility to add a solution before this place
+		 */
+		if (statement != null && statement.startsWith("\"") && dataset instanceof SolrDataSet) {
+
+			if (statement.contains(" OR ")) {
+				statement = statement.replaceAll("\"", "");
+				statement = statement.replaceAll("'", "\"");
+			} else if (statement.equals("\"*\"")) {
+				statement = statement.replaceAll("\"", "");
+			} else if (statement.equals("\"'%'\"")) {
+				statement = statement.replaceAll("\"", "");
+				statement = statement.replaceAll("'", "");
+				statement = statement.replace("%", "*");
+			} else if (statement.contains(" , ")) {
+				if (!statement.isEmpty() && statement.startsWith("\"") && statement.endsWith("\"")) {
+					statement = statement.substring(1, statement.length() - 1);
+				}
+			}
+		}
 
 		/*
 		 * profileAttributeStartIndex = statement.indexOf("$P{", profileAttributeEndIndex-1); if (profileAttributeStartIndex != -1) statement =
@@ -939,12 +986,15 @@ public class RESTDataSet extends ConfigurableDataSet {
 		if (type.length() > 0) {
 			attributeValue = attributeValue.substring(0, previousLastBrace + 1) + "}";
 		}
-		if (attributeValue.length() < 6)
+		if (attributeValue.length() < 6) {
 			throw new Exception(sintaxErrorMsg);
-		if (!attributeValue.endsWith("}}"))
+		}
+		if (!attributeValue.endsWith("}}")) {
 			throw new Exception(sintaxErrorMsg);
-		if (attributeValue.charAt(2) != '{')
+		}
+		if (attributeValue.charAt(2) != '{') {
 			throw new Exception(sintaxErrorMsg);
+		}
 		char splitter = attributeValue.charAt(1);
 		String valuesList = attributeValue.substring(3, attributeValue.length() - 2);
 		String[] values = valuesList.split(String.valueOf(splitter));
@@ -965,10 +1015,11 @@ public class RESTDataSet extends ConfigurableDataSet {
 	public static String quote(String s) {
 		logger.debug("IN");
 		int slashEIndex = s.indexOf("\\E");
-		if (slashEIndex == -1)
+		if (slashEIndex == -1) {
 			return "\\Q" + s + "\\E";
+		}
 
-		StringBuffer sb = new StringBuffer(s.length() * 2);
+		StringBuilder sb = new StringBuilder(s.length() * 2);
 		sb.append("\\Q");
 		slashEIndex = 0;
 		int current = 0;
@@ -977,7 +1028,7 @@ public class RESTDataSet extends ConfigurableDataSet {
 			current = slashEIndex + 2;
 			sb.append("\\E\\\\E\\Q");
 		}
-		sb.append(s.substring(current, s.length()));
+		sb.append(s.substring(current));
 		sb.append("\\E");
 		logger.debug("OUT");
 		return sb.toString();
@@ -991,7 +1042,8 @@ public class RESTDataSet extends ConfigurableDataSet {
 	 * @param attribute   : the attribute
 	 * @return
 	 */
-	private static String checkParType(String replacement, String parType, String attribute) throws NumberFormatException {
+	private static String checkParType(String replacement, String parType, String attribute)
+			throws NumberFormatException {
 		logger.debug("IN");
 		String toReturn = replacement;
 		// check if numbers are number otherwise throw exception
@@ -1012,7 +1064,7 @@ public class RESTDataSet extends ConfigurableDataSet {
 			String me = e.getMessage();
 			me += " - attribute " + attribute + " should be of number type";
 			NumberFormatException numberFormatException = new NumberFormatException(attribute);
-			numberFormatException.setStackTrace(e.getStackTrace());
+
 			throw numberFormatException;
 		}
 

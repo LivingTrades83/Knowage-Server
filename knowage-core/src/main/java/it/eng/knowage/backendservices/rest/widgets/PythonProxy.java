@@ -35,17 +35,13 @@ import org.json.JSONObject;
 
 import it.eng.spagobi.api.common.AbstractDataSetResource;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.services.content.service.ContentServiceImplSupplier;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.user.UserProfileManager;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.rest.RestUtilities;
 import it.eng.spagobi.utilities.rest.RestUtilities.HttpMethod;
-
-/*
- https://localhost:8080/knowage/restful-services/2.0/backendservices/widgets/python
- */
 
 @Path("/2.0/backendservices/widgets/python")
 public class PythonProxy extends AbstractDataSetResource {
@@ -54,13 +50,13 @@ public class PythonProxy extends AbstractDataSetResource {
 	HttpMethod methodPost = HttpMethod.valueOf("Post");
 	HttpMethod methodGet = HttpMethod.valueOf("Get");
 
-	static protected Logger logger = Logger.getLogger(PythonProxy.class);
+	protected static Logger logger = Logger.getLogger(PythonProxy.class);
 
 	@POST
 	@Path("/edit/{output_type}")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.EDIT_PYTHON_SCRIPTS })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.EDIT_PYTHON_SCRIPTS })
 	public Response editWidget(@PathParam("output_type") String outputType, PythonWidgetDTO pythonWidgetDTO) {
 		return executeWidget(outputType, pythonWidgetDTO);
 	}
@@ -92,7 +88,7 @@ public class PythonProxy extends AbstractDataSetResource {
 			Map<String, Object> drivers = pythonWidgetDTO.getDrivers();
 			if (dsLabel != null) {
 				datastore = getDataStore(dsLabel, pythonWidgetDTO.getParameters(), drivers, pythonWidgetDTO.getSelections(), null, -1,
-						pythonWidgetDTO.getAggregations(), null, -1, -1, null, null);
+						pythonWidgetDTO.getAggregations(), null, -1, -1, null, null, false);
 			}
 			body = PythonUtils.createPythonEngineRequestBody(datastore, dsLabel, pythonWidgetDTO.getScript(), drivers, pythonWidgetDTO.getOutputVariable());
 			pythonAddress = PythonUtils.getPythonAddress(pythonWidgetDTO.getEnvironmentLabel());
@@ -117,7 +113,7 @@ public class PythonProxy extends AbstractDataSetResource {
 	@GET
 	@Path("/libraries/{env_label}")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.EDIT_PYTHON_SCRIPTS })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.EDIT_PYTHON_SCRIPTS })
 	public Response libraries(@PathParam("env_label") String envLabel) {
 		logger.debug("IN");
 		it.eng.spagobi.utilities.rest.RestUtilities.Response response = null;

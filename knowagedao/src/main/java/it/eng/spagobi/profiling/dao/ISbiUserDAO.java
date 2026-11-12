@@ -3,16 +3,16 @@
  * Copyright (C) 2016 Engineering Ingegneria Informatica S.p.A.
  *
  * Knowage is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
+ * it under the terms of the GNU Affero General License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * Knowage is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
+ * GNU Affero General License for more details.
  *
- * You should have received a copy of the GNU Affero General Public License
+ * You should have received a copy of the GNU Affero General License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package it.eng.spagobi.profiling.dao;
@@ -20,7 +20,9 @@ package it.eng.spagobi.profiling.dao;
 import java.util.ArrayList;
 import java.util.List;
 
+import it.eng.spagobi.commons.dao.EmittingEventDAO;
 import it.eng.spagobi.commons.dao.ISpagoBIDao;
+import it.eng.spagobi.commons.dao.es.UserEventsEmettingCommand;
 import it.eng.spagobi.commons.metadata.SbiExtRoles;
 import it.eng.spagobi.dao.PagedList;
 import it.eng.spagobi.dao.QueryFilters;
@@ -29,48 +31,68 @@ import it.eng.spagobi.profiling.bean.SbiUser;
 import it.eng.spagobi.profiling.bean.SbiUserAttributes;
 import it.eng.spagobi.profiling.bo.UserBO;
 
-public interface ISbiUserDAO extends ISpagoBIDao {
+/**
+ * DAO for SBI_USER table and related ones.
+ *
+ * WARNING : All the implementation must consider the difference between queries and commands because all the commands executed must be tracked for GDPR.
+ *
+ */
+public interface ISbiUserDAO extends ISpagoBIDao, EmittingEventDAO<UserEventsEmettingCommand> {
 
-	public SbiUser loadSbiUserByUserId(String userId);
+	// Query
+	SbiUser loadSbiUserByUserId(String userId);
 
-	public SbiUser loadSbiUserById(Integer id);
+	SbiUser loadSbiUserById(Integer id);
 
-	public void deleteSbiUserById(Integer id);
+	ArrayList<SbiExtRoles> loadSbiUserRolesById(Integer id);
 
-	public void deleteSbiUserAttributeById(Integer id, Integer attrId);
+	ArrayList<SbiUserAttributes> loadSbiUserAttributesById(Integer id);
 
-	public Integer saveSbiUser(SbiUser user);
+	ArrayList<SbiUser> loadSbiUsers();
 
-	public void updateSbiUserRoles(SbiExtUserRoles role);
+	ArrayList<SbiUser> loadAllTenantsUsers();
 
-	public void updateSbiUserAttributes(SbiUserAttributes attribute);
+	ArrayList<UserBO> loadUsers();
 
-	public ArrayList<SbiExtRoles> loadSbiUserRolesById(Integer id);
+	List<UserBO> loadUsers(QueryFilters filters);
 
-	public ArrayList<SbiUserAttributes> loadSbiUserAttributesById(Integer id);
+	List<UserBO> loadUsers(QueryFilters filters, String dateFilter);
 
-	public ArrayList<SbiUser> loadSbiUsers();
+	PagedList<UserBO> loadUsersPagedList(QueryFilters filters, Integer offset, Integer fetchSize);
 
-	public ArrayList<UserBO> loadUsers();
+	boolean thereIsAnyUsers();
 
-	public List<UserBO> loadUsers(QueryFilters filters);
+	int getFailedLoginAttempts(String userId);
 
-	public List<UserBO> loadUsers(QueryFilters filters, String dateFilter);
+	Integer isUserIdAlreadyInUse(String userId);
 
-	public void updateSbiUser(SbiUser user, Integer userID);
+	void checkUserId(String userId, Integer id);
 
-	public Integer fullSaveOrUpdateSbiUser(SbiUser user);
+	// Commands
 
-	public PagedList<UserBO> loadUsersPagedList(QueryFilters filters, Integer offset, Integer fetchSize);
+	void deleteSbiUserById(Integer id);
 
-	public void checkUserId(String userId, Integer id);
+	void deleteSbiUserAttributeById(Integer id, Integer attrId);
 
-	public Integer isUserIdAlreadyInUse(String userId);
-	
-	public int getFailedLoginAttempts(String userId);
+	Integer saveSbiUser(SbiUser user);
 
-	public void incrementFailedLoginAttempts(String userId);
+	void updateSbiUserRoles(SbiExtUserRoles role);
 
-	public void resetFailedLoginAttempts(String userId);
+	void updateSbiUserAttributes(SbiUserAttributes attribute);
 
+	void updateSbiUser(SbiUser user, Integer userID);
+
+	Integer fullSaveOrUpdateSbiUser(SbiUser user);
+
+	void incrementFailedLoginAttempts(String userId);
+
+	void resetFailedLoginAttempts(String userId);
+
+	void resetOtpSecret(Integer userId);
+
+	ArrayList<SbiExtRoles> loadSbiUserRolesByIdAllTenants(int id);
+
+	ArrayList<SbiUser> loadSbiUserFromEmail(String email);
+
+	SbiUser loadSbiUserByUserIdAllTenants(String userId);
 }

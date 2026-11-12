@@ -37,6 +37,8 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -48,6 +50,7 @@ import it.eng.spagobi.analiticalmodel.functionalitytree.dao.ILowFunctionalityDAO
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.bo.Role;
 import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.IRoleDAO;
@@ -63,7 +66,10 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 @Path("/2.0/functionalities")
 @ManageAuthorization
 public class FunctionalitiesResource extends AbstractSpagoBIResource {
-	private final String charset = "; charset=UTF-8";
+
+	private static final Logger LOGGER = LogManager.getLogger(FunctionalitiesResource.class);
+
+	private static final String CHARSET = "; charset=UTF-8";
 
 	/**
 	 * Getting list of all functionalities. Arrays of Roles that belong to one functionality are implemented to be like: One Role only with id and name
@@ -76,7 +82,7 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response getFolders(@DefaultValue("false") @QueryParam("includeDocs") Boolean recoverBIObjects, @QueryParam("perm") String permissionOnFolder,
 			@QueryParam("dateFilter") String dateFilter) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
 			UserProfile profile = getUserProfile();
@@ -88,7 +94,7 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 			} else {
 				allFolders = dao.loadAllLowFunctionalities(recoverBIObjects);
 			}
-			List<LowFunctionality> folders = new ArrayList<LowFunctionality>();
+			List<LowFunctionality> folders = new ArrayList<>();
 
 			if (permissionOnFolder != null && !permissionOnFolder.isEmpty()) {
 				for (LowFunctionality lf : allFolders) {
@@ -103,7 +109,7 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 					}
 				}
 			}
-			List<LowFunctionality> newListOfFolders = new ArrayList<LowFunctionality>();
+			List<LowFunctionality> newListOfFolders = new ArrayList<>();
 			JSONArray arrayDev = null;
 			JSONArray arrayTest = null;
 			JSONArray arrayExec = null;
@@ -142,10 +148,10 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 			return Response.ok(filteredListArray.toString()).build();
 		} catch (Exception e) {
 			String errorString = "sbi.folder.load.folders.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
@@ -240,9 +246,10 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("forsharing/{objectId}")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getFunctionalitiesForSharing(@PathParam("objectId") Integer objectId) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
+		String permission = SpagoBIConstants.PERMISSION_ON_FOLDER_TO_CREATE;
 		List<LowFunctionality> folders = new ArrayList<>();
 		try {
 			UserProfile profile = getUserProfile();
@@ -250,16 +257,17 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 			dao.setUserProfile(profile);
 			List<LowFunctionality> foldersForSharing = dao.loadFunctionalitiesForSharing(objectId);
 			for (LowFunctionality folder : foldersForSharing) {
-				if (ObjectsAccessVerifier.canSee(folder, profile))
+				if (folder.getParentId() == null || checkPermissionOnFolder(permission, folder, profile)) {
 					folders.add(folder);
+				}
 			}
 			return Response.ok(folders).build();
 		} catch (Exception e) {
 			String errorString = "Cannot get available folders for sharing";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
@@ -271,8 +279,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("moveUp/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONALITIES_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONALITIES_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getLowFunctMoveUp(@PathParam("id") Integer id) {
 
 		try {
@@ -281,8 +289,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.folder.load.folder.moveUp";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}
@@ -295,8 +303,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("getParent/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONALITIES_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONALITIES_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getParent(@PathParam("id") Integer id) {
 
 		try {
@@ -305,8 +313,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.folder.load.parent.folder";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}
@@ -319,8 +327,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("moveDown/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONALITIES_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONALITIES_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getLowFunctMoveDown(@PathParam("id") Integer id) {
 
 		try {
@@ -329,8 +337,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.folder.load.folder.moveDown";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}
@@ -343,7 +351,7 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONALITIES_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONALITIES_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response insertLowFunctionality(@javax.ws.rs.core.Context HttpServletRequest req) {
 
@@ -357,10 +365,10 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 			JSONArray execRoles = paramsObj.getJSONArray("execRoles");
 			JSONArray creatRoles = paramsObj.getJSONArray("createRoles");
 			roleDao = DAOFactory.getRoleDAO();
-			ArrayList<Role> devRolesArrayList = new ArrayList<Role>();
-			ArrayList<Role> testRolesArrayList = new ArrayList<Role>();
-			ArrayList<Role> execRolesArrayList = new ArrayList<Role>();
-			ArrayList<Role> creatRolesArrayList = new ArrayList<Role>();
+			ArrayList<Role> devRolesArrayList = new ArrayList<>();
+			ArrayList<Role> testRolesArrayList = new ArrayList<>();
+			ArrayList<Role> execRolesArrayList = new ArrayList<>();
+			ArrayList<Role> creatRolesArrayList = new ArrayList<>();
 			Role[] devRolesArray = new Role[devRoles.length()];
 			for (int i = 0; i < devRoles.length(); i++) {
 				int roleID = devRoles.getJSONObject(i).getInt("id");
@@ -409,8 +417,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 			return Response.ok(lowFunctionality).build();
 		} catch (Exception e) {
 			String errorString = "sbi.folder.save.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e, "MessageFiles.messages");
 		}
 
 	}
@@ -423,7 +431,7 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 	@PUT
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONALITIES_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONALITIES_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateLowFunctionality(@PathParam("id") Integer id, @javax.ws.rs.core.Context HttpServletRequest req) {
 		ILowFunctionalityDAO objDao = null;
@@ -435,10 +443,10 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 			JSONArray execRoles = paramsObj.getJSONArray("execRoles");
 			JSONArray creatRoles = paramsObj.getJSONArray("createRoles");
 			roleDao = DAOFactory.getRoleDAO();
-			ArrayList<Role> devRolesArrayList = new ArrayList<Role>();
-			ArrayList<Role> testRolesArrayList = new ArrayList<Role>();
-			ArrayList<Role> execRolesArrayList = new ArrayList<Role>();
-			ArrayList<Role> creatRolesArrayList = new ArrayList<Role>();
+			ArrayList<Role> devRolesArrayList = new ArrayList<>();
+			ArrayList<Role> testRolesArrayList = new ArrayList<>();
+			ArrayList<Role> execRolesArrayList = new ArrayList<>();
+			ArrayList<Role> creatRolesArrayList = new ArrayList<>();
 			Role[] devRolesArray = new Role[devRoles.length()];
 			for (int i = 0; i < devRoles.length(); i++) {
 				int roleID = devRoles.getJSONObject(i).getInt("id");
@@ -492,8 +500,8 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.folder.modify.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 	}
 
@@ -520,7 +528,7 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 		// ArrayList childs =
 		// DAOFactory.getFunctionalityCMSDAO().recoverChilds(parentPath);
 		List childs = DAOFactory.getLowFunctionalityDAO().loadSubLowFunctionalities(parentPath, false);
-		if (childs.size() != 0) {
+		if (!childs.isEmpty()) {
 			Iterator i = childs.iterator();
 			while (i.hasNext()) {
 				LowFunctionality childNode = (LowFunctionality) i.next();
@@ -751,12 +759,12 @@ public class FunctionalitiesResource extends AbstractSpagoBIResource {
 			return Response.ok().build();
 		} catch (EMFUserError eMFUserError) {
 			String errorString = eMFUserError.getDescription();
-			logger.error(errorString, eMFUserError);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), eMFUserError);
+			LOGGER.error(errorString, eMFUserError);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), eMFUserError);
 		} catch (Exception e) {
 			String errorString = "sbi.folder.delete.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 	}
 }

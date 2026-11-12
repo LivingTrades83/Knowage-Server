@@ -19,9 +19,9 @@ package it.eng.spagobi.utilities.database.temporarytable;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +34,7 @@ import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.persist.DataSetTableDescriptor;
 import it.eng.spagobi.tools.dataset.persist.IDataSetTableDescriptor;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.database.DataBaseException;
 import it.eng.spagobi.utilities.database.DataBaseFactory;
@@ -57,12 +57,12 @@ public class TemporaryTableManager {
 	 * Contains the definition of the existing temporary tables. The key is created by a fixed prefix and a suffix that depends on user profile (1 temporary
 	 * table for each user). The value relevant to a key is the SQL statement that defines the temporary table.
 	 */
-	private static Map<String, String> tables = new HashMap<String, String>();
+	private static Map<String, String> tables = new HashMap<>();
 
 	/**
 	 * Contains the descriptors of the existing temporary tables.
 	 */
-	private static Map<String, IDataSetTableDescriptor> tableDescriptors = new HashMap<String, IDataSetTableDescriptor>();
+	private static Map<String, IDataSetTableDescriptor> tableDescriptors = new HashMap<>();
 
 	public static IDataSetTableDescriptor createTable(List<String> fields, String sqlStatement, String tableName, IDataSource dataSource) throws Exception {
 		return createTable(fields, sqlStatement, tableName, dataSource, -1); // queryTimeout = -1 -> NO TIMEOUT
@@ -130,8 +130,9 @@ public class TemporaryTableManager {
 				 *
 				 * Andrea Fantappiè
 				 */
-				if (driverName.contains("MySQL"))
+				if (driverName.contains("MySQL")) {
 					catalog = schema;
+				}
 				actualTableName = tableName.substring(tableName.indexOf(".") + 1);
 			} else {
 				actualTableName = tableName;
@@ -375,8 +376,9 @@ public class TemporaryTableManager {
 	 */
 	private static String addTablespace(String dialect, String sql) {
 		String tableSpace = getTableTablespace();
-		if (tableSpace == null || tableSpace.length() == 0)
+		if (tableSpace == null || tableSpace.length() == 0) {
 			return sql;
+		}
 
 		if (dialect.contains("Oracle")) {
 			sql += " TABLESPACE " + tableSpace;
@@ -447,6 +449,10 @@ public class TemporaryTableManager {
 		logger.debug("OUT");
 	}
 
+	public static void renameTable(String tableNameOld, String tableNameNew, IDataSource dataSource) throws Exception {
+		executeStatement("ALTER TABLE " + tableNameOld + " RENAME " + tableNameNew, dataSource);
+	}
+
 	private static void executeStatement(String sql, IDataSource dataSource) throws Exception {
 		executeStatement(sql, dataSource, -1);
 	}
@@ -460,13 +466,17 @@ public class TemporaryTableManager {
 			if (!dialect.contains("VoltDB")) {
 				connection.setAutoCommit(false);
 			}
-			Statement stmt = connection.createStatement();
+			PreparedStatement stmt = connection.prepareStatement(sql);
 			if (queryTimeout > 0) {
 				stmt.setQueryTimeout(queryTimeout);
 			}
 
 			logger.debug("Executing sql " + sql);
-			stmt.execute(sql);
+			if (dialect.contains("PostgreSQL")) {
+				stmt.execute();
+			} else {
+				stmt.execute(sql);
+			}
 			if (!dialect.contains("VoltDB")) {
 				connection.commit();
 			}
@@ -543,7 +553,7 @@ public class TemporaryTableManager {
 			logger.debug("Actual table prefix : [" + schema + "]");
 		}
 		String tableNameSuffix = getTableNameSuffix();
-		String cleanRoot = StringUtils.convertNonAscii(root);
+		String cleanRoot = KnowageStringUtils.convertNonAscii(root);
 		// removing non letters
 		StringBuilder sb = new StringBuilder();
 		int n = cleanRoot.length();

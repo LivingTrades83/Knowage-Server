@@ -19,13 +19,13 @@ import junit.framework.TestCase;
 
 public class AbstractCachePerfTest extends TestCase {
 
-	protected static List<ICache> caches = new ArrayList<ICache>();
+	protected static List<ICache> caches = new ArrayList<>();
 	protected JDBCDataSet[] sqlDatasets;
 	protected List<IDataSource> dataSourceReadings;
 	protected List<IDataSource> dataSourceWritings;
 	private static final String query = "select * from store";
 
-	static private Logger logger = Logger.getLogger(AbstractCacheTest.class);
+	private static Logger logger = Logger.getLogger(AbstractCacheTest.class);
 
 	/*
 	 * (non-Javadoc)

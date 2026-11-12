@@ -34,21 +34,21 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.engine.chart.ChartEngineConfig;
 import it.eng.spagobi.json.Xml;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 
 @Path("/chart/style")
 public class StyleResource {
-	static private Logger logger = Logger.getLogger(StyleResource.class);
+	private static Logger logger = Logger.getLogger(StyleResource.class);
 	private static final String PATH_TO_STYLE = File.separator + "style";
 	private static final String PATH_TO_SFNAS = "/chart/templates/styles/nostyle/default.xml";
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.CREATE_COCKPIT_FUNCTIONALITY })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CREATE_COCKPIT_FUNCTIONALITY })
 	public String getStyles() throws Exception {
 
 		String resourcePath = ChartEngineConfig.getEngineResourcePath();

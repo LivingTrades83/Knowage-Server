@@ -75,6 +75,9 @@ public final class DataSourceServiceProxy extends AbstractServiceProxy{
 			}else {
 				service = Service.create(SERVICE_QNAME).getPort(DataSourceService.class);
 			}
+
+			setCommonHeader(service);
+
 			return service;
 		} catch (Exception e) {
 			logger.error("Impossible to locate [" + SERVICE_NAME + "] at [" + serviceUrl + "]");
@@ -160,6 +163,28 @@ public final class DataSourceServiceProxy extends AbstractServiceProxy{
 
 		try {
 			dataSourceConfig = lookUp().getDataSourceById(readTicket(), userId,id);
+			if(dataSourceConfig != null) {
+				dataSource = DataSourceFactory.getDataSource( dataSourceConfig );
+			}
+		} catch (Exception e) {
+			logger.error("Error during Service LookUp",e);
+		}finally{
+			logger.debug("OUT");
+		}
+		return dataSource;
+	}
+
+	/**
+	 * Returns the data source for cache.
+	 *
+	 * @return SpagoBiDataSource object
+	 */
+	public IDataSource getDataSourceForCache() {
+		IDataSource dataSource = null;
+		SpagoBiDataSource dataSourceConfig = null;
+
+		try {
+			dataSourceConfig = lookUp().getDataSourceForCache(readTicket(), userId);
 			if(dataSourceConfig != null) {
 				dataSource = DataSourceFactory.getDataSource( dataSourceConfig );
 			}

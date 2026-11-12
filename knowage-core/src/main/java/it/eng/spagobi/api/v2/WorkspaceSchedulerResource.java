@@ -18,6 +18,8 @@
 package it.eng.spagobi.api.v2;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -40,7 +42,7 @@ import it.eng.spagobi.analiticalmodel.document.bo.Snapshot;
 import it.eng.spagobi.analiticalmodel.document.dao.ISnapshotDAO;
 import it.eng.spagobi.analiticalmodel.document.dao.SnapshotDAOHibImpl;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
@@ -54,11 +56,11 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 @ManageAuthorization
 public class WorkspaceSchedulerResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(WorkspaceSchedulerResource.class);
+	protected static Logger logger = Logger.getLogger(WorkspaceSchedulerResource.class);
 
 	@GET
 	@Path("/{scheduler}")
-	@UserConstraint(functionalities = { SpagoBIConstants.SEE_SNAPSHOTS_FUNCTIONALITY })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SEE_SNAPSHOTS_FUNCTIONALITY })
 	@Produces(MediaType.APPLICATION_JSON)
 	public String getSchedulations(@PathParam("scheduler") String name, @QueryParam("collate") boolean collate)
 			throws IOException, EMFUserError, EMFInternalError, JSONException {
@@ -72,7 +74,7 @@ public class WorkspaceSchedulerResource extends AbstractSpagoBIResource {
 			snapDao = DAOFactory.getSnapshotDAO();
 			list = snapDao.getSnapshotsBySchedulation(name, collate, false);
 		} catch (EMFUserError e) {
-			throw new SpagoBIRestServiceException("Error with getting snapshpots", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Error with getting snapshpots", getLocale(), e);
 
 		}
 		boolean isAllPDf = true;
@@ -83,7 +85,8 @@ public class WorkspaceSchedulerResource extends AbstractSpagoBIResource {
 				JSONArray ids = new JSONArray();
 				for (int i = 0; i < snapshotList.size(); i++) {
 					// obj.put("time", snapshotList.get(i).getDateCreation());
-					obj.put("time", SnapshotDAOHibImpl.DATE_FORMATTER.format(snapshotList.get(i).getDateCreation()));
+					obj.put("time", SnapshotDAOHibImpl.DATE_FORMATTER_V2
+							.format(LocalDateTime.ofInstant(snapshotList.get(i).getDateCreation().toInstant(), ZoneId.systemDefault())));
 					ids.put(snapshotList.get(i).getId());
 					if (snapshotList.get(i).getContentType() == null || !snapshotList.get(i).getContentType().equalsIgnoreCase("application/pdf")) {
 						isAllPDf = false;

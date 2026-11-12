@@ -21,10 +21,13 @@ import net.sf.jasperreports.engine.JRExporter;
 
 import it.eng.spago.base.SourceBean;
 import it.eng.spagobi.services.common.EnginConf;
+
+import org.apache.log4j.Logger;
 /**
  * 
  * @deprecated
  */
+@Deprecated
 public class ExporterFactory {	
 	
 	/**
@@ -34,7 +37,9 @@ public class ExporterFactory {
 	 * 
 	 * @return the exporter
 	 */
-	static public JRExporter getExporter(String format) {
+	private static Logger logger = Logger.getLogger(ExporterFactory.class);
+
+	public static JRExporter getExporter(String format) {
 		JRExporter exporter = null;
 		
 		SourceBean config = EnginConf.getInstance().getConfig();
@@ -46,8 +51,8 @@ public class ExporterFactory {
 		try {
 			exporter = (JRExporter)Class.forName(exporterClassName).newInstance();
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			//e.printStackTrace();
+			logger.error("Class.forName",e);
 		} 
 		
 		return exporter;
@@ -60,7 +65,7 @@ public class ExporterFactory {
 	 * 
 	 * @return the mIME type
 	 */
-	static public String getMIMEType(String format) {
+	public static String getMIMEType(String format) {
 		String mimeType = null;
 		SourceBean config = EnginConf.getInstance().getConfig();
 		SourceBean exporterConfig = (SourceBean) config.getFilteredSourceBeanAttribute ("EXPORTERS.EXPORTER", "format", format);
@@ -74,7 +79,7 @@ public class ExporterFactory {
 	 * 
 	 * @return the default type
 	 */
-	static public String getDefaultType(){
+	public static String getDefaultType(){
 		String defaultType = null;
 		SourceBean config = EnginConf.getInstance().getConfig();
 		defaultType = (String)config.getAttribute("EXPORTERS.default");

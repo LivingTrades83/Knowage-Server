@@ -38,7 +38,7 @@ public enum PasswordEncrypterHolder {
 
 	PasswordEncrypter passwordEncrypter = null;
 
-	private PasswordEncrypterHolder(byte[] keyBytes) {
+	PasswordEncrypterHolder(byte[] keyBytes) {
 		passwordEncrypter = new PasswordEncrypter(keyBytes);
 	}
 
@@ -49,13 +49,13 @@ public enum PasswordEncrypterHolder {
 		Logger logger = Logger.getLogger(PasswordEncrypterHolder.class);
 		byte[] fileContent = null;
 		try {
-			String fileLocation = (String) new InitialContext().lookup("java:/comp/env/password_encryption_secret");
+			String fileLocation = (String) new InitialContext().lookup("java:comp/env/password_encryption_secret");
 
 			fileContent = getKeyBytes(fileLocation);
 
 		} catch (NamingException e) {
 			String message = "Unable to find resource for security initialization. [password_encryption_secret] envinronment variable is missing.";
-			logger.error(String.format("%s %s", message, documentationLink));
+			logger.error(String.format("%s %s", message, documentationLink), e);
 			throw new Error(message, e);
 		}
 
@@ -75,7 +75,7 @@ public enum PasswordEncrypterHolder {
 
 		} catch (IOException e) {
 			String message = "Unable to find file for security initialization.";
-			logger.error(String.format("%s %s", message, documentationLink));
+			logger.error(String.format("%s %s", message, documentationLink), e);
 			throw new Error(message, e);
 		}
 
@@ -83,13 +83,14 @@ public enum PasswordEncrypterHolder {
 	}
 
 	private static byte[] getOldKeyBytes() {
-		byte[] keyBytes = { (byte) 0x06, (byte) 0xAB, (byte) 0x12, (byte) 0xE4, (byte) 0xE4, (byte) 0xE4, (byte) 0xE4, (byte) 0x12, (byte) 0x13, (byte) 0xE4,
-				(byte) 0x12, (byte) 0xCC, (byte) 0xEF, (byte) 0xE4, (byte) 0x06, (byte) 0x07, (byte) 0xE4, (byte) 0x07, (byte) 0x12, (byte) 0xCD, (byte) 0xE4,
-				(byte) 0x07, (byte) 0xFE, (byte) 0xFF, (byte) 0x07, (byte) 0xE4, (byte) 0x08 };
+		byte[] keyBytes = { (byte) 0x06, (byte) 0xAB, (byte) 0x12, (byte) 0xE4, (byte) 0xE4, (byte) 0xE4, (byte) 0xE4,
+				(byte) 0x12, (byte) 0x13, (byte) 0xE4, (byte) 0x12, (byte) 0xCC, (byte) 0xEF, (byte) 0xE4, (byte) 0x06,
+				(byte) 0x07, (byte) 0xE4, (byte) 0x07, (byte) 0x12, (byte) 0xCD, (byte) 0xE4, (byte) 0x07, (byte) 0xFE,
+				(byte) 0xFF, (byte) 0x07, (byte) 0xE4, (byte) 0x08 };
 		return keyBytes;
 	}
 
-	public String enCrypt(String value) {
-		return passwordEncrypter.enCrypt(value);
+	public String hash(String value) {
+		return passwordEncrypter.encrypt(value);
 	}
 }

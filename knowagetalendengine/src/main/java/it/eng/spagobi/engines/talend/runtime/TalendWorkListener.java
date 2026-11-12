@@ -27,7 +27,7 @@ public class TalendWorkListener implements WorkListener {
     public static final String TALEND_PRESENTAION_HANDLER_CLASS_NAME = "it.eng.spagobi.engines.drivers.talend.TalendEventPresentationHandler";
     
     
-    private static transient Logger logger = Logger.getLogger(TalendWorkListener.class);
+    private static final Logger logger = Logger.getLogger(TalendWorkListener.class);
 	
     public TalendWorkListener(AuditServiceProxy auditServiceProxy, EventServiceProxy eventServiceProxy) {
     	this.auditServiceProxy = auditServiceProxy;
@@ -35,15 +35,18 @@ public class TalendWorkListener implements WorkListener {
     }
     
     
-    public void workAccepted(WorkEvent event) {
+    @Override
+	public void workAccepted(WorkEvent event) {
     	logger.info("IN");
     }
 
-    public void workRejected(WorkEvent event) {
+    @Override
+	public void workRejected(WorkEvent event) {
     	logger.info("IN");
     }
     
-    public void workCompleted(WorkEvent event) {
+    @Override
+	public void workCompleted(WorkEvent event) {
 		
     	WorkException workException;
     	TalendWork talendWork;
@@ -79,7 +82,8 @@ public class TalendWorkListener implements WorkListener {
 
     }
 
-    public void workStarted(WorkEvent event) {
+    @Override
+	public void workStarted(WorkEvent event) {
     	
     	if(auditServiceProxy != null) {
     		auditServiceProxy.notifyServiceStartEvent();

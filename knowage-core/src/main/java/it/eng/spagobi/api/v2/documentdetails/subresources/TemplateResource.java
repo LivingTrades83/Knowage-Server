@@ -43,7 +43,7 @@ import it.eng.spagobi.analiticalmodel.document.bo.ObjTemplate;
 import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectDAO;
 import it.eng.spagobi.analiticalmodel.document.dao.IObjTemplateDAO;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.JSError;
@@ -53,17 +53,17 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 @Path("")
 public class TemplateResource extends AbstractSpagoBIResource {
 
-	public static enum FILETYPE {
+	public enum FILETYPE {
 		json, xml, bin, rptdesign, sbicockpit, jrxml, pdf, xls, xlsx, doc, docx, ppt, pptx
-	};
+	}
 
-	static protected Logger logger = Logger.getLogger(TemplateResource.class);
+	protected static Logger logger = Logger.getLogger(TemplateResource.class);
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Path("/")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public List<ObjTemplate> getDocumentTemplates(@PathParam("id") Integer id) {
 		logger.debug("IN");
 		IBIObjectDAO documentDao = null;
@@ -78,7 +78,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 			Assert.assertNotNull(documentTemplates, "Document Template can not be null");
 		} catch (EMFUserError e) {
 			logger.debug("Could not get content from template", e);
-			throw new SpagoBIRestServiceException("Could not get content from templates", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Could not get content from templates", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return documentTemplates;
@@ -87,7 +87,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/{templateId}")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public byte[] getActiveDocumentTemplate(@PathParam("id") Integer id) {
 		logger.debug("IN");
 		IBIObjectDAO documentDao = null;
@@ -102,7 +102,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 			Assert.assertNotNull(documentTemplate, "Document Template can not be null");
 		} catch (EMFUserError e) {
 			logger.debug("Could not get content from template", e);
-			throw new SpagoBIRestServiceException("Could not get content from template", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Could not get content from template", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return temp;
@@ -111,7 +111,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/selected/{templateId}")
 	@Produces("application/text")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public byte[] getDocumentTemplate(@PathParam("id") Integer id, @PathParam("templateId") Integer templateId) {
 		logger.debug("IN");
 		byte[] temp = null;
@@ -123,7 +123,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 			Assert.assertNotNull(documentTemplate, "Document Template can not be null");
 		} catch (EMFInternalError e) {
 			logger.debug("Could not get content from template", e);
-			throw new SpagoBIRestServiceException("Could not get content from template", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Could not get content from template", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return temp;
@@ -134,7 +134,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 	 **/
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
 	public Response uploadTemplate(MultiPartBody body, @PathParam("id") int id) {
 
@@ -162,7 +162,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			logger.debug("Template could not be uploaded", e);
-			throw new SpagoBIRestServiceException("Template could not be uploaded", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Template could not be uploaded", getLocale(), e);
 		}
 
 		logger.debug("OUT");
@@ -216,7 +216,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 			}
 		} catch (Exception e) {
 			logger.debug("Template could not be downloaded", e);
-			throw new SpagoBIRestServiceException("Template could not be downloaded", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Template could not be downloaded", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return response.build();
@@ -225,7 +225,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 	@PUT
 	@Path("/{templateId}")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void setDocTemplateActive(@PathParam("id") Integer id, @PathParam("templateId") Integer templateId) {
 		logger.debug("IN");
 		Assert.assertNotNull(templateId, "Template ID can not be null");
@@ -241,7 +241,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 			templateDAO.setTemplateActive(template, document);
 		} catch (EMFUserError | EMFInternalError e) {
 			logger.debug("Template could not be modified", e);
-			throw new SpagoBIRestServiceException("Template could not be modified", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Template could not be modified", getLocale(), e);
 		}
 		logger.debug("OUT");
 	}
@@ -249,7 +249,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 	@DELETE
 	@Path("/{templateId}")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public Integer deleteDocumentActiveTemplateById(@PathParam("id") Integer id, @PathParam("templateId") Integer templateId) {
 		logger.debug("IN");
 		Assert.assertNotNull(templateId, "Template ID can not be null");
@@ -259,7 +259,7 @@ public class TemplateResource extends AbstractSpagoBIResource {
 			templateDAO.deleteBIObjectTemplate(templateId);
 		} catch (EMFInternalError e) {
 			logger.debug("Template could not be deleted", e);
-			throw new SpagoBIRestServiceException("Template could not be deleted", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Template could not be deleted", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return templateId;

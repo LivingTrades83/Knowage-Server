@@ -45,22 +45,22 @@ import org.jgrapht.graph.Multigraph;
 
 public class QueryGraphBuilder {
 
-	private static transient Logger logger = Logger.getLogger(QueryGraphBuilder.class);
+	private static final Logger LOGGER = Logger.getLogger(QueryGraphBuilder.class);
 	private List<IModelEntity> vertexes;
 
 
 	public QueryGraphBuilder(){
-		vertexes = new ArrayList<IModelEntity>();
+		vertexes = new ArrayList<>();
 	}
 
 	
 	public QueryGraph buildGraphFromEdges(Collection<Relationship> edges){
-		logger.debug("IN");
-		logger.debug("Building the multigraph");
+		LOGGER.debug("IN");
+		LOGGER.debug("Building the multigraph");
 		QueryGraph multigraph = buildGraphFromEdges2(edges);
 		
 		if(multigraph==null){
-			logger.debug("The query graph is null");
+			LOGGER.debug("The query graph is null");
 			return null;
 		}
 		
@@ -173,9 +173,9 @@ public class QueryGraphBuilder {
 	 * @return the graph built starting from the list of edges
 	 */
 	public QueryGraph buildGraphFromEdges2(Collection<Relationship> edges){
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Assert.assertNotNull(edges, "The list of edges is null. Impossbile to create a graph");
-		logger.debug("The number of paths is "+edges.size());
+		LOGGER.debug("The number of paths is "+edges.size());
 
 		QueryGraph graph = new QueryGraph(Relationship.class);
 
@@ -187,7 +187,7 @@ public class QueryGraphBuilder {
 			}
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return graph;
 	}
 
@@ -203,31 +203,31 @@ public class QueryGraphBuilder {
 			IModelEntity target= edge.getTargetEntity();
 
 			if(!vertexes.contains(src)){
-				logger.debug("Add the vertex "+src.getName());
+				LOGGER.debug("Add the vertex "+src.getName());
 				vertexes.add(src);
 				graph.addVertex(src);
 			}
 			if(!vertexes.contains(target)){
-				logger.debug("Add the vertex "+src.getName());
+				LOGGER.debug("Add the vertex "+src.getName());
 				vertexes.add(target);
 				graph.addVertex(target);
 			}
 
-			logger.debug("Add the edge "+src.getName()+"--"+target.getName());
+			LOGGER.debug("Add the edge "+src.getName()+"--"+target.getName());
 			graph.addEdge(src, target, edge);
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 	
 	//USEFULL BUT NOT USED METHOSDS
 	
 	public Graph<IModelEntity, Relationship> buildGraphFromPaths(Collection<GraphPath<IModelEntity, Relationship>> paths){
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Assert.assertNotNull(paths, "The list of paths is null. Impossbile to create a graph");
-		logger.debug("The number of paths is "+paths.size());
+		LOGGER.debug("The number of paths is "+paths.size());
 
-		UndirectedGraph<IModelEntity, Relationship> graph = new Multigraph<IModelEntity, Relationship>(Relationship.class);
+		UndirectedGraph<IModelEntity, Relationship> graph = new Multigraph<>(Relationship.class);
 		
 		if(paths!=null){
 			Iterator<GraphPath<IModelEntity, Relationship>> pathIter = paths.iterator();
@@ -237,20 +237,20 @@ public class QueryGraphBuilder {
 			}
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return graph;
 	}
 	
 	private void addPathToGraph(Graph<IModelEntity, Relationship> graph, GraphPath<IModelEntity, Relationship> path ){
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		List<Relationship> edges = path.getEdgeList();
 		if(edges!=null){
 			for(int i=0; i<edges.size(); i++){
-				Relationship edge = (Relationship)edges.get(i);
+				Relationship edge = edges.get(i);
 				addEdgeToGraph(graph, edge);
 			}
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 

@@ -1,0 +1,919 @@
+/*
+ * Knowage, Open Source Business Intelligence suite
+ * Copyright (C) 2021 Engineering Ingegneria Informatica S.p.A.
+ *
+ * Knowage is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Knowage is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package it.eng.knowage.resourcemanager.service.impl;
+
+import static java.util.stream.Collectors.toList;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
+
+import javax.ws.rs.core.Response.Status;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import it.eng.knowage.boot.error.KnowageBusinessException;
+import it.eng.knowage.boot.error.KnowageRuntimeException;
+import it.eng.knowage.boot.utils.ContextPropertiesConfig;
+import it.eng.knowage.boot.utils.HMACUtilities;
+import it.eng.knowage.knowageapi.error.ImpossibleToCreateFileException;
+import it.eng.knowage.knowageapi.error.ImpossibleToCreateFolderException;
+import it.eng.knowage.knowageapi.error.ImpossibleToDeleteFileException;
+import it.eng.knowage.knowageapi.error.ImpossibleToDeleteFolderException;
+import it.eng.knowage.knowageapi.error.ImpossibleToDownloadFileException;
+import it.eng.knowage.knowageapi.error.ImpossibleToReadFilesListException;
+import it.eng.knowage.knowageapi.error.ImpossibleToReadFolderListException;
+import it.eng.knowage.knowageapi.error.ImpossibleToReadMetadataException;
+import it.eng.knowage.knowageapi.error.ImpossibleToSaveMetadataException;
+import it.eng.knowage.knowageapi.error.ImpossibleToUploadFileException;
+import it.eng.knowage.knowageapi.utils.PathTraversalChecker;
+import it.eng.knowage.resourcemanager.resource.dto.FileDTO;
+import it.eng.knowage.resourcemanager.resource.dto.FolderDTO;
+import it.eng.knowage.resourcemanager.resource.dto.MetadataDTO;
+import it.eng.knowage.resourcemanager.resource.dto.RootFolderDTO;
+import it.eng.knowage.resourcemanager.service.ResourceManagerAPI;
+import it.eng.knowage.resourcemanager.utilities.ResourceManagerUtilities;
+import it.eng.spagobi.services.security.SpagoBIUserProfile;
+
+@Component
+public class ResourceManagerAPIImpl implements ResourceManagerAPI {
+	/**
+	 *
+	 */
+	private static final String METADATA_JSON = "metadata.json";
+	private static final String MODELS = "models";
+	private static final String ENG_GPT_DATA_FOLDER = "eng-gpt-data";
+	private static final String SQL_GOLD_JSON = "sqlGold.json";
+	private static final String ENG_GPT_DATA_ERROR_CODE = "KN-RM-012";
+	private static final Logger LOGGER = Logger.getLogger(ResourceManagerAPIImpl.class);
+	private static final String DOCS_FOLDER = "docs";
+	private static final String EXTERNAL_LIBRARIES_FOLDER = "external-libraries";
+	private static Map<String, List<String>> foldersForDevs = new HashMap<>();
+	private final Map<String, HashMap<String, Object>> cachedNodesInfo = new HashMap<>();
+
+	private static final String RESOURCE_FUNCTIONALITY_DEV = "ResourceManagementDev";
+	private static final String RESOURCE_FUNCTIONALITY = "ResourceManagement";
+
+	@Autowired
+	HMACUtilities hmacUtilities;
+
+	static {
+		List<String> folders = new ArrayList<>();
+		folders.add(MODELS);
+		folders.add("talend");
+		folders.add("static_menu");
+		folders.add("layer");
+		folders.add("jasper_messages");
+		folders.add("hierarchies");
+		folders.add("birt_messages");
+		folders.add("dataset");
+		foldersForDevs.put("DEV", folders);
+	}
+
+	@Override
+	public RootFolderDTO getFolders(SpagoBIUserProfile profile) throws ImpossibleToReadFolderListException {
+
+		RootFolderDTO newRootFolder = null;
+		LOGGER.debug("Starting resource path json tree");
+		try {
+			Path fullP = getWorkDirectory(profile);
+			Path fullBoundedBasePath = applyBuondedBasePath(fullP);
+
+			String buondedBasePath = ResourceManagerUtilities.getBuondedBasePath();
+			FolderDTO parentFolder = new FolderDTO(fullBoundedBasePath);
+			parentFolder.setRelativePath(buondedBasePath);
+			parentFolder.setKey(hmacUtilities.getKeyHashedValue(fullBoundedBasePath.toString()));
+
+			FolderDTO mylist = createTree(parentFolder, profile, buondedBasePath, 0);
+			newRootFolder = new RootFolderDTO(Arrays.asList(mylist));
+
+			LOGGER.debug("Finished resource path json tree");
+		} catch (IOException e) {
+			LOGGER.error("[ResourceManagerAPIImpl], [getFolders], ", e);
+			throw new KnowageRuntimeException(e);
+		}
+		return newRootFolder;
+	}
+
+	/**
+	 * @param fullP
+	 * @throws IOException
+	 */
+	private Path applyBuondedBasePath(Path fullP) throws IOException {
+		String buondedBasePath = ResourceManagerUtilities.getBuondedBasePath();
+		Path fullBoundedBasePath = fullP.resolve(buondedBasePath);
+
+		if (!Files.isDirectory(fullBoundedBasePath)) {
+			LOGGER.info("Buonded base path folder is missing. It will be created now.");
+			Files.createDirectories(fullBoundedBasePath);
+		}
+
+		return fullBoundedBasePath;
+	}
+
+	public Path getWorkDirectory(SpagoBIUserProfile profile) throws IOException {
+		String resourcePathBase = ContextPropertiesConfig.getResourcePath();
+		String tenant = profile.getOrganization();
+		Path totalPath = Paths.get(resourcePathBase).resolve(tenant);
+		if (!Files.isDirectory(totalPath)) {
+			LOGGER.info("The tenant folder is missing. It will be created now.");
+			Files.createDirectories(totalPath);
+
+		}
+		return totalPath;
+	}
+
+	private FolderDTO createTree(FolderDTO parentFolder, SpagoBIUserProfile profile, String currentRelativePath,
+			int level) throws IOException {
+		Path node = Paths.get(parentFolder.getFullPath());
+		File nodeFile = node.toFile();
+		Path nodePath = Paths.get(nodeFile.getAbsolutePath());
+		Path workDir = getWorkDirectory(profile);
+		boolean canSee = true;
+		if (nodePath.getParent().equals(workDir)) {
+			if (!canSee(nodePath, profile)) {
+				canSee = false;
+			}
+		}
+		if (nodeFile.isDirectory()) {
+			String[] subNote = nodeFile.list();
+			for (String fileName : subNote) {
+				Path path = nodePath.resolve(fileName);
+				if (path.getParent().equals(workDir) && !fileName.equals(DOCS_FOLDER)) {
+					if (!canSee(path, profile)) {
+						continue;
+					}
+				}
+				if (Files.isDirectory(path) && (fileName.equals(DOCS_FOLDER) || currentRelativePath.startsWith(DOCS_FOLDER) || canSee)) {
+					FolderDTO folder = new FolderDTO(path);
+					folder.setKey(hmacUtilities.getKeyHashedValue(path.toString()));
+
+					Path modelsPath = getWorkDirectory(profile).resolve(MODELS);
+
+					boolean modelFolder = !path.relativize(modelsPath).toString().isEmpty()
+							&& path.relativize(modelsPath).getNameCount() == 1;
+
+					String relativePath = Paths.get(currentRelativePath).resolve(fileName).toString();
+					folder.setRelativePath(relativePath);
+
+					int nextLevel = level + 1;
+					folder.setModelFolder(modelFolder);
+					folder.setLevel(nextLevel);
+					parentFolder.addChildren(folder);
+					createTree(folder, profile, relativePath, nextLevel);
+				} else {
+					// parentFolder.addFile(new CustomFile(path));
+				}
+			}
+		}
+		return parentFolder;
+	}
+
+	@Override
+	public boolean canSee(Path path, SpagoBIUserProfile profile) throws IOException {
+		boolean canSee = false;
+		if (profile.isIsSuperadmin()) {
+			return true;
+		} else {
+			if (hasDevFunctionality(profile)) {
+				List<String> restrictedFolders = foldersForDevs.get("DEV");
+				for (String folder : restrictedFolders) {
+
+					Path completePath = getTotalPath(folder, profile);
+					if (path.toString().toLowerCase().startsWith(completePath.toString().toLowerCase())
+							|| path.toString().equalsIgnoreCase(getWorkDirectory(profile).toString())
+							|| (path.toString().toLowerCase()
+									.startsWith(getWorkDirectory(profile).toString().toLowerCase())
+									&& path.toFile().exists() && !path.toFile().isDirectory())) {
+						return true;
+					}
+
+				}
+			} else {
+				canSee = hasAdministratorFunction(profile);
+			}
+		}
+
+		return canSee;
+	}
+
+	// Admin functionalities, EE and CE
+	public static boolean hasAdministratorFunction(SpagoBIUserProfile profile) {
+		if (profile.getFunctions().contains(RESOURCE_FUNCTIONALITY)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	// DEV functionalities, EE and CE
+	public static boolean hasDevFunctionality(SpagoBIUserProfile profile) {
+		if (profile.getFunctions().contains(RESOURCE_FUNCTIONALITY_DEV)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	// if user can't work with directory it is not necessary
+	// if (canSee(pathToWork, profile)) ...
+	@Override
+	public boolean createFolder(String path, SpagoBIUserProfile profile) throws ImpossibleToCreateFolderException {
+		boolean bool = false;
+		try {
+			Path totalPath = getTotalPath(path, profile);
+			Path workDir = getFullRootByPath(path, profile);
+			if (canSee(workDir, profile)) {
+				File file = totalPath.toFile();
+
+				if (file.exists()) {
+					String message = String.format("Directory %s is already existing.",
+							totalPath.getName(totalPath.getNameCount() - 1));
+					throw new ImpossibleToCreateFolderException(message);
+				} else {
+					// Creating the directory
+					bool = file.mkdir();
+					if (bool) {
+						LOGGER.info("Directory created successfully");
+					} else {
+						String message = "Sorry couldn't create specified directory";
+						LOGGER.info(message);
+						throw new ImpossibleToCreateFolderException(message);
+					}
+				}
+			}
+		} catch (KnowageBusinessException e) {
+			throw new ImpossibleToCreateFolderException(e.getMessage(), e);
+		} catch (Exception e) {
+			throw new KnowageRuntimeException(e.getMessage(), e);
+		}
+		return bool;
+	}
+
+	@Override
+	public boolean delete(String path, SpagoBIUserProfile profile)
+			throws IOException, ImpossibleToDeleteFolderException, ImpossibleToDeleteFileException {
+		Path workDir = getFullRootByPath(path, profile);
+		if (canSee(workDir, profile)) {
+			Path totalPath = getTotalPath(path, profile);
+			File file = totalPath.toFile();
+			if (file.isDirectory()) {
+				try {
+					FileUtils.deleteDirectory(file);
+				} catch (IOException e) {
+					throw new ImpossibleToDeleteFolderException(e.getMessage(), e);
+				}
+			} else {
+				try {
+					FileUtils.forceDelete(file);
+				} catch (IOException e) {
+					throw new ImpossibleToDeleteFileException(e.getMessage(), e);
+				}
+			}
+		}
+		return true;
+	}
+
+	@Override
+	public Path getDownloadFolderPath(String key, String path, SpagoBIUserProfile profile)
+			throws ImpossibleToCreateFileException {
+		Path workingPath = null;
+		Path pathToReturn = null;
+		try {
+			Path workDirr = getFullRootByPath(path, profile);
+			if (canSee(workDirr, profile)) {
+				Path workDir = getWorkDirectory(profile);
+				workingPath = workDir.resolve(path);
+				pathToReturn = createZipFile(key, workingPath);
+			}
+		} catch (Exception e) {
+			throw new ImpossibleToCreateFileException(e.getMessage(), e);
+		}
+		return pathToReturn;
+	}
+
+	@Override
+	public Path getDownloadFilePath(List<String> path, SpagoBIUserProfile profile, boolean multi)
+			throws ImpossibleToDownloadFileException {
+		Path pathToReturn = null;
+		try {
+			if (multi) {
+				pathToReturn = createZipFileOfFiles(path, profile);
+			} else {
+				String pathFile = path.get(0);
+				Path workDirr = getFullRootByPath(pathFile, profile);
+
+				if (pathFile.startsWith(DOCS_FOLDER) || canSee(workDirr, profile)) {
+					Path workDir = getWorkDirectory(profile);
+					pathToReturn = workDir.resolve(pathFile);
+				}
+			}
+		} catch (Exception e) {
+			throw new ImpossibleToDownloadFileException(e.getMessage(), e);
+		}
+		return pathToReturn;
+	}
+
+	@Override
+	public Path getExternalLibraryPath(String libraryName, SpagoBIUserProfile profile)
+			throws ImpossibleToReadFilesListException {
+		try {
+			PathTraversalChecker.isValidFileName(libraryName);
+
+			Path workDirectory = getWorkDirectory(profile).normalize();
+			Path externalLibrariesDirectory = workDirectory.resolve(EXTERNAL_LIBRARIES_FOLDER).normalize();
+			if (!Files.isDirectory(externalLibrariesDirectory)) {
+				throw new ImpossibleToReadFilesListException("External libraries folder not found");
+			}
+
+			Path realWorkDirectory = workDirectory.toRealPath();
+			Path realExternalLibrariesDirectory = externalLibrariesDirectory.toRealPath();
+			if (!realExternalLibrariesDirectory.startsWith(realWorkDirectory)) {
+				throw new ImpossibleToReadFilesListException("Invalid external libraries folder");
+			}
+			Path candidatePath = realExternalLibrariesDirectory.resolve(libraryName).normalize();
+			if (!candidatePath.startsWith(realExternalLibrariesDirectory)) {
+				throw new ImpossibleToReadFilesListException("Invalid library name");
+			}
+			if (!Files.exists(candidatePath) || !Files.isRegularFile(candidatePath)) {
+				throw new ImpossibleToReadFilesListException("External library not found: " + libraryName);
+			}
+
+			Path realCandidatePath = candidatePath.toRealPath();
+			if (!realCandidatePath.startsWith(realExternalLibrariesDirectory)) {
+				throw new ImpossibleToReadFilesListException("Invalid library name");
+			}
+
+			return realCandidatePath;
+		} catch (ImpossibleToReadFilesListException e) {
+			throw e;
+		} catch (KnowageRuntimeException e) {
+			throw new ImpossibleToReadFilesListException("Invalid library name", e);
+		} catch (IOException e) {
+			throw new ImpossibleToReadFilesListException("Error while resolving external library " + libraryName, e);
+		}
+	}
+
+	public Path getFullRootByPath(String path, SpagoBIUserProfile profile) throws IOException {
+		String separator = File.separator.equals("\\") ? "\\\\" : File.separator;
+		String rootElement = path.split(separator)[0];
+		return getTotalPath(rootElement, profile);
+	}
+
+	@Override
+	public String getFolderByKey(String key, SpagoBIUserProfile profile) throws ImpossibleToReadFolderListException {
+		String relativePath = null;
+
+		HashMap<String, Object> nodeInfos = cachedNodesInfo.get(key);
+		if (nodeInfos != null) {
+			relativePath = (String) nodeInfos.get("relativePath");
+		}
+		if (relativePath == null) {
+			RootFolderDTO folders = getFolders(profile);
+			for (FolderDTO folder : folders.getRoot()) {
+
+				FolderDTO node = findNode(folder, key);
+				if (node == null) {
+					continue;
+				}
+				relativePath = node.getRelativePath();
+				HashMap<String, Object> m = new HashMap<>();
+				m.put("relativePath", relativePath);
+				m.put("level", node.getLevel());
+				cachedNodesInfo.put(key, m);
+			}
+
+		}
+		if (relativePath == null) {
+			String message = String.format("No matching node for key [%s]", key);
+			LOGGER.debug(message);
+			throw new ImpossibleToReadFolderListException(message);
+		}
+		return relativePath;
+	}
+
+	private FolderDTO findNode(FolderDTO node, String key) {
+		FolderDTO toReturn = null;
+		if (node.getKey().equals(key))
+			return node;
+
+		List<FolderDTO> children = node.getChildren();
+		for (int i = 0; i < children.size(); i++) {
+			toReturn = findNode(children.get(i), key);
+			if (toReturn != null)
+				break;
+		}
+
+		return toReturn;
+	}
+
+	@Override
+	public List<FileDTO> getListOfFiles(String key, SpagoBIUserProfile profile)
+			throws ImpossibleToReadFilesListException, ImpossibleToReadFolderListException {
+		String path = getFolderByKey(key, profile);
+		List<FileDTO> returnList = new ArrayList<>();
+		try {
+			Path totalPath = getTotalPath(path, profile);
+			File folder = totalPath.toFile();
+			Path workDir = getFullRootByPath(path, profile);
+			if (canSee(workDir, profile)) {
+				File[] listOfFiles = folder.listFiles();
+				if (listOfFiles != null) {
+					int level = (int) cachedNodesInfo.get(key).get("level");
+					for (int i = 0; i < listOfFiles.length; i++) {
+						File f = listOfFiles[i];
+						if (f.isFile()) {
+							if (level == ResourceManagerUtilities.getModelsFolderLevel()
+									&& f.getName().equals(METADATA_JSON)) {
+								continue;
+							}
+							LOGGER.debug("File " + listOfFiles[i].getName());
+							returnList.add(new FileDTO(listOfFiles[i]));
+						}
+					}
+				}
+			}
+		} catch (Exception e) {
+			throw new ImpossibleToReadFilesListException("");
+		}
+		return returnList;
+	}
+
+	@Override
+	public void importFile(InputStream archiveInputStream, String path, SpagoBIUserProfile profile)
+			throws IOException, ImpossibleToUploadFileException {
+
+		try {
+			Path workBaseDir = getFullRootByPath(path, profile);
+			Path fileTotalPath = getTotalPath(path, profile);
+
+			if (canSee(workBaseDir, profile)) {
+				Files.deleteIfExists(fileTotalPath);
+				Files.createFile(fileTotalPath);
+				Path tempArchive = fileTotalPath.getParent().resolve(fileTotalPath.getFileName());
+				FileUtils.copyInputStreamToFile(archiveInputStream, tempArchive.toFile());
+			}
+		} catch (Exception e) {
+			throw new ImpossibleToUploadFileException(e.getMessage(), e);
+		}
+	}
+
+	@Override
+	public void importFileAndExtract(InputStream archiveInputStream, String path, SpagoBIUserProfile profile)
+			throws IOException {
+		Path workBaseDir = getFullRootByPath(path, profile);
+		Path fileTotalPath = getTotalPath(path, profile);
+		String totalPathDestinationDir = fileTotalPath.getParent().toFile().getAbsolutePath();
+		if (canSee(workBaseDir, profile)) {
+			Files.deleteIfExists(fileTotalPath);
+			Files.createFile(fileTotalPath);
+			Path tempArchive = fileTotalPath.getParent().resolve(fileTotalPath.getFileName());
+			File zipFile = tempArchive.toFile();
+			FileUtils.copyInputStreamToFile(archiveInputStream, zipFile);
+			extractFolder(zipFile.getAbsolutePath(), totalPathDestinationDir);
+			zipFile.delete();
+		}
+
+	}
+
+	@Override
+	public String getEngGptData(String modelId, SpagoBIUserProfile profile) throws KnowageBusinessException {
+		String normalizedModelId = normalizeEngGptModelId(modelId);
+		try {
+			Path sqlGoldPath = resolveEngGptDataFilePath(normalizedModelId, profile, false);
+			if (!Files.exists(sqlGoldPath) || !Files.isRegularFile(sqlGoldPath)) {
+				throw newEngGptDataException("sqlGold.json not found for modelId [" + normalizedModelId + "]", Status.NOT_FOUND,
+						"No sqlGold.json found for the specified model");
+			}
+			return new String(Files.readAllBytes(sqlGoldPath), StandardCharsets.UTF_8);
+		} catch (KnowageBusinessException e) {
+			throw e;
+		} catch (IOException e) {
+			throw newEngGptDataException("Error while reading sqlGold.json for modelId [" + normalizedModelId + "]", Status.INTERNAL_SERVER_ERROR,
+					"Impossible to read Eng GPT data", e);
+		}
+	}
+
+	@Override
+	public void saveEngGptData(String modelId, String jsonContent, SpagoBIUserProfile profile) throws KnowageBusinessException {
+		String normalizedModelId = normalizeEngGptModelId(modelId);
+		validateEngGptDataPayload(jsonContent);
+		try {
+			Path sqlGoldPath = resolveEngGptDataFilePath(normalizedModelId, profile, true);
+			Files.write(sqlGoldPath, jsonContent.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+					StandardOpenOption.WRITE);
+		} catch (KnowageBusinessException e) {
+			throw e;
+		} catch (IOException e) {
+			throw newEngGptDataException("Error while saving sqlGold.json for modelId [" + normalizedModelId + "]", Status.INTERNAL_SERVER_ERROR,
+					"Impossible to save Eng GPT data", e);
+		}
+	}
+
+	@Override
+	public void deleteEngGptData(String modelId, SpagoBIUserProfile profile) throws KnowageBusinessException {
+		String normalizedModelId = normalizeEngGptModelId(modelId);
+		try {
+			Path modelDirectory = resolveEngGptDataModelDirectory(normalizedModelId, profile, false);
+			if (!Files.exists(modelDirectory)) {
+				throw newEngGptDataException("Eng GPT data folder not found for modelId [" + normalizedModelId + "]", Status.NOT_FOUND,
+						"No Eng GPT data found for the specified model");
+			}
+			File modelDirectoryFile = modelDirectory.toFile();
+			if (modelDirectoryFile.isDirectory()) {
+				FileUtils.deleteDirectory(modelDirectoryFile);
+			} else {
+				FileUtils.forceDelete(modelDirectoryFile);
+			}
+		} catch (KnowageBusinessException e) {
+			throw e;
+		} catch (IOException e) {
+			throw newEngGptDataException("Error while deleting Eng GPT data for modelId [" + normalizedModelId + "]", Status.INTERNAL_SERVER_ERROR,
+					"Impossible to delete Eng GPT data", e);
+		}
+	}
+
+	private Path resolveEngGptDataFilePath(String modelId, SpagoBIUserProfile profile, boolean createDirectories)
+			throws IOException, KnowageBusinessException {
+		return resolveEngGptDataModelDirectory(modelId, profile, createDirectories).resolve(SQL_GOLD_JSON);
+	}
+
+	private Path resolveEngGptDataModelDirectory(String modelId, SpagoBIUserProfile profile, boolean createDirectories)
+			throws IOException, KnowageBusinessException {
+		Path engGptDataRoot = resolveEngGptDataRoot(profile, createDirectories);
+		Path modelDirectory = engGptDataRoot.resolve(modelId).normalize();
+		if (!modelDirectory.startsWith(engGptDataRoot)) {
+			throw newEngGptDataException("Invalid modelId [" + modelId + "]", Status.BAD_REQUEST, "The provided modelId is not valid");
+		}
+		if (createDirectories && !Files.isDirectory(modelDirectory)) {
+			Files.createDirectories(modelDirectory);
+		}
+		return modelDirectory;
+	}
+
+	private Path resolveEngGptDataRoot(SpagoBIUserProfile profile, boolean createDirectories) throws IOException, KnowageBusinessException {
+		Path workDirectory = getWorkDirectory(profile);
+		Path engGptDataRoot = workDirectory.resolve(ENG_GPT_DATA_FOLDER).normalize();
+		if (!canSee(engGptDataRoot, profile)) {
+			String userId = profile != null ? profile.getUserId() : "unknown";
+			throw newEngGptDataException("User [" + userId + "] cannot access Eng GPT data root [" + engGptDataRoot + "]", Status.FORBIDDEN,
+					"User is not allowed to access Eng GPT data");
+		}
+		if (createDirectories && !Files.isDirectory(engGptDataRoot)) {
+			Files.createDirectories(engGptDataRoot);
+		}
+		return engGptDataRoot;
+	}
+
+	private String normalizeEngGptModelId(String modelId) throws KnowageBusinessException {
+		String normalizedModelId = modelId != null ? modelId.trim() : null;
+		if (normalizedModelId == null || normalizedModelId.isEmpty()) {
+			throw newEngGptDataException("Missing modelId", Status.BAD_REQUEST, "The modelId parameter is mandatory");
+		}
+		try {
+			PathTraversalChecker.isValidFileName(normalizedModelId);
+		} catch (KnowageRuntimeException e) {
+			throw newEngGptDataException("Invalid modelId [" + normalizedModelId + "]", Status.BAD_REQUEST, "The provided modelId is not valid", e);
+		}
+		return normalizedModelId;
+	}
+
+	void validateEngGptDataPayload(String jsonContent) throws KnowageBusinessException {
+		if (jsonContent == null || jsonContent.trim().isEmpty()) {
+			throw newEngGptDataException("Missing Eng GPT JSON payload", Status.BAD_REQUEST, "The request body must contain a valid JSON document");
+		}
+
+		JsonNode rootNode;
+		try {
+			rootNode = new ObjectMapper().readTree(jsonContent);
+		} catch (IOException e) {
+			throw newEngGptDataException("Invalid Eng GPT JSON payload", Status.BAD_REQUEST, "The request body must contain a valid JSON document", e);
+		}
+
+		if (rootNode == null || !rootNode.isObject()) {
+			throw newEngGptDataException("Invalid Eng GPT JSON payload root", Status.BAD_REQUEST,
+					"The request body must be a JSON object containing the sql_gold array");
+		}
+
+		JsonNode sqlGoldNode = rootNode.get("sql_gold");
+		if (sqlGoldNode == null || !sqlGoldNode.isArray()) {
+			throw newEngGptDataException("Missing or invalid sql_gold array", Status.BAD_REQUEST,
+					"The request body must contain the sql_gold array");
+		}
+
+		for (int i = 0; i < sqlGoldNode.size(); i++) {
+			validateSqlGoldEntry(sqlGoldNode.get(i), i);
+		}
+	}
+
+	private void validateSqlGoldEntry(JsonNode entryNode, int index) throws KnowageBusinessException {
+		if (entryNode == null || !entryNode.isObject()) {
+			throw newEngGptDataException("Invalid sql_gold entry at index [" + index + "]", Status.BAD_REQUEST,
+					"Each sql_gold entry must be a JSON object");
+		}
+
+		validateRequiredTextField(entryNode, "NL", index);
+		validateRequiredTextField(entryNode, "SQL", index);
+		validateRequiredStringArrayField(entryNode, "tables", index);
+		validateRequiredStringArrayField(entryNode, "columns", index);
+	}
+
+	private void validateRequiredTextField(JsonNode entryNode, String fieldName, int index) throws KnowageBusinessException {
+		JsonNode fieldNode = entryNode.get(fieldName);
+		if (fieldNode == null || !fieldNode.isTextual() || fieldNode.asText().trim().isEmpty()) {
+			throw newEngGptDataException("Invalid field [" + fieldName + "] for sql_gold entry [" + index + "]", Status.BAD_REQUEST,
+					"Each sql_gold entry must contain a non-empty " + fieldName + " string");
+		}
+	}
+
+	private void validateRequiredStringArrayField(JsonNode entryNode, String fieldName, int index) throws KnowageBusinessException {
+		JsonNode fieldNode = entryNode.get(fieldName);
+		if (fieldNode == null || !fieldNode.isArray()) {
+			throw newEngGptDataException("Invalid field [" + fieldName + "] for sql_gold entry [" + index + "]", Status.BAD_REQUEST,
+					"Each sql_gold entry must contain the " + fieldName + " array");
+		}
+
+		for (int elementIndex = 0; elementIndex < fieldNode.size(); elementIndex++) {
+			JsonNode arrayElement = fieldNode.get(elementIndex);
+			if (arrayElement == null || !arrayElement.isTextual() || arrayElement.asText().trim().isEmpty()) {
+				throw newEngGptDataException(
+						"Invalid value for field [" + fieldName + "] in sql_gold entry [" + index + "] at position [" + elementIndex + "]",
+						Status.BAD_REQUEST, "The " + fieldName + " array must contain only non-empty strings");
+			}
+		}
+	}
+
+	private KnowageBusinessException newEngGptDataException(String message, Status status, String description) {
+		KnowageBusinessException exception = new KnowageBusinessException(message);
+		exception.setStatus(status);
+		exception.setCode(ENG_GPT_DATA_ERROR_CODE);
+		exception.setDescription(description);
+		return exception;
+	}
+
+	private KnowageBusinessException newEngGptDataException(String message, Status status, String description, Throwable cause) {
+		KnowageBusinessException exception = new KnowageBusinessException(message, cause);
+		exception.setStatus(status);
+		exception.setCode(ENG_GPT_DATA_ERROR_CODE);
+		exception.setDescription(description);
+		return exception;
+	}
+
+	public Path getTotalPath(String path, SpagoBIUserProfile profile) throws IOException {
+		return getWorkDirectory(profile).resolve(path);
+	}
+
+	public Path createZipFile(String key, Path fullPath) {
+
+		try {
+			Path tempDirectory = Files.createTempDirectory("knowage-zip");
+			Path tempFile = Files.createTempFile("knowage-zip", key);
+
+			File fileDest = tempDirectory.resolve(fullPath.getName(fullPath.getNameCount() - 1)).toFile();
+			FileUtils.copyDirectory(fullPath.toFile(), fileDest);
+			try (Stream<Path> walk = Files.walk(tempDirectory)) {
+				List<Path> files = walk.collect(toList());
+
+				putEntries(tempDirectory, tempFile, files);
+			}
+
+			cleanUpTempDirectory(tempDirectory);
+
+			return tempFile;
+
+		} catch (IOException e) {
+			throw new KnowageRuntimeException("Error creating export ZIP archive", e);
+		}
+	}
+
+	public Path createZipFileOfFiles(List<String> fullPaths, SpagoBIUserProfile profile) {
+
+		try {
+			Path tempDirectory = Files.createTempDirectory("knowage-zip");
+			Path tempFile = Files.createTempFile("knowage-zip", "temp");
+
+			File fileDest = new File(tempDirectory.toString());
+			for (String path : fullPaths) {
+				Path workDir = getTotalPath(path, profile);
+				FileUtils.copyFileToDirectory(workDir.toFile(), fileDest);
+			}
+			try (Stream<Path> walk = Files.walk(tempDirectory)) {
+				List<Path> files = walk.collect(toList());
+
+				putEntries(tempDirectory, tempFile, files);
+			}
+			cleanUpTempDirectory(tempDirectory);
+
+			return tempFile;
+
+		} catch (IOException e) {
+			throw new KnowageRuntimeException("Error creating export ZIP archive", e);
+		}
+	}
+
+	private void putEntries(Path tempDirectory, Path tempFile, List<Path> files) throws IOException {
+		try (ZipOutputStream ret = new ZipOutputStream(Files.newOutputStream(tempFile))) {
+
+			for (Path currPath : files) {
+				Path relativize = tempDirectory.relativize(currPath);
+				if (!relativize.toString().isEmpty()) {
+					if (Files.isDirectory(currPath)) {
+						ZipEntry zipEntry = new ZipEntry(relativize.toString() + "/");
+						ret.putNextEntry(zipEntry);
+					} else {
+						ZipEntry zipEntry = new ZipEntry(relativize.toString());
+						ret.putNextEntry(zipEntry);
+						InputStream currPathInputStream = Files.newInputStream(currPath);
+						copy(currPathInputStream, ret);
+					}
+					ret.closeEntry();
+				}
+			}
+		}
+	}
+
+	private void extractFolder(String zipFile, String extractFolder) throws IOException {
+		int buffer = 2048;
+		File file = new File(zipFile);
+		try (ZipFile zip = new ZipFile(file)) {
+			File destinationDirectory = new File(extractFolder).getCanonicalFile();
+
+			destinationDirectory.mkdir();
+			Enumeration<? extends ZipEntry> zipFileEntries = zip.entries();
+
+			// Process each entry
+			while (zipFileEntries.hasMoreElements()) {
+				// grab a zip file entry
+				ZipEntry entry = zipFileEntries.nextElement();
+				String currentEntry = entry.getName();
+
+				File destFile = new File(destinationDirectory, currentEntry).getCanonicalFile();
+				if (Paths.get(currentEntry).isAbsolute() || !destFile.toPath().startsWith(destinationDirectory.toPath())) {
+					throw new IOException("ZIP entry is outside the extraction directory");
+				}
+				File destinationParent = destFile.getParentFile();
+
+				// create the parent directory structure if needed
+				destinationParent.mkdirs();
+
+				if (!entry.isDirectory()) {
+					BufferedInputStream is = new BufferedInputStream(zip.getInputStream(entry));
+					int currentByte;
+					// establish buffer for writing file
+					byte[] data = new byte[buffer];
+
+					// write the current file to disk
+					try (FileOutputStream fos = new FileOutputStream(destFile);
+							BufferedOutputStream dest = new BufferedOutputStream(fos, buffer)) {
+
+						// read and write until last byte is encountered
+						while ((currentByte = is.read(data, 0, buffer)) != -1) {
+							dest.write(data, 0, currentByte);
+						}
+						dest.flush();
+					}
+				}
+
+			}
+		} catch (Exception e) {
+			// TODO: change it for error handling
+			throw new KnowageRuntimeException(e);
+		}
+	}
+
+	private void copy(InputStream source, OutputStream target) throws IOException {
+		byte[] buf = new byte[8192];
+		int length;
+		while ((length = source.read(buf)) > 0) {
+			target.write(buf, 0, length);
+		}
+	}
+
+	private void cleanUpTempDirectory(Path tempDirectory) throws IOException {
+		// Common way to delete recursively
+		try (Stream<Path> walk = Files.walk(tempDirectory)) {
+			walk.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+		}
+	}
+
+	private boolean isStartingFromModel(Path path, SpagoBIUserProfile profile) throws IOException {
+		Path fullPath = getWorkDirectory(profile);
+
+		Path fullBoundedBasePath = applyBuondedBasePath(fullPath);
+		return path.startsWith(fullBoundedBasePath);
+	}
+
+	@Override
+	public MetadataDTO getMetadata(String path, SpagoBIUserProfile profile) throws ImpossibleToReadMetadataException {
+		MetadataDTO metadata = null;
+		try {
+			Path workPath = getFullRootByPath(path, profile);
+			Path totalPath = getTotalPath(path, profile).resolve(METADATA_JSON);
+
+			if (isStartingFromModel(totalPath, profile) && canSee(workPath, profile)) {
+				ObjectMapper mapper = new ObjectMapper();
+				if (!new File(totalPath.toString()).exists()) {
+					LOGGER.debug("Metadata file not found. It will be created.");
+					new File(totalPath.toString()).createNewFile();
+
+					metadata = new MetadataDTO();
+					// convert map to JSON file
+					mapper.writeValue(totalPath.toFile(), metadata);
+
+				} else {
+					// create object mapper instance
+					metadata = mapper.readValue(totalPath.toFile(), MetadataDTO.class);
+				}
+			}
+		} catch (Exception ex) {
+			throw new ImpossibleToReadMetadataException(ex.getMessage(), ex);
+		}
+
+		return metadata;
+	}
+
+	/**
+	 * JSONObject jsonCode = new JSONObject(); jsonCode.put("name", fileDTO.getName()); jsonCode.put("version", fileDTO.getVersion()); jsonCode.put("type",
+	 * fileDTO.getType()); jsonCode.put("opensource", fileDTO.isOpensource()); jsonCode.put("description", fileDTO.getDescription()); jsonCode.put("accuracy",
+	 * fileDTO.getAccuracy()); jsonCode.put("usage", fileDTO.getUsage()); jsonCode.put("format", fileDTO.getFormat()); jsonCode.put("image", fileDTO.getImage());
+	 *
+	 * @throws ImpossibleToSaveMetadataException
+	 */
+	@Override
+	public MetadataDTO saveMetadata(MetadataDTO fileDTO, String path, SpagoBIUserProfile profile)
+			throws ImpossibleToSaveMetadataException {
+		try {
+			Path workPath = getFullRootByPath(path, profile);
+			Path totalPath = getTotalPath(path, profile);
+			if (isStartingFromModel(totalPath, profile) && canSee(workPath, profile)) {
+				Path metadataPath = totalPath.resolve(METADATA_JSON);
+				ObjectMapper objectMapper = new ObjectMapper();
+				objectMapper.writeValue(metadataPath.toFile(), fileDTO);
+			}
+		} catch (Exception e) {
+			throw new ImpossibleToSaveMetadataException(e.getMessage(), e);
+
+		}
+		return fileDTO;
+	}
+
+	@Override
+	public boolean updateFolder(Path path, String folderName, SpagoBIUserProfile profile)
+			throws ImpossibleToCreateFolderException, IOException {
+		boolean updated = false;
+
+		File fromDirectory = getTotalPath(path.toString(), profile).toFile();
+		File toDirectory = getTotalPath(fromDirectory.getParent(), profile).resolve(folderName).toFile();
+
+		if (toDirectory.exists()) {
+			String message = "Destination folder already existing";
+			throw new ImpossibleToCreateFolderException(message);
+		}
+
+		updated = fromDirectory.renameTo(toDirectory);
+
+		return updated;
+	}
+
+}

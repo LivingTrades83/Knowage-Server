@@ -43,6 +43,8 @@ import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
  */
 public class CrossTab {
 
+	private static final Logger LOGGER = Logger.getLogger(CrossTab.class);
+
 	private Node columnsRoot;
 	private Node rowsRoot;
 	String[][] dataMatrix;
@@ -56,9 +58,6 @@ public class CrossTab {
 
 	private static final String PATH_SEPARATOR = "_S_";
 	private static final String DATA_MATRIX_NA = "NA";
-
-	private static final SimpleDateFormat DATE_FORMATTER = new SimpleDateFormat("dd/MM/yyyy");
-	private static final SimpleDateFormat TIMESTAMP_FORMATTER = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 
 	public static final String CROSSTAB_NODE_JSON_KEY = "node_key";
 	public static final String CROSSTAB_NODE_JSON_CHILDS = "node_childs";
@@ -77,7 +76,8 @@ public class CrossTab {
 	public static final String MEASURE_FORMAT = "format";
 	public static final String MEASURE_POSITION = "measurePosition";
 
-	private static Logger logger = Logger.getLogger(CrossTab.class);
+	private static final String DATE_FORMAT_DATE = "dd/MM/yyyy";
+	private static final String DATE_FORMAT_TIMESTAMP = "dd/MM/yyyy HH:mm:ss";
 
 	public enum CellType {
 		DATA("data"), CF("cf"), SUBTOTAL("partialsum"), TOTAL("totals");
@@ -125,9 +125,9 @@ public class CrossTab {
 //		}
 //
 
-		List<String> rowCordinates = new ArrayList<String>();
-		List<String> columnCordinates = new ArrayList<String>();
-		List<String> data = new ArrayList<String>();
+		List<String> rowCordinates = new ArrayList<>();
+		List<String> columnCordinates = new ArrayList<>();
+		List<String> data = new ArrayList<>();
 
 		columnsRoot = new Node(Node.CROSSTAB_NODE_COLUMN_ROOT);
 		rowsRoot = new Node(Node.CROSSTAB_NODE_ROW_ROOT);
@@ -149,7 +149,7 @@ public class CrossTab {
 		rowsRoot.orderedSubtree();
 
 		if (index < valuesDataStore.getRecordsCount()) {
-			logger.debug("Crosstab cells number limit exceeded");
+			LOGGER.debug("Crosstab cells number limit exceeded");
 			Node completeColumnsRoot = new Node("rootCompleteC");
 			for (index = 0; index < valuesDataStore.getRecordsCount(); index++) {
 				valueRecord = valuesDataStore.getRecordAt(index);
@@ -206,7 +206,7 @@ public class CrossTab {
 				columnsRoot.getLeafsNumber());
 
 		// put measures' info into measures variable
-		measures = new ArrayList<CrossTab.MeasureInfo>();
+		measures = new ArrayList<>();
 		IMetaData meta = valuesDataStore.getMetaData();
 		for (int i = meta.getFieldCount() - measuresCount; i < meta.getFieldCount(); i++) {
 			// the field number i contains the measure number (i - <number of dimensions>)
@@ -216,8 +216,8 @@ public class CrossTab {
 			measures.add(getMeasureInfo(fieldMeta, relevantMeasure));
 		}
 
-		celltypeOfColumns = new ArrayList<CrossTab.CellType>();
-		celltypeOfRows = new ArrayList<CrossTab.CellType>();
+		celltypeOfColumns = new ArrayList<>();
+		celltypeOfRows = new ArrayList<>();
 
 		for (int i = 0; i < dataMatrix.length; i++) {
 			celltypeOfRows.add(CellType.DATA);
@@ -403,7 +403,7 @@ public class CrossTab {
 	 * @param measures
 	 */
 	private void addMeasuresToTree(Node root, List<Measure> measures) {
-		List<Node> measuresNodes = new ArrayList<Node>();
+		List<Node> measuresNodes = new ArrayList<>();
 		for (int i = 0; i < measures.size(); i++) {
 			measuresNodes.add(new Node(measures.get(i).getAlias()));
 		}
@@ -432,7 +432,7 @@ public class CrossTab {
 	 * @return list with all the path from the node n to the leafs
 	 */
 	private List<String> getLeafsPathList(Node n) {
-		List<String> toReturn = new ArrayList<String>();
+		List<String> toReturn = new ArrayList<>();
 		for (int i = 0; i < n.getChilds().size(); i++) {
 			toReturn.addAll(visit(n.getChilds().get(i), PATH_SEPARATOR));
 		}
@@ -440,7 +440,7 @@ public class CrossTab {
 	}
 
 	private List<String> visit(Node n, String prefix) {
-		List<String> toReturn = new ArrayList<String>();
+		List<String> toReturn = new ArrayList<>();
 		if (n.getChilds().size() == 0) {
 			if (prefix.equals(PATH_SEPARATOR)) {
 				toReturn.add(prefix + (n.getValue()));
@@ -472,9 +472,11 @@ public class CrossTab {
 			clazz = String.class;
 		}
 		if (Timestamp.class.isAssignableFrom(clazz)) {
-			fieldValue = TIMESTAMP_FORMATTER.format(obj);
+			SimpleDateFormat timestampFormatter = new SimpleDateFormat(DATE_FORMAT_TIMESTAMP);
+			fieldValue = timestampFormatter.format(obj);
 		} else if (Date.class.isAssignableFrom(clazz)) {
-			fieldValue = DATE_FORMATTER.format(obj);
+			SimpleDateFormat dateFormatter = new SimpleDateFormat(DATE_FORMAT_DATE);
+			fieldValue = dateFormatter.format(obj);
 		} else {
 			fieldValue = obj.toString();
 		}
@@ -532,7 +534,7 @@ public class CrossTab {
 		Node node;
 		Node nodeToCheck = root;
 		int nodePosition;
-		List<IField> valueFields = new ArrayList<IField>();
+		List<IField> valueFields = new ArrayList<>();
 
 		valueFields = valueRecord.getFields();
 

@@ -142,13 +142,13 @@ function cockpitStaticPivotTableWidgetControllerFunction(
 				}
 				offsetArray.splice(headerIndex, 0 , pivotedHeaders[h].offsetLeft - leftPadding);
 			}
-			pivotedHeaders[h].style.left = offsetArray[headerIndex];
+			pivotedHeaders[h].style.left = offsetArray[headerIndex] + 'px';
 		}
 		var pivotedCells = elem.querySelectorAll('td[pivot]');
 		if(pivotedCells.length > 0){
 			for(var k in pivotedCells){
 				if(pivotedCells[k] && pivotedCells[k].style){
-					pivotedCells[k].style.left = offsetArray[pivotedCells[k].getAttribute('pivot')];
+					pivotedCells[k].style.left = offsetArray[pivotedCells[k].getAttribute('pivot')] + 'px';
 					if(!pivotedCells[k].style.backgroundColor && pivotedCells[k].getAttribute('pivot')[0]!= 'h') pivotedCells[k].style.backgroundColor = 'white';
 				}
 			}
@@ -1324,6 +1324,11 @@ function cockpitStaticPivotTableWidgetControllerFunction(
 		    			 }
 		    		  }
 
+		    		  if (!isTotalsLabelUnique()) {
+		    			  $scope.showAction($scope.translate.load('sbi.cockpit.widgets.staticpivot.uniqueTotalLabels'))
+		    			  return;
+		    		  }
+
 		    		  if($scope.localModel.content.crosstabDefinition.measures.length == 0 ||
 		    			($scope.localModel.content.crosstabDefinition.rows.length == 0 &&
 		    			$scope.localModel.content.crosstabDefinition.columns.length ==0)
@@ -1331,13 +1336,35 @@ function cockpitStaticPivotTableWidgetControllerFunction(
 		    			  $scope.showAction($scope.translate.load('sbi.cockpit.widgets.staticpivot.missingfield'));
 		    			  return;
 		    		  }
-		    		  if ($scope.localModel.content.crosstabDefinition)
+		    		  if ($scope.localModel.content.crosstabDefinition) {
 		    			  $scope.localModel.content.sortOptions =  fnOrder($scope.localModel.content.crosstabDefinition.columns, $scope.localModel.content.crosstabDefinition.rows) || {}; //update sorting
+		    		  }
+
 		    		  angular.copy($scope.localModel,model);//src, dest
 		    		  mdPanelRef.close();
 		    		  $scope.$destroy();
 		    		  finishEdit.resolve();
 
+		    	    }
+
+		    	    isTotalsLabelUnique=function(){
+		    	    	for (i=0; i<$scope.localModel.content.crosstabDefinition.measures.length; i++) {
+		    	    		var alias = $scope.localModel.content.crosstabDefinition.measures[i].alias;
+		    	    		if (!isAliasUnique(alias)) return false;
+		    	    	}
+		    	    	return true;
+		    	    }
+
+		    	    isAliasUnique=function(alias){
+		    	    	if (alias == $scope.localModel.content.crosstabDefinition.config.columnsubtotalLabel)
+		    	    		return false;
+		    	    	if (alias == $scope.localModel.content.crosstabDefinition.config.columntotalLabel)
+		    	    		return false;
+		    	    	if (alias == $scope.localModel.content.crosstabDefinition.config.rowsubtotalLabel)
+		    	    		return false;
+		    	    	if (alias == $scope.localModel.content.crosstabDefinition.config.rowtotalLabel)
+		    	    		return false;
+		    	    	return true;
 		    	    }
 
 			  		$scope.showAction = function(text) {
@@ -1499,7 +1526,7 @@ function cockpitStaticPivotTableWidgetControllerFunction(
 		$scope.conditions=['>','<','==','>=','<=','!='];
 
 		$scope.getTemplateUrl = function(template){
-			return cockpitModule_generalServices.getTemplateUrl('tableWidget',template)
+			return cockpitModule_generalServices.getTemplateUrl('advancedTableWidget',template)
 		}
 
 		$scope.selectedColumn.disableShowHeader = false; //default is enabled: only for measures force disable if there are many measures
@@ -1602,11 +1629,16 @@ function cockpitStaticPivotTableWidgetControllerFunction(
 				sbiModule_messaging.showErrorMessage(sbiModule_translate.load('sbi.chartengine.structure.serieStyleConfig.dataLabels.format.emptyText'), sbiModule_translate.load('sbi.generic.error'));
 				return;
 			}
+			if($scope.selectedColumn.ranges && $scope.selectedColumn.ranges.length > 0){
+				if($scope.selectedColumn.ranges.some((i)=>!i.operator || typeof i.value == 'undefined')) {
+					sbiModule_messaging.showErrorMessage(sbiModule_translate.load('sbi.chartengine.structure.serieStyleConfig.error.badThresholdsSettings'), sbiModule_translate.load('sbi.generic.error'));
+					return;
+				}
+			}
 			$scope.checkPrecision();
 			$scope.selectedColumn = $scope.cleanObjectConfiguration($scope.selectedColumn, 'style', false);
 			$scope.selectedColumn = $scope.cleanObjectConfigurationForSaving($scope.selectedColumn);
 			angular.copy($scope.selectedColumn,selectedColumn);
-//			angular.copy($scope.localModel,model);
 
 			$mdDialog.cancel();
 		}

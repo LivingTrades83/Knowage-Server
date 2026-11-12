@@ -17,11 +17,7 @@
  */
 package it.eng.spagobi.wapp.dao;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.log4j.Logger;
 import org.hibernate.Criteria;
@@ -30,7 +26,6 @@ import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.criterion.Criterion;
-import org.hibernate.criterion.Expression;
 import org.hibernate.criterion.Restrictions;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -55,7 +50,7 @@ import it.eng.spagobi.wapp.metadata.SbiMenuRoleId;
  *
  */
 public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
-	private static transient Logger logger = Logger.getLogger(MenuDAOImpl.class);
+	private static final Logger LOGGER = Logger.getLogger(MenuDAOImpl.class);
 
 	/**
 	 * Load menu by id.
@@ -78,7 +73,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
 
-			Criterion domainCdCriterrion = Expression.eq("menuId", menuID);
+			Criterion domainCdCriterrion = Restrictions.eq("menuId", menuID);
 			Criteria criteria = tmpSession.createCriteria(SbiMenu.class);
 			criteria.add(domainCdCriterrion);
 			SbiMenu hibMenu = (SbiMenu) criteria.uniqueResult();
@@ -128,7 +123,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
 
-			Criterion domainCdCriterrion = Expression.eq("menuId", menuID);
+			Criterion domainCdCriterrion = Restrictions.eq("menuId", menuID);
 			Criteria criteria = tmpSession.createCriteria(SbiMenu.class);
 			criteria.add(domainCdCriterrion);
 			SbiMenu hibMenu = (SbiMenu) criteria.uniqueResult();
@@ -205,7 +200,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
 
-			Criterion domainCdCriterrion = Expression.eq("menuId", menuID);
+			Criterion domainCdCriterrion = Restrictions.eq("menuId", menuID);
 			Criteria criteria = tmpSession.createCriteria(SbiMenu.class);
 			criteria.add(domainCdCriterrion);
 			SbiMenu hibMenu = (SbiMenu) criteria.uniqueResult();
@@ -233,6 +228,57 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 		}
 		return toReturn;
 	}
+	/**
+	 * Load menu by id v2.
+	 *
+	 * @param menuID the menu id
+	 * @param roleID the user's role id
+	 *
+	 * @return the menu
+	 *
+	 * @throws EMFUserError the EMF user error
+	 *
+	 * @see it.eng.spagobi.wapp.dao.IMenuDAO#loadMenuByIDV2(integer, integer)
+	 */
+	@Override
+	public Menu loadMenuByIDV2(Integer menuID, Integer roleID) throws EMFUserError {
+		Menu toReturn = null;
+		Session tmpSession = null;
+		Transaction tx = null;
+
+		try {
+			tmpSession = getSession();
+			tx = tmpSession.beginTransaction();
+
+			Criterion domainCdCriterrion = Restrictions.eq("menuId", menuID);
+			Criteria criteria = tmpSession.createCriteria(SbiMenu.class);
+			criteria.add(domainCdCriterrion);
+			SbiMenu hibMenu = (SbiMenu) criteria.uniqueResult();
+			if (hibMenu == null)
+				return null;
+
+			// SbiMenu hibMenu = (SbiMenu)tmpSession.load(SbiMenu.class,
+			// menuID);
+			toReturn = toMenuV2(hibMenu, roleID, tmpSession);
+
+		} catch (HibernateException he) {
+			logException(he);
+
+			if (tx != null)
+				tx.rollback();
+
+			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
+
+		} finally {
+			if (tmpSession != null) {
+				if (tmpSession.isOpen())
+					tmpSession.close();
+
+			}
+		}
+		return toReturn;
+	}
+
 
 	/**
 	 * Load menu by name.
@@ -253,7 +299,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 		try {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
-			Criterion labelCriterrion = Expression.eq("name", name);
+			Criterion labelCriterrion = Restrictions.eq("name", name);
 			Criteria criteria = tmpSession.createCriteria(SbiMenu.class);
 			criteria.add(labelCriterrion);
 			SbiMenu hibMenu = (SbiMenu) criteria.uniqueResult();
@@ -324,9 +370,9 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			// delete incongruous roles associations
 			deleteIncongruousRoles(tmpSession, hibMenu);
 
-			hibMenu.setViewIcons(new Boolean(aMenu.isViewIcons()));
-			hibMenu.setHideToolbar(new Boolean(aMenu.getHideToolbar()));
-			hibMenu.setHideSliders(new Boolean(aMenu.getHideSliders()));
+			hibMenu.setViewIcons(aMenu.isViewIcons());
+			hibMenu.setHideToolbar(aMenu.getHideToolbar());
+			hibMenu.setHideSliders(aMenu.getHideSliders());
 
 			hibMenu.setStaticPage(aMenu.getStaticPage());
 			hibMenu.setExternalApplicationUrl(aMenu.getExternalApplicationUrl());
@@ -335,13 +381,13 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 				hibMenu.setIcon(null);
 
 			} else {
-				hibMenu.setIcon(new Gson().toJson(aMenu.getIcon()).toString());
+				hibMenu.setIcon(new Gson().toJson(aMenu.getIcon()));
 			}
 
 			if (aMenu.getCustIcon() == null) {
 				hibMenu.setCustIcon(null);
 			} else {
-				hibMenu.setCustIcon(new Gson().toJson(aMenu.getCustIcon()).toString());
+				hibMenu.setCustIcon(new Gson().toJson(aMenu.getCustIcon()));
 			}
 			updateSbiCommonInfo4Update(hibMenu);
 			tx.commit();
@@ -419,9 +465,9 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			hibMenu.setSnapshotHistory(aMenu.getSnapshotHistory());
 			hibMenu.setFunctionality(aMenu.getFunctionality());
 			hibMenu.setInitialPath(aMenu.getInitialPath());
-			hibMenu.setViewIcons(new Boolean(aMenu.isViewIcons()));
-			hibMenu.setHideToolbar(new Boolean(aMenu.getHideToolbar()));
-			hibMenu.setHideSliders(new Boolean(aMenu.getHideSliders()));
+			hibMenu.setViewIcons(aMenu.isViewIcons());
+			hibMenu.setHideToolbar(aMenu.getHideToolbar());
+			hibMenu.setHideSliders(aMenu.getHideSliders());
 			hibMenu.setStaticPage(aMenu.getStaticPage());
 			hibMenu.setExternalApplicationUrl(aMenu.getExternalApplicationUrl());
 
@@ -440,21 +486,21 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			}
 			Integer maxProg = (Integer) hibQuery.uniqueResult();
 			if (maxProg != null)
-				hibMenu.setProg(new Integer(maxProg.intValue() + 1));
+				hibMenu.setProg(maxProg.intValue() + 1);
 			else
-				hibMenu.setProg(new Integer(1));
+				hibMenu.setProg(1);
 
 			if (aMenu.getIcon() == null) {
 				hibMenu.setIcon(null);
 
 			} else {
-				hibMenu.setIcon(new Gson().toJson(aMenu.getIcon()).toString());
+				hibMenu.setIcon(new Gson().toJson(aMenu.getIcon()));
 			}
 
 			if (aMenu.getCustIcon() == null) {
 				hibMenu.setCustIcon(null);
 			} else {
-				hibMenu.setCustIcon(new Gson().toJson(aMenu.getCustIcon()).toString());
+				hibMenu.setCustIcon(new Gson().toJson(aMenu.getCustIcon()));
 			}
 
 			updateSbiCommonInfo4Insert(hibMenu);
@@ -555,6 +601,32 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 	}
 
 	@Override
+	public Map<Integer, SbiMenu> loadSbiMenusByIds(ArrayList<Integer> integers) {
+
+		Session tmpSession = null;
+		Map<Integer, SbiMenu> result = new HashMap<>();
+		try {
+			tmpSession = getSession();
+
+			String hql = "from SbiMenu s where s.menuId in (:menuIds) ";
+			Query query = tmpSession.createQuery(hql);
+			query.setParameterList("menuIds", integers);
+			List<SbiMenu> hibMenus = query.list();
+            for (SbiMenu hibMenu : hibMenus) {
+                result.put(hibMenu.getMenuId(), hibMenu);
+            }
+		} catch (HibernateException he) {
+			logException(he);
+		} finally {
+			if (tmpSession != null) {
+				if (tmpSession.isOpen())
+					tmpSession.close();
+			}
+		}
+		return result;
+	}
+
+	@Override
 	public SbiMenu loadSbiMenubyName(String name) {
 		Session tmpSession = null;
 		Transaction tx = null;
@@ -563,7 +635,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
 
-			Criterion domainCdCriterrion = Expression.eq("name", name);
+			Criterion domainCdCriterrion = Restrictions.eq("name", name);
 			Criteria criteria = tmpSession.createCriteria(SbiMenu.class);
 			criteria.add(domainCdCriterrion);
 			SbiMenu hibMenu = (SbiMenu) criteria.uniqueResult();
@@ -738,7 +810,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 	 */
 	@Override
 	public List loadAllMenues() throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session tmpSession = null;
 		Transaction tx = null;
 		List realResult = new ArrayList();
@@ -754,13 +826,13 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 				SbiMenu hibMenu = (SbiMenu) it.next();
 				if (hibMenu != null) {
 					Menu biMenu = toMenu(hibMenu, null);
-					logger.debug("Add Menu:" + biMenu.getName());
+					LOGGER.debug("Add Menu:" + biMenu.getName());
 					realResult.add(biMenu);
 				}
 			}
 			// tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 
 			if (tx != null)
 				tx.rollback();
@@ -775,13 +847,13 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			}
 
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return realResult;
 	}
 
 	@Override
 	public List<Menu> loadAllFather() throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session tmpSession = null;
 		Transaction tx = null;
 		List<Menu> realResult = new ArrayList<>();
@@ -798,13 +870,13 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 				SbiMenu hibMenu = it.next();
 				if (hibMenu != null) {
 					Menu biMenu = toMenu(hibMenu, null);
-					logger.debug("Add Menu:" + biMenu.getName());
+					LOGGER.debug("Add Menu:" + biMenu.getName());
 					realResult.add(biMenu);
 				}
 			}
 			// tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 
 			if (tx != null)
 				tx.rollback();
@@ -819,7 +891,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			}
 
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return realResult;
 	}
 
@@ -849,7 +921,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			Query aQuery = tmpSession.createQuery(hql);
 			aQuery.setInteger(0, menuId.intValue());
 			List biFeaturesAssocitedWithMap = aQuery.list();
-			if (biFeaturesAssocitedWithMap.size() > 0)
+			if (!biFeaturesAssocitedWithMap.isEmpty())
 				bool = true;
 			else
 				bool = false;
@@ -913,7 +985,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 						aQuery.setInteger(1, roleID);
 
 						List<SbiMenuRole> hibListRoles = aQuery.list();
-						if (hibListRoles.size() > 0) {
+						if (!hibListRoles.isEmpty()) {
 							Menu biMenu = toMenu(hibMenu, roleID);
 							lstChildren.add(biMenu);
 						}
@@ -939,6 +1011,69 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			}
 		}
 		return lstChildren;
+	}
+
+	/**
+	 * Gets the children menu.
+	 *
+	 * @param menuId the menu id
+	 * @param roleId the user's role id
+	 *
+	 * @return the children menu
+	 *
+	 * @throws EMFUserError the EMF user error
+	 *
+	 * @see it.eng.spagobi.wapp.dao.IMenuDAO#getChildrenMenu(java.lang.Integer)
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public List<Menu> getChildrenMenuV2(Integer menuId, Integer roleID, Session session) throws EMFUserError {
+		List<Menu> lstChildren = new ArrayList<>();
+		boolean localSession = false;
+
+		try {
+			// Only create a new session if one wasn't provided
+			if (session == null || !session.isOpen()) {
+				session = getSession();
+				localSession = true;  // Flag that we created this session locally
+			}
+
+			String hql = " from SbiMenu s where s.parentId = ? order by s.prog";
+			Query aQuery = session.createQuery(hql);
+			aQuery.setInteger(0, menuId.intValue());
+
+			List<SbiMenu> hibList = aQuery.list();
+
+			for (SbiMenu hibMenu : hibList) {
+				if (hibMenu != null) {
+					if (roleID != null) {
+						String roleHql = " from SbiMenuRole as mf where mf.id.menuId = ? and mf.id.extRoleId = ? ";
+						Query roleQuery = session.createQuery(roleHql);
+						roleQuery.setInteger(0, hibMenu.getMenuId());
+						roleQuery.setInteger(1, roleID);
+
+						List<SbiMenuRole> hibListRoles = roleQuery.list();
+						if (!hibListRoles.isEmpty()) {
+							Menu biMenu = toMenuV2(hibMenu, roleID, session);
+							lstChildren.add(biMenu);
+						}
+					} else {
+						Menu biMenu = toMenuV2(hibMenu, roleID, session);
+						lstChildren.add(biMenu);
+					}
+				}
+			}
+
+			return lstChildren;
+		} catch (HibernateException he) {
+			logException(he);
+			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
+		} finally {
+			// Only close the session if we created it in this method
+			if (localSession && session != null && session.isOpen()) {
+				session.close();
+			}
+		}
 	}
 
 	/**
@@ -987,7 +1122,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			MenuIcon menuIcon = new MenuIcon();
 			try {
 				JSONObject jsonObject = new JSONObject(hibMenu.getIcon());
-				menuIcon.setId(jsonObject.getInt("id"));
+				menuIcon.setId(jsonObject.getString("id"));
 				menuIcon.setCategory(jsonObject.getString("category"));
 				menuIcon.setLabel(jsonObject.getString("label"));
 				menuIcon.setClassName(jsonObject.getString("className"));
@@ -995,8 +1130,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 				menuIcon.setUnicode(null);
 				menuIcon.setVisible(jsonObject.getBoolean("visible"));
 			} catch (JSONException e) {
-				// Error parsing JSON object
-				e.printStackTrace();
+				LOGGER.error(e);
 			}
 
 			icon = menuIcon;
@@ -1007,7 +1141,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 		if (hibMenu.getCustIcon() != null && !hibMenu.getCustIcon().equals("")) {
 			MenuIcon menuIcon = new MenuIcon();
 			try {
-				JSONObject jsonObject = new JSONObject(new String(hibMenu.getCustIcon()));
+				JSONObject jsonObject = new JSONObject(hibMenu.getCustIcon());
 				menuIcon.setId(null);
 				menuIcon.setCategory(jsonObject.getString("category"));
 				menuIcon.setLabel(jsonObject.getString("label"));
@@ -1017,8 +1151,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 				menuIcon.setUnicode(null);
 				menuIcon.setVisible(jsonObject.getBoolean("visible"));
 			} catch (JSONException e) {
-				// Error parsing JSON object
-				e.printStackTrace();
+				LOGGER.error(e);
 			}
 			custIcon = menuIcon;
 		}
@@ -1054,7 +1187,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 		// set children
 		try {
 			List tmpLstChildren = (DAOFactory.getMenuDAO().getChildrenMenu(menu.getMenuId(), roleId));
-			boolean hasCHildren = (tmpLstChildren.size() == 0) ? false : true;
+			boolean hasCHildren = (tmpLstChildren.isEmpty()) ? false : true;
 			menu.setLstChildren(tmpLstChildren);
 			menu.setHasChildren(hasCHildren);
 		} catch (Exception ex) {
@@ -1063,6 +1196,104 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 
 		return menu;
 	}
+
+	/**
+	 * From the Hibernate Menu object at input, gives the corrispondent <code>Menu</code> object.
+	 *
+	 * @param hibMenu The Hibernate Menu object
+	 * @return the corrispondent output <code>Menu</code>
+	 */
+	private Menu toMenuV2(SbiMenu hibMenu, Integer roleId, Session session) throws EMFUserError {
+
+		Menu menu = new Menu();
+		menu.setMenuId(hibMenu.getMenuId());
+		menu.setName(hibMenu.getName());
+		menu.setDescr(hibMenu.getDescr());
+		menu.setParentId(hibMenu.getParentId());
+		menu.setObjId(hibMenu.getObjId());
+		menu.setObjParameters(hibMenu.getObjParameters());
+		menu.setSubObjName(hibMenu.getSubObjName());
+		menu.setSnapshotName(hibMenu.getSnapshotName());
+		menu.setSnapshotHistory(hibMenu.getSnapshotHistory());
+		menu.setFunctionality(hibMenu.getFunctionality());
+		menu.setInitialPath(hibMenu.getInitialPath());
+		menu.setLevel(getLevel(menu.getParentId(), menu.getObjId()));
+		menu.setProg(hibMenu.getProg());
+
+		if (hibMenu.getViewIcons() != null) {
+			menu.setViewIcons(hibMenu.getViewIcons().booleanValue());
+		} else
+			menu.setViewIcons(false);
+
+		if (hibMenu.getHideToolbar() != null) {
+			menu.setHideToolbar(hibMenu.getHideToolbar().booleanValue());
+		} else
+			menu.setHideToolbar(false);
+
+		if (hibMenu.getHideSliders() != null) {
+			menu.setHideSliders(hibMenu.getHideSliders().booleanValue());
+		} else
+			menu.setHideSliders(false);
+
+		menu.setStaticPage(hibMenu.getStaticPage());
+		menu.setExternalApplicationUrl(hibMenu.getExternalApplicationUrl());
+
+		MenuIcon icon = null;
+		if (hibMenu.getIcon() != null && !hibMenu.getIcon().equals("")) {
+			MenuIcon menuIcon = new MenuIcon();
+			try {
+				JSONObject jsonObject = new JSONObject(hibMenu.getIcon());
+				menuIcon.setId(jsonObject.getString("id"));
+				menuIcon.setCategory(jsonObject.getString("category"));
+				menuIcon.setLabel(jsonObject.getString("label"));
+				menuIcon.setClassName(jsonObject.getString("className"));
+				menuIcon.setSrc(null);
+				menuIcon.setUnicode(null);
+				menuIcon.setVisible(jsonObject.getBoolean("visible"));
+			} catch (JSONException e) {
+				LOGGER.error(e);
+			}
+
+			icon = menuIcon;
+		}
+		menu.setIcon(icon);
+
+		MenuIcon custIcon = null;
+		if (hibMenu.getCustIcon() != null && !hibMenu.getCustIcon().equals("")) {
+			MenuIcon menuIcon = new MenuIcon();
+			try {
+				JSONObject jsonObject = new JSONObject(hibMenu.getCustIcon());
+				menuIcon.setId(null);
+				menuIcon.setCategory(jsonObject.getString("category"));
+				menuIcon.setLabel(jsonObject.getString("label"));
+				menuIcon.setClassName(jsonObject.getString("className"));
+				menuIcon.setSrc(jsonObject.getString("src"));
+				// unicode value not used. Set to null because of problems to read
+				menuIcon.setUnicode(null);
+				menuIcon.setVisible(jsonObject.getBoolean("visible"));
+			} catch (JSONException e) {
+				LOGGER.error(e);
+			}
+			custIcon = menuIcon;
+		}
+		menu.setCustIcon(custIcon);
+
+		Role[] rolesD = new Role[0];
+		menu.setRoles(rolesD);
+
+		// set children
+		try {
+			List tmpLstChildren = (DAOFactory.getMenuDAO().getChildrenMenuV2(menu.getMenuId(), roleId, session));
+			boolean hasCHildren = (tmpLstChildren.isEmpty()) ? false : true;
+			menu.setLstChildren(tmpLstChildren);
+			menu.setHasChildren(hasCHildren);
+		} catch (Exception ex) {
+			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
+		}
+
+		return menu;
+	}
+
 
 	/**
 	 * Return the level of menu element: 1 - first, 2 - second|third, 4 - last, 0 other
@@ -1093,21 +1324,17 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 		Set menuRoleToSave = new HashSet();
 
 		Criterion domainCdCriterrion = null;
-		Criteria criteria = null;
-		criteria = aSession.createCriteria(SbiMenuRole.class);
 		Role[] roles = null;
 		roles = aMenu.getRoles();
 
 		for (int i = 0; i < roles.length; i++) {
 			Role role = roles[i];
-			domainCdCriterrion = Expression.eq("extRoleId", role.getId());
-			criteria = aSession.createCriteria(SbiExtRoles.class);
+			domainCdCriterrion = Restrictions.eq("extRoleId", role.getId());
+			Criteria criteria = aSession.createCriteria(SbiExtRoles.class);
 			criteria.add(domainCdCriterrion);
 			SbiExtRoles hibRole = (SbiExtRoles) criteria.uniqueResult();
 
-			SbiMenuRoleId sbiMenuRoleId = new SbiMenuRoleId();
-			sbiMenuRoleId.setMenuId(hibMenu.getMenuId());
-			sbiMenuRoleId.setExtRoleId(role.getId());
+			SbiMenuRoleId sbiMenuRoleId = new SbiMenuRoleId(hibMenu.getMenuId(),role.getId());
 
 			SbiMenuRole sbiMenuRole = new SbiMenuRole();
 			sbiMenuRole.setId(sbiMenuRoleId);
@@ -1145,7 +1372,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			// Change children:
 
 			// get the children of old father, they will point to new father
-			Criterion parentCriterrion = Expression.eq("parentId", fatherId);
+			Criterion parentCriterrion = Restrictions.eq("parentId", fatherId);
 			Criteria criteria = tmpSession.createCriteria(SbiMenu.class);
 			criteria.add(parentCriterrion);
 
@@ -1158,7 +1385,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 				sbiMenuO.setParentId(menuID);
 			}
 
-			Criterion childCriterrion = Expression.eq("parentId", menuID);
+			Criterion childCriterrion = Restrictions.eq("parentId", menuID);
 			Criteria childCriteria = tmpSession.createCriteria(SbiMenu.class);
 			childCriteria.add(childCriterrion);
 
@@ -1208,7 +1435,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			tx = tmpSession.beginTransaction();
 			SbiMenu hibMenu = (SbiMenu) tmpSession.load(SbiMenu.class, menuID);
 			Integer oldProg = hibMenu.getProg();
-			Integer newProg = new Integer(oldProg.intValue() - 1);
+			Integer newProg = oldProg.intValue() - 1;
 			String upperMenuHql = "";
 			Query query = null;
 			if (hibMenu.getParentId() == null || hibMenu.getParentId().intValue() == 0) {
@@ -1230,7 +1457,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 
 			SbiMenu hibUpperMenu = (SbiMenu) query.uniqueResult();
 			if (hibUpperMenu == null) {
-				logger.error("The menu with prog [" + newProg + "] does not exist.");
+				LOGGER.error("The menu with prog [" + newProg + "] does not exist.");
 				return;
 			}
 
@@ -1240,12 +1467,13 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			updateSbiCommonInfo4Update(hibUpperMenu);
 			tx.commit();
 		} catch (HibernateException he) {
+			LOGGER.error("Hibernate error: " + he.getMessage());
 			if (tx != null)
 				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} catch (Exception e) {
-			logger.error("Error: " + e.getMessage());
+			LOGGER.error("Error: " + e.getMessage());
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
 			if (tmpSession != null) {
@@ -1272,7 +1500,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			tx = tmpSession.beginTransaction();
 			SbiMenu hibMenu = (SbiMenu) tmpSession.load(SbiMenu.class, menuID);
 			Integer oldProg = hibMenu.getProg();
-			Integer newProg = new Integer(oldProg.intValue() + 1);
+			Integer newProg = oldProg.intValue() + 1;
 
 			String upperMenuHql = "";
 			Query query = null;
@@ -1295,7 +1523,7 @@ public class MenuDAOImpl extends AbstractHibernateDAO implements IMenuDAO {
 			// Query query = tmpSession.createQuery(upperMenuHql);
 			SbiMenu hibUpperMenu = (SbiMenu) query.uniqueResult();
 			if (hibUpperMenu == null) {
-				logger.error("The menu with prog [" + newProg + "] does not exist.");
+				LOGGER.error("The menu with prog [" + newProg + "] does not exist.");
 				return;
 			}
 

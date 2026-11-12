@@ -17,45 +17,37 @@
  */
 package it.eng.spagobi.commons.utilities;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
+import static it.eng.spagobi.commons.constants.ConfigurationConstants.SPAGOBI_SPAGOBI_SERVICE_JNDI;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.GregorianCalendar;
+import java.util.Calendar;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Vector;
+import java.util.UUID;
 
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import org.apache.commons.httpclient.Header;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpMethod;
 import org.apache.commons.httpclient.NameValuePair;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
-import org.apache.log4j.Logger;
-import org.safehaus.uuid.UUID;
-import org.safehaus.uuid.UUIDGenerator;
+import org.apache.commons.httpclient.methods.StringRequestEntity;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import it.eng.spago.base.RequestContainer;
-import it.eng.spago.base.ResponseContainer;
-import it.eng.spago.base.SessionContainer;
-import it.eng.spago.base.SourceBean;
-import it.eng.spago.base.SourceBeanException;
-import it.eng.spago.dispatching.service.DefaultRequestContext;
-import it.eng.spago.error.EMFErrorHandler;
-import it.eng.spago.error.EMFErrorSeverity;
-import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.BIObjectParameter;
 import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
-import it.eng.spagobi.engines.InternalEngineIFace;
-import it.eng.spagobi.engines.chart.SpagoBIChartInternalEngine;
 import it.eng.spagobi.engines.config.bo.Engine;
 import it.eng.spagobi.engines.drivers.IEngineDriver;
 import it.eng.spagobi.engines.drivers.geo.GeoDriver;
@@ -65,15 +57,18 @@ import it.eng.spagobi.utilities.assertion.Assert;
 
 public class ExecutionProxy {
 
-	static private Logger logger = Logger.getLogger(ExecutionProxy.class);
-	static private String backEndExtension = "BackEnd";
-	static public String SEND_MAIL_MODALITY = "SEND_MAIL";
-	static public String EXPORT_MODALITY = "EXPORT";
-	static public String MASSIVE_EXPORT_MODALITY = SpagoBIConstants.MASSIVE_EXPORT_MODALITY;
+	private static final Logger LOGGER = LogManager.getLogger(ExecutionProxy.class);
+
+	private static final String BACK_END_EXTENSION = "BackEnd";
+
+	public static final String SEND_MAIL_MODALITY = "SEND_MAIL";
+	public static final String EXPORT_MODALITY = "EXPORT";
+	public static final String MASSIVE_EXPORT_MODALITY = SpagoBIConstants.MASSIVE_EXPORT_MODALITY;
 
 	private BIObject biObject = null;
 
 	private String returnedContentType = null;
+	private String outputTypeTrigger = null;
 	String mimeType = null;
 
 	/**
@@ -104,120 +99,18 @@ public class ExecutionProxy {
 	 * @return the byte[]
 	 */
 	public byte[] exec(IEngUserProfile profile, String modality, String defaultOutputFormat) {
-		logger.debug("IN");
+		LOGGER.debug("Executing document with profile {}, modality {}, defaultOutputFormat {}", profile, modality, defaultOutputFormat);
 		byte[] response = new byte[0];
 		try {
-			if (biObject == null)
+			if (biObject == null) {
 				return response;
+			}
 			// get the engine of the biobject
 			Engine eng = biObject.getEngine();
 			// if engine is not an external it's not possible to call it using
 			// url
 			if (!EngineUtilities.isExternal(eng)) {
-				if (eng.getClassName().equals("it.eng.spagobi.engines.kpi.SpagoBIKpiInternalEngine")) {
-					SourceBean request = null;
-					SourceBean resp = null;
-					EMFErrorHandler errorHandler = null;
-
-					try {
-						request = new SourceBean("");
-						resp = new SourceBean("");
-					} catch (SourceBeanException e1) {
-						e1.printStackTrace();
-					}
-					RequestContainer reqContainer = new RequestContainer();
-					ResponseContainer resContainer = new ResponseContainer();
-					reqContainer.setServiceRequest(request);
-					resContainer.setServiceResponse(resp);
-					DefaultRequestContext defaultRequestContext = new DefaultRequestContext(reqContainer, resContainer);
-					resContainer.setErrorHandler(new EMFErrorHandler());
-					RequestContainer.setRequestContainer(reqContainer);
-					ResponseContainer.setResponseContainer(resContainer);
-					Locale locale = new Locale("it", "IT", "");
-					SessionContainer session = new SessionContainer(true);
-					reqContainer.setSessionContainer(session);
-					SessionContainer permSession = session.getPermanentContainer();
-					// IEngUserProfile profile = new AnonymousCMSUserProfile();
-					permSession.setAttribute(IEngUserProfile.ENG_USER_PROFILE, profile);
-					errorHandler = defaultRequestContext.getErrorHandler();
-
-					String className = eng.getClassName();
-					logger.debug("Try instantiating class " + className + " for internal engine " + eng.getName() + "...");
-					InternalEngineIFace internalEngine = null;
-					// tries to instantiate the class for the internal engine
-					try {
-						if (className == null && className.trim().equals(""))
-							throw new ClassNotFoundException();
-						internalEngine = (InternalEngineIFace) Class.forName(className).newInstance();
-					} catch (ClassNotFoundException cnfe) {
-						logger.error("The class ['" + className + "'] for internal engine " + eng.getName() + " was not found.", cnfe);
-						Vector params = new Vector();
-						params.add(className);
-						params.add(eng.getName());
-						errorHandler.addError(new EMFUserError(EMFErrorSeverity.ERROR, 2001, params));
-						return response;
-					} catch (Exception e) {
-						logger.error("Error while instantiating class " + className, e);
-						errorHandler.addError(new EMFUserError(EMFErrorSeverity.ERROR, 100));
-						return response;
-					}
-					try {
-						reqContainer.setAttribute("scheduledExecution", "true");
-						internalEngine.execute(reqContainer, biObject, resp);
-					} catch (EMFUserError e) {
-						logger.error("Error during engine execution", e);
-						errorHandler.addError(e);
-					} catch (Exception e) {
-						logger.error("Error while engine execution", e);
-						errorHandler.addError(new EMFUserError(EMFErrorSeverity.ERROR, 100));
-					}
-					return response;
-				} else if (eng.getClassName().equals("it.eng.spagobi.engines.chart.SpagoBIChartInternalEngine")) {
-					SourceBean request = null;
-					EMFErrorHandler errorHandler = null;
-					try {
-						request = new SourceBean("");
-					} catch (SourceBeanException e1) {
-						e1.printStackTrace();
-					}
-					RequestContainer reqContainer = new RequestContainer();
-					SpagoBIChartInternalEngine sbcie = new SpagoBIChartInternalEngine();
-
-					// Call chart engine
-					File file = sbcie.executeChartCode(reqContainer, biObject, null, profile);
-
-					// read input from file
-					InputStream is = new FileInputStream(file);
-
-					// Get the size of the file
-					long length = file.length();
-
-					if (length > Integer.MAX_VALUE) {
-						logger.error("file too large");
-						return null;
-					}
-
-					// Create the byte array to hold the data
-					byte[] bytes = new byte[(int) length];
-
-					// Read in the bytes
-					int offset = 0;
-					int numRead = 0;
-					while (offset < bytes.length && (numRead = is.read(bytes, offset, bytes.length - offset)) >= 0) {
-						offset += numRead;
-					}
-
-					// Ensure all the bytes have been read in
-					if (offset < bytes.length) {
-						logger.warn("Could not read all the file");
-					}
-					// Close the input stream and return bytes
-					is.close();
-					return bytes;
-				} // end chart case
-				else {
-					return response;
-				}
+				return response;
 			}
 			// get driver class
 			String driverClassName = eng.getDriverName();
@@ -228,15 +121,15 @@ public class ExecutionProxy {
 			// get the map of parameter to send to the engine
 			Map mapPars = aEngineDriver.getParameterMap(biObject, profile, "");
 			if (defaultOutputFormat != null && !defaultOutputFormat.trim().equals("")) {
-				List params = biObject.getDrivers();
-				Iterator iterParams = params.iterator();
+				List<BIObjectParameter> params = biObject.getDrivers();
+				Iterator<BIObjectParameter> iterParams = params.iterator();
 				boolean findOutPar = false;
 				while (iterParams.hasNext()) {
-					BIObjectParameter par = (BIObjectParameter) iterParams.next();
+					BIObjectParameter par = iterParams.next();
 					String parUrlName = par.getParameterUrlName();
 					List values = par.getParameterValues();
-					logger.debug("processing biparameter with url name " + parUrlName);
-					if (parUrlName.equalsIgnoreCase("outputType") && values != null && values.size() > 0) {
+					LOGGER.debug("Processing BIObjectParameter with url name {}", parUrlName);
+					if (parUrlName.equalsIgnoreCase("outputType") && values != null && !values.isEmpty()) {
 						findOutPar = true;
 						break;
 					}
@@ -273,8 +166,7 @@ public class ExecutionProxy {
 
 			// adding SBI_EXECUTION_ID parameter
 			if (!mapPars.containsKey("SBI_EXECUTION_ID")) {
-				UUIDGenerator uuidGen = UUIDGenerator.getInstance();
-				UUID uuidObj = uuidGen.generateTimeBasedUUID();
+				UUID uuidObj = UUID.randomUUID();
 				String executionId = uuidObj.toString();
 				executionId = executionId.replaceAll("-", "");
 				mapPars.put("SBI_EXECUTION_ID", executionId);
@@ -288,15 +180,19 @@ public class ExecutionProxy {
 				mapPars.put(AuditManager.AUDIT_ID, auditId.toString());
 			}
 
+			// add outputType from trigger
+			adjustOutputParameterForSchedulerTrigger(mapPars);
+
 			// get the url of the engine
 			String urlEngine = getExternalEngineUrl(eng);
 
+			LOGGER.debug("The URL is {}", urlEngine);
+
 			// built the request to sent to the engine
 			HttpMethod httpMethod;
-			if ("it.eng.spagobi.engines.drivers.cockpit.CockpitDriver".equals(eng.getDriverName())
-					|| "it.eng.spagobi.engines.drivers.chart.ChartDriver".equals(eng.getDriverName())) {
+			if (!EngineUtilities.hasBackEndService(eng)) {
 				GetMethod getMethod = new GetMethod(urlEngine);
-				List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+				List<NameValuePair> nameValuePairs = new ArrayList<>();
 				Iterator iterMapPar = mapPars.keySet().iterator();
 				while (iterMapPar.hasNext()) {
 					String parurlname = (String) iterMapPar.next();
@@ -321,71 +217,123 @@ public class ExecutionProxy {
 				}
 				httpMethod = postMethod;
 			}
-			String userId = (String) UserProfile.createSchedulerUserProfile().getUserUniqueIdentifier();
-			String encodedUserId = Base64.getEncoder().encodeToString(userId.getBytes("UTF-8"));
-			httpMethod.addRequestHeader("Authorization", "Direct " + encodedUserId);
+			// String userId = (String) UserProfile.createSchedulerUserProfileWithRole(null).getUserUniqueIdentifier();
+			UserProfile userProfile = (UserProfile) profile;
+			String encodedUserId = Base64.getEncoder().encodeToString(((String) userProfile.getUserId()).getBytes(UTF_8));
 
-			// sent request to the engine
-			HttpClient client = new HttpClient();
-			int statusCode = client.executeMethod(httpMethod);
-			logger.debug("statusCode=" + statusCode);
-			response = httpMethod.getResponseBody();
-
-			Header headContetType = httpMethod.getResponseHeader("Content-Type");
-			if (headContetType != null) {
-				returnedContentType = headContetType.getValue();
+			if (driverClassName.equals("it.eng.spagobi.engines.drivers.dashboard.DashboardDriver")) {
+				httpMethod.addRequestHeader("X-Kn-Authorization", "Bearer " + encodedUserId);
 			} else {
-				returnedContentType = "application/octet-stream";
+				httpMethod.addRequestHeader("Authorization", "Direct " + encodedUserId);
 			}
 
-			auditManager.updateAudit(auditId, null, new Long(GregorianCalendar.getInstance().getTimeInMillis()), "EXECUTION_PERFORMED", null, null);
+			if (!driverClassName.equals("it.eng.spagobi.engines.drivers.dossier.DossierDriver")) {
+				// sent request to the engine
+				LOGGER.debug("Calling {} with parameters {} and headers {}", httpMethod.getURI(), httpMethod.getParams(), httpMethod.getRequestHeaders());
+				HttpClient client = new HttpClient();
+				int statusCode = client.executeMethod(httpMethod);
+				LOGGER.debug("Response status code {}", statusCode);
+				response = httpMethod.getResponseBody();
+
+				Header headContetType = httpMethod.getResponseHeader("Content-Type");
+				if (headContetType != null) {
+					returnedContentType = headContetType.getValue();
+				} else {
+					returnedContentType = "application/octet-stream";
+				}
+			} else {
+				// DossierDriver: urlEngine is already configured to point to /dossier/syncRun
+				// Parameters are passed as query string because syncRun uses @QueryParam
+				// Content-Type must be application/json to satisfy @Consumes(APPLICATION_JSON)
+
+				// add the extra params expected by syncRun as @QueryParam
+
+				mapPars.put("activityName", biObject.getName());
+				mapPars.put("documentId", biObject.getId().toString());
+
+				StringBuilder syncRunQuery = new StringBuilder(urlEngine);
+				boolean firstParam = !urlEngine.contains("?");
+				Iterator iterSyncPars = mapPars.keySet().iterator();
+				while (iterSyncPars.hasNext()) {
+					String parName = (String) iterSyncPars.next();
+					String parValue = mapPars.get(parName) != null ? mapPars.get(parName).toString() : "";
+					syncRunQuery.append(firstParam ? "?" : "&");
+					syncRunQuery.append(java.net.URLEncoder.encode(parName, UTF_8.name()));
+					syncRunQuery.append("=");
+					syncRunQuery.append(java.net.URLEncoder.encode(parValue, UTF_8.name()));
+					firstParam = false;
+				}
+
+				String syncRunUrl = syncRunQuery.toString();
+				LOGGER.debug("DossierDriver syncRun URL with params: {}", syncRunUrl);
+
+				PostMethod syncRunMethod = new PostMethod(syncRunUrl);
+				syncRunMethod.setRequestEntity(new StringRequestEntity("{}", "application/json", UTF_8.name()));
+				syncRunMethod.addRequestHeader("Authorization", "Direct " + encodedUserId);
+
+				LOGGER.debug("Calling DossierDriver syncRun at {}", syncRunUrl);
+				HttpClient dossierClient = new HttpClient();
+				int syncStatusCode = dossierClient.executeMethod(syncRunMethod);
+				LOGGER.debug("DossierDriver syncRun response status code {}", syncStatusCode);
+
+				response = syncRunMethod.getResponseBody();
+
+				Header syncContentType = syncRunMethod.getResponseHeader("Content-Type");
+				if (syncContentType != null) {
+					returnedContentType = syncContentType.getValue();
+				} else {
+					returnedContentType = "application/octet-stream";
+				}
+				syncRunMethod.releaseConnection();
+			}
+
+			auditManager.updateAudit(auditId, null, Calendar.getInstance().getTimeInMillis(), "EXECUTION_PERFORMED", null, null);
 			httpMethod.releaseConnection();
 		} catch (Exception e) {
-			logger.error("Error while executing object ", e);
+			LOGGER.error("Error while executing object ", e);
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return response;
 	}
 
+
 	private String getExternalEngineUrl(Engine eng) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		// in case there is a Secondary URL, use it
 		String urlEngine = eng.getSecondaryUrl();
 		if (urlEngine == null || urlEngine.trim().equals("")) {
-			logger.debug("Secondary url is not defined for engine " + eng.getLabel() + "; main url will be used.");
+			LOGGER.debug("Secondary url is not defined for engine {}; main url will be used.", eng.getLabel());
 			// in case there is not a Secondary URL, use the main url
 			urlEngine = eng.getUrl();
 		}
-		logger.debug("Engine url is " + urlEngine);
+		LOGGER.debug("Engine url is {}", urlEngine);
 		Assert.assertTrue(urlEngine != null && !urlEngine.trim().equals(""), "External engine url is not defined!!");
 		urlEngine = resolveRelativeUrls(urlEngine);
 
-		if (!"it.eng.spagobi.engines.drivers.cockpit.CockpitDriver".equals(eng.getDriverName())
-				&& !"it.eng.spagobi.engines.drivers.chart.ChartDriver".equals(eng.getDriverName())
-
-		) {
+		String driverName = eng.getDriverName();
+		if (EngineUtilities.hasBackEndService(eng)) {
 			// ADD this extension because this is a BackEnd engine invocation
-			urlEngine = urlEngine + backEndExtension;
+			urlEngine = urlEngine + BACK_END_EXTENSION;
 		}
-		logger.debug("OUT: returning " + urlEngine);
+		LOGGER.debug("Returned URL is {}", urlEngine);
 		return urlEngine;
 	}
 
 	private String resolveRelativeUrls(String url) {
-		logger.debug("IN: url = " + url);
+		LOGGER.debug("Resolving relative ULR {}", url);
 		if (url.startsWith("/")) {
-			logger.debug("Url is relative");
+			LOGGER.debug("Url is relative");
 			String domain = getServiceHostUrl();
-			logger.debug("SpagoBI domain is " + domain);
+			LOGGER.debug("SpagoBI domain is {}", domain);
 			url = domain + url;
-			logger.debug("Absolute url is " + url);
+			LOGGER.debug("Absolute url is {}", url);
 		}
-		logger.debug("OUT: returning " + url);
+		LOGGER.debug("Returning {}", url);
 		return url;
 	}
 
 	public String getServiceHostUrl() {
-		String serviceURL = SpagoBIUtilities.readJndiResource(SingletonConfig.getInstance().getConfigValue("SPAGOBI.SPAGOBI_SERVICE_JNDI"));
+		String serviceURL = SpagoBIUtilities.readJndiResource(SingletonConfig.getInstance().getConfigValue(SPAGOBI_SPAGOBI_SERVICE_JNDI));
 		serviceURL = serviceURL.substring(0, serviceURL.lastIndexOf('/'));
 		return serviceURL;
 	}
@@ -416,7 +364,7 @@ public class ExecutionProxy {
 	 * @return the file extension from cont type
 	 */
 	public String getFileExtensionFromContType(String contentType) {
-		logger.debug("IN: contentType = " + contentType);
+		LOGGER.debug("Getting file extension from content type {}", contentType);
 		String extension = "";
 		if (contentType != null) {
 			if (contentType.equalsIgnoreCase("text/html")) {
@@ -447,7 +395,7 @@ public class ExecutionProxy {
 				extension = ".svg";
 			}
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return extension;
 	}
 
@@ -465,20 +413,11 @@ public class ExecutionProxy {
 		}
 	}
 
-	private String getTemporaryTableName() {
-		UUIDGenerator uuidGen = UUIDGenerator.getInstance();
-		UUID uuidObj = uuidGen.generateTimeBasedUUID();
-		String executionId = uuidObj.toString();
-		return executionId.replaceAll("-", "");
+	private void adjustOutputParameterForSchedulerTrigger(Map mapPars) {
+		if (this.outputTypeTrigger != null) {
+			mapPars.put("outputType", this.outputTypeTrigger);
+		}
 	}
-
-	// public boolean isSplittingFilter() {
-	// return splittingFilter;
-	// }
-	//
-	// public void setSplittingFilter(boolean splittingFilter) {
-	// this.splittingFilter = splittingFilter;
-	// }
 
 	public String getMimeType() {
 		return mimeType;
@@ -487,4 +426,9 @@ public class ExecutionProxy {
 	public void setMimeType(String outputType) {
 		this.mimeType = outputType;
 	}
+
+	public void setOutputTypeTrigger(String outputTypeTrigger) {
+		this.outputTypeTrigger = outputTypeTrigger;
+	}
+
 }

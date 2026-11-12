@@ -17,19 +17,24 @@
  */
 package it.eng.spagobi.tools.dataset.utils;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.sql.Timestamp;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import javax.servlet.http.HttpSession;
-
+import it.eng.spago.base.SourceBean;
+import it.eng.spago.security.IEngUserProfile;
+import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
+import it.eng.spagobi.commons.utilities.StringUtilities;
+import it.eng.spagobi.container.ObjectUtils;
+import it.eng.spagobi.services.proxy.DataSetServiceProxy;
+import it.eng.spagobi.tools.dataset.bo.DataSetParameterItem;
+import it.eng.spagobi.tools.dataset.bo.DataSetParametersList;
+import it.eng.spagobi.tools.dataset.bo.IDataSet;
+import it.eng.spagobi.tools.dataset.common.datawriter.JSONDataWriter;
+import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
+import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import it.eng.spagobi.utilities.Helper;
+import it.eng.spagobi.utilities.assertion.Assert;
+import it.eng.spagobi.utilities.database.AbstractDataBase;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
+import it.eng.spagobi.utilities.json.JSONUtils;
 import org.apache.log4j.Logger;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormatter;
@@ -38,24 +43,15 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONObjectDeserializator;
 
-import it.eng.spago.base.SourceBean;
-import it.eng.spago.security.IEngUserProfile;
-import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
-import it.eng.spagobi.commons.utilities.StringUtilities;
-import it.eng.spagobi.container.ObjectUtils;
-import it.eng.spagobi.services.proxy.DataSetServiceProxy;
-import it.eng.spagobi.tools.dataset.bo.DataSetParameterItem;
-import it.eng.spagobi.tools.dataset.bo.DataSetParametersList;
-import it.eng.spagobi.tools.dataset.bo.IDataSet;
-import it.eng.spagobi.tools.dataset.common.datawriter.CockpitJSONDataWriter;
-import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
-import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
-import it.eng.spagobi.utilities.Helper;
-import it.eng.spagobi.utilities.assertion.Assert;
-import it.eng.spagobi.utilities.database.AbstractDataBase;
-import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
-import it.eng.spagobi.utilities.json.JSONUtils;
+import javax.servlet.http.HttpSession;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
+import java.util.*;
 
 /**
  * TODO : move it in it.eng.spagobi.tools.dataset and rename to DataSetProfiler (or similar)
@@ -72,7 +68,7 @@ public class DataSetUtilities {
 	 */
 	private static boolean disableDefaultParams;
 
-	private final static Logger logger = Logger.getLogger(DataSetUtilities.class);
+	private static final Logger logger = Logger.getLogger(DataSetUtilities.class);
 
 	/**
 	 * Check if the dataset is executable by the user
@@ -109,7 +105,7 @@ public class DataSetUtilities {
 	public static boolean isAdministrator(IEngUserProfile profile) {
 		Assert.assertNotNull(profile, "Object in input is null");
 		try {
-			if (profile.isAbleToExecuteAction(SpagoBIConstants.DOCUMENT_MANAGEMENT_ADMIN)) {
+			if (profile.isAbleToExecuteAction(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_ADMIN)) {
 				return true;
 			} else {
 				return false;
@@ -136,7 +132,7 @@ public class DataSetUtilities {
 				return null;
 			}
 
-			Map<String, ParamDefaultValue> res = new HashMap<String, ParamDefaultValue>();
+			Map<String, ParamDefaultValue> res = new HashMap<>();
 			DataSetParametersList dspl = DataSetParametersList.fromXML(params);
 			for (DataSetParameterItem item : (List<DataSetParameterItem>) dspl.getItems()) {
 				String defaultValue = item.getDefaultValue();
@@ -287,7 +283,7 @@ public class DataSetUtilities {
 			JSONObject jsonParameters = ObjectUtils.toJSONObject(parameters);
 			toReturn = getParametersMap(jsonParameters);
 		} else {
-			toReturn = new HashMap<String, String>();
+			toReturn = new HashMap<>();
 		}
 		return toReturn;
 	}
@@ -333,8 +329,37 @@ public class DataSetUtilities {
 		return jsonPar;
 	}
 
+	public static JSONArray paramsFromXML2JSONObj(IDataSet dataset) throws Exception {
+		JSONArray paramsJSONArray = new JSONArray();
+		if (dataset.getParameters() != null && !dataset.getParameters().isEmpty()) {
+			SourceBean source = SourceBean.fromXMLString(dataset.getParameters());
+			if (source != null && source.getName().equals("PARAMETERSLIST")) {
+				List<SourceBean> rows = source.getAttributeAsList("ROWS.ROW");
+
+				for (SourceBean row : rows) {
+					JSONObject paramsJSONObject = new JSONObject();
+					String name = (String) row.getAttribute("NAME");
+					String defaultValue = (String) row.getAttribute(DataSetParametersList.DEFAULT_VALUE_XML);
+					String multiValue = (String) row.getAttribute("MULTIVALUE");
+					String type = (String) row.getAttribute("TYPE");
+					paramsJSONObject.put("defaultValue", defaultValue);
+					paramsJSONObject.put("name", name);
+					paramsJSONObject.put("multiValue", multiValue);
+					paramsJSONObject.put("type", type);
+
+					if (dataset.getParamsMap() != null && dataset.getParamsMap().containsKey(name)) {
+						paramsJSONObject.put("value", dataset.getParamsMap().get(name));
+					}
+
+					paramsJSONArray.put(paramsJSONObject);
+				}
+			}
+		}
+		return paramsJSONArray;
+	}
+
 	public static Map<String, String> getParametersMap(JSONObject jsonParameters) {
-		Map<String, String> toReturn = new HashMap<String, String>();
+		Map<String, String> toReturn = new HashMap<>();
 		if (jsonParameters != null) {
 			Iterator<String> keys = jsonParameters.keys();
 			try {
@@ -359,7 +384,7 @@ public class DataSetUtilities {
 
 	public static Map<String, Object> getDriversMap(JSONObject driversJson) {
 
-		Map<String, Object> ret = new HashMap<String, Object>();
+		Map<String, Object> ret = new HashMap<>();
 
 		try {
 			if (driversJson != null) {
@@ -379,36 +404,93 @@ public class DataSetUtilities {
 		Object result = null;
 
 		if (value != null && !value.equalsIgnoreCase("null")) {
-			if (type.toString().toLowerCase().contains("timestamp")) {
+			if (type.toString().toLowerCase().contains("timestamp") || LocalDateTime.class.isAssignableFrom(type)) {
 				try {
 					result = Timestamp.valueOf(value);
 				} catch (IllegalArgumentException e) {
 					try {
-						Date date = new SimpleDateFormat(CockpitJSONDataWriter.TIMESTAMP_FORMAT).parse(value);
-						String formattedValue = new SimpleDateFormat(CockpitJSONDataWriter.CACHE_TIMESTAMP_FORMAT).format(date);
+
+						LocalDateTime localDateTime = LocalDateTime.parse(value,
+								java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.TIMESTAMP_FORMAT));
+						String formattedValue = localDateTime
+								.format(java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.CACHE_TIMESTAMP_FORMAT));
+						// Date date = new SimpleDateFormat(CockpitJSONDataWriter.TIMESTAMP_FORMAT).parse(value);
+						// String formattedValue = new SimpleDateFormat(CockpitJSONDataWriter.CACHE_TIMESTAMP_FORMAT).format(date);
 						result = Timestamp.valueOf(formattedValue);
-					} catch (ParseException | IllegalArgumentException ex) { // tries Solr date format
+					} catch (DateTimeParseException | IllegalArgumentException ex) { // tries Solr date format
 						try {
-							DateTimeFormatter dateTime = ISODateTimeFormat.dateTimeNoMillis();
+							DateTimeFormatter dateTime = ISODateTimeFormat.date();
 							DateTime parsedDateTime = dateTime.parseDateTime(value);
 							Date dateToconvert = parsedDateTime.toDate();
-							SimpleDateFormat sdf = new SimpleDateFormat(CockpitJSONDataWriter.CACHE_TIMESTAMP_FORMAT);
-							String valuesToChange = sdf.format(dateToconvert);
+							// SimpleDateFormat sdf = new SimpleDateFormat(CockpitJSONDataWriter.CACHE_TIMESTAMP_FORMAT);
+							// String valuesToChange = sdf.format(dateToconvert);
+							java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.CACHE_TIMESTAMP_FORMAT);
+							String valuesToChange = formatter.format(dateToconvert.toInstant().atZone(ZoneId.systemDefault()));
 							result = Timestamp.valueOf(valuesToChange);
 						} catch (Exception ex2) {
-							throw new SpagoBIRuntimeException(ex2);
-						}
+                            // Caused by: java.lang.IllegalArgumentException: Invalid format: "2015-03-30T00:00" is malformed at "T00:00"
+                            // try to parse it
+                            try {
+                                LocalDateTime localDateTime = LocalDateTime.parse(value,
+                                        java.time.format.DateTimeFormatter.ISO_DATE_TIME);
+                                String formattedValue = localDateTime
+                                        .format(java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.CACHE_TIMESTAMP_FORMAT));
+                                result = Timestamp.valueOf(formattedValue);
+                            } catch (DateTimeParseException | IllegalArgumentException ex3) {
+                                // Caused by: java.time.format.DateTimeParseException: Text '28/12/2015' could not be parsed at index 0
+                                // try dd/MM/yyyy format
+                                try {
+                                    LocalDate localDate = LocalDate.parse(value,
+                                            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                                    String formattedValue = localDate.atStartOfDay()
+                                            .format(java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.CACHE_TIMESTAMP_FORMAT));
+                                    result = Timestamp.valueOf(formattedValue);
+                                } catch (DateTimeParseException | IllegalArgumentException ex4) {
+                                    // Caused by: java.time.format.DateTimeParseException: Text '12/28/2015' could not be parsed
+                                    // try MM/dd/yyyy format
+                                    try {
+                                        LocalDate localDate = LocalDate.parse(value,
+                                                java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy"));
+                                        String formattedValue = localDate.atStartOfDay()
+                                                .format(java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.CACHE_TIMESTAMP_FORMAT));
+                                        result = Timestamp.valueOf(formattedValue);
+                                    } catch (DateTimeParseException | IllegalArgumentException ex5) {
+                                        throw new SpagoBIRuntimeException(ex5);
+                                    }
+                                }
+                            }}
 					}
 				}
 			} else if (Date.class.isAssignableFrom(type)) {
 				try {
-					result = new SimpleDateFormat(CockpitJSONDataWriter.DATE_FORMAT).parse(value);
-				} catch (ParseException e) {
+					LocalDate dateTime = LocalDate.parse(value, java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.DATE_FORMAT));
+					result = Date.from(dateTime.atStartOfDay(ZoneId.systemDefault()).toInstant());
+				} catch (DateTimeParseException e) {
 					try {
-						result = new SimpleDateFormat(CockpitJSONDataWriter.CACHE_DATE_FORMAT).parse(value);
-					} catch (ParseException pe) {
-						throw new SpagoBIRuntimeException(pe);
-					}
+						LocalDate localDate = LocalDate.parse(value, java.time.format.DateTimeFormatter.ofPattern(JSONDataWriter.CACHE_DATE_FORMAT));
+						result = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+                    } catch (DateTimeParseException pe) {
+                        try {
+                            LocalDateTime localDateTime = LocalDateTime.parse(value, java.time.format.DateTimeFormatter.ISO_DATE_TIME);
+                            result = Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+                        } catch (DateTimeParseException ex) {
+                            // Caused by: java.time.format.DateTimeParseException: Text '2015-01-01 00:00:00' could not be parsed at index 10
+                            try {
+                                LocalDateTime localDateTime = LocalDateTime.parse(value,
+                                        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                                result = Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+                            } catch (DateTimeParseException exc) {
+                                // Caused by: it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException: java.time.format.DateTimeParseException: Text '1998-08-12 00:00:00.0' could not be parsed, unparsed text found at index 19
+                                try {
+                                    LocalDateTime localDateTime = LocalDateTime.parse(value,
+                                            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.S"));
+                                    result = Date.from(localDateTime.atZone(ZoneId.systemDefault()).toInstant());
+                                } catch (DateTimeParseException excp) {
+                                    throw new SpagoBIRuntimeException(excp);
+                                }
+                            }
+                        }
+                    }
 				}
 			} else if (Boolean.class.isAssignableFrom(type)) {
 				result = Boolean.valueOf(value);
@@ -474,4 +556,5 @@ public class DataSetUtilities {
 			return columnName;
 		}
 	}
+
 }

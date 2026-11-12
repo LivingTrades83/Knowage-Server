@@ -17,17 +17,22 @@
  */
 package it.eng.spagobi.commons.dao;
 
-import it.eng.spago.base.SourceBean;
-import it.eng.spago.configuration.ConfigSingleton;
-import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
-import it.eng.spagobi.services.common.EnginConf;
-
 import java.io.File;
+import java.io.InputStream;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.xpath.XPath;
+
 import org.apache.log4j.Logger;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
+import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
+import it.eng.spagobi.services.common.EnginConf;
 
 /**
  * @author Andrea Gioia (andrea.gioia@eng.it)
@@ -42,7 +47,7 @@ public class DAOConfig {
 	 */
 	private static File hibernateConfigurationFileFile;
 
-	static private Logger logger = Logger.getLogger(DAOConfig.class);
+	private static Logger logger = Logger.getLogger(DAOConfig.class);
 
 	public static String getResourcePath() {
 		String resourcePath;
@@ -59,19 +64,51 @@ public class DAOConfig {
 		DAOConfig.mappings = mappings;
 	}
 
+
 	public static Map<String, String> getMappings() {
-		if (DAOConfig.mappings == null) {
-			DAOConfig.mappings = new HashMap<String, String>();
-			ConfigSingleton configSingleton = ConfigSingleton.getInstance();
-			List<SourceBean> daoConfigSourceBeans = configSingleton.getAttributeAsList("SPAGOBI.DAO-CONF.DAO");
-			for (SourceBean daoConfigSourceBean : daoConfigSourceBeans) {
-				String daoName = (String) daoConfigSourceBean.getAttribute("name");
-				String daoClass = (String) daoConfigSourceBean.getAttribute("implementation");
-				DAOConfig.mappings.put(daoName, daoClass);
+		Map<String, String> local = mappings;
+		if (local == null) {
+			synchronized (DAOConfig.class) {
+				local = mappings;
+				if (local == null) {
+					local = loadMappings();
+					local = java.util.Collections.unmodifiableMap(local);
+					mappings = local;
+				}
 			}
 		}
-		return DAOConfig.mappings;
+		return local;
 	}
+
+	private static Map<String, String> loadMappings() {
+		Map<String, String> map = new HashMap<>();
+		try (InputStream is = DAOConfig.class.getResourceAsStream("/conf/dao_config.xml")) {
+			if (is == null) {
+				throw new IllegalStateException("dao_config.xml not found in the classpath");
+			}
+
+			DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+			f.setNamespaceAware(false);
+			f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+			DocumentBuilder b = f.newDocumentBuilder();
+			Document doc = b.parse(is);
+
+			XPath x = javax.xml.xpath.XPathFactory.newInstance().newXPath();
+			NodeList nodes = (NodeList) x.evaluate("/DAO-CONF/DAO", doc, javax.xml.xpath.XPathConstants.NODESET);
+
+			for (int i = 0; i < nodes.getLength(); i++) {
+				Element el = (Element) nodes.item(i);
+				String name = el.getAttribute("name");
+				String impl = el.getAttribute("implementation");
+				map.put(name, impl);
+			}
+			return map;
+
+		} catch (Exception ex) {
+			throw new IllegalStateException("Errore nel parsing di dao_config.xml", ex);
+		}
+	}
+
 
 	public static String getHibernateConfigurationFile() {
 		if (DAOConfig.hibernateConfigurationFile == null) {
@@ -90,5 +127,9 @@ public class DAOConfig {
 
 	public static void setHibernateConfigurationFileFile(File hibernateConfigurationFileFile) {
 		DAOConfig.hibernateConfigurationFileFile = hibernateConfigurationFileFile;
+	}
+
+	private DAOConfig() {
+
 	}
 }

@@ -17,6 +17,7 @@
  */
 package it.eng.knowage.knowageapi.dao.dto;
 
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Optional;
 import java.util.Set;
@@ -39,6 +40,8 @@ import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
 import org.hibernate.annotations.GenericGenerator;
+
+import it.eng.knowage.boot.dao.dto.AbstractEntity;
 
 /**
  * @author Marco Libanori
@@ -448,6 +451,10 @@ public class SbiCatalogFunction extends AbstractEntity implements Serializable, 
 		String otherLabel = Optional.ofNullable(o).map(e -> e.label).orElse("");
 
 		return thisLabel.compareTo(otherLabel);
+	}
+
+	private final void writeObject(ObjectOutputStream aOutputStream) {
+		  throw new UnsupportedOperationException("Security violation : cannot serialize object to a stream");
 	}
 
 }

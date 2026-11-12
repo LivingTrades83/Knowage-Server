@@ -17,7 +17,9 @@
  */
 package it.eng.spagobi.api.v2.documentdetails.subresources;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
@@ -37,20 +39,22 @@ import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.analiticalmodel.document.bo.OutputParameter;
 import it.eng.spagobi.analiticalmodel.document.dao.IOutputParameterDAO;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
+import it.eng.spagobi.tools.crossnavigation.dao.ICrossNavigationDAO;
+import it.eng.spagobi.tools.crossnavigation.metadata.SbiCrossNavigationPar;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 
 @Path("/")
 public class OutputParametarsResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(OutputParametarsResource.class);
+	protected static Logger logger = Logger.getLogger(OutputParametarsResource.class);
 
 	@GET
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public List<OutputParameter> getDocumentOutputParameters(@PathParam("id") Integer id) {
 		logger.debug("IN");
 		IOutputParameterDAO outputParameterDAO = DAOFactory.getOutputParameterDAO();
@@ -63,7 +67,7 @@ public class OutputParametarsResource extends AbstractSpagoBIResource {
 	@POST
 	@Consumes("application/json")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public OutputParameter addDocumentOutputParameters(@PathParam("id") Integer id, OutputParameter outputParameter) {
 		logger.debug("IN");
 		Assert.assertNotNull(outputParameter, "Output Parameters can not be null");
@@ -78,7 +82,7 @@ public class OutputParametarsResource extends AbstractSpagoBIResource {
 	@Path("{outParId}")
 	@Consumes("application/json")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public String updateOutputParameter(@PathParam("id") Integer id, @PathParam("outParId") Integer outParId, OutputParameter outputParameter) {
 		logger.debug("IN");
 		try {
@@ -102,14 +106,15 @@ public class OutputParametarsResource extends AbstractSpagoBIResource {
 			Gson gson = new Gson();
 			JsonElement lfJsonElement = gson.toJsonTree(outputParameter);
 
-			if (found != null && found)
+			if (found != null && found.equals(Boolean.TRUE)) {
 				lfJsonElement.getAsJsonObject().addProperty("usedInCrossNavigations", found);
+			}
 
 			return gson.toJson(lfJsonElement);
 
 		} catch (Exception e) {
 			logger.error("Error while updating a output parameter", e);
-			throw new SpagoBIRestServiceException("Error while updating a output parameter", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Error while updating a output parameter", getLocale(), e);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -118,7 +123,7 @@ public class OutputParametarsResource extends AbstractSpagoBIResource {
 	@DELETE
 	@Path("{outputparId}")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public Integer deleteDocumentOutputParameters(@PathParam("id") Integer id, @PathParam("outputparId") Integer outputparId) {
 		logger.debug("IN");
 
@@ -129,10 +134,24 @@ public class OutputParametarsResource extends AbstractSpagoBIResource {
 
 		} catch (EMFUserError e) {
 			logger.error("Error while deleting driver", e);
-			throw new SpagoBIRestServiceException("Deleting driver has failed", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Deleting driver has failed", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return outputparId;
 	}
+
+	@GET
+	@Path("{outputparId}/sbicrossnavigation")
+	@Produces("application/json")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
+	public List<String> getSbiCrossNavigationFromOutputParameter(@PathParam("id") Integer id, @PathParam("outputparId") Integer outputparId) {
+		logger.debug("IN");
+		ICrossNavigationDAO crossNavigationDao = DAOFactory.getCrossNavigationDAO();
+		List<SbiCrossNavigationPar> listSbiCrossNavigation = crossNavigationDao.listNavigationsByOutputParameters(outputparId);
+		logger.debug("OUT");
+		return Optional.ofNullable(listSbiCrossNavigation).map(x -> x.stream().map(z -> z.getSbiCrossNavigation().getName()).toList())
+				.orElse(Collections.emptyList());
+	}
+
 
 }

@@ -29,7 +29,7 @@ import javax.ws.rs.core.MediaType;
 import org.apache.log4j.Logger;
 
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.dao.PagedList;
 import it.eng.spagobi.events.EventsAccessController;
 import it.eng.spagobi.events.bo.EventLog;
@@ -39,11 +39,11 @@ import it.eng.spagobi.services.rest.annotations.UserConstraint;
 @Path("/2.0/events")
 public class EventResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(EventResource.class);
+	protected static Logger logger = Logger.getLogger(EventResource.class);
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.EVENTS_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.EVENTS_MANAGEMENT })
 	public PagedList<EventLog> getEventsLogList(
 	// @formatter:off
 			@DefaultValue("0") @QueryParam("offset") Integer offset,

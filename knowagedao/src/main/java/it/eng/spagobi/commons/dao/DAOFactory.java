@@ -17,10 +17,14 @@
  */
 package it.eng.spagobi.commons.dao;
 
-import org.apache.log4j.Logger;
+import java.util.Optional;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.hibernate.HibernateException;
 
 import it.eng.spago.error.EMFUserError;
+import it.eng.spagobi.monitoring.dao.IAuditDAO;
 import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectDAO;
 import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectRating;
 import it.eng.spagobi.analiticalmodel.document.dao.IObjNoteDAO;
@@ -43,26 +47,22 @@ import it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO;
 import it.eng.spagobi.behaviouralmodel.check.dao.ICheckDAO;
 import it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO;
 import it.eng.spagobi.cache.dao.ICacheDAO;
-import it.eng.spagobi.community.dao.ISbiCommunityDAO;
+import it.eng.spagobi.commons.SingletonConfig;
+import it.eng.spagobi.commons.dao.es.AbstractEventEmittingImpl;
+import it.eng.spagobi.commons.dao.es.NoEventEmitting;
 import it.eng.spagobi.dossier.dao.ISbiDossierActivityDAO;
 import it.eng.spagobi.engines.config.dao.IEngineDAO;
-import it.eng.spagobi.engines.config.dao.ISbiExportersDAO;
 import it.eng.spagobi.federateddataset.dao.ISbiFederationDefinitionDAO;
 import it.eng.spagobi.functions.dao.IBIObjFunctionDAO;
 import it.eng.spagobi.functions.dao.ICatalogFunctionDAO;
 import it.eng.spagobi.functions.dao.IFunctionInputColumnDAO;
 import it.eng.spagobi.functions.dao.IFunctionInputVariableDAO;
 import it.eng.spagobi.functions.dao.IFunctionOutputColumnDAO;
-import it.eng.spagobi.georeport.dao.IFeaturesProviderFileDAO;
-import it.eng.spagobi.georeport.dao.IFeaturesProviderWFSDAO;
 import it.eng.spagobi.hotlink.rememberme.dao.IRememberMeDAO;
 import it.eng.spagobi.i18n.dao.I18NMessagesDAO;
 import it.eng.spagobi.images.dao.IImagesDAO;
 import it.eng.spagobi.kpi.dao.IKpiDAO;
-import it.eng.spagobi.mapcatalogue.dao.ISbiGeoFeaturesDAO;
 import it.eng.spagobi.mapcatalogue.dao.ISbiGeoLayersDAO;
-import it.eng.spagobi.mapcatalogue.dao.ISbiGeoMapFeaturesDAO;
-import it.eng.spagobi.mapcatalogue.dao.ISbiGeoMapsDAO;
 import it.eng.spagobi.metadata.dao.ISbiDsBcDAO;
 import it.eng.spagobi.metadata.dao.ISbiJobSourceDAO;
 import it.eng.spagobi.metadata.dao.ISbiJobTableDAO;
@@ -102,18 +102,25 @@ import it.eng.spagobi.tools.timespan.dao.ITimespanDAO;
 import it.eng.spagobi.tools.udp.dao.IUdpDAO;
 import it.eng.spagobi.tools.udp.dao.IUdpValueDAO;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
+import it.eng.spagobi.view.dao.ISbiViewDAO;
+import it.eng.spagobi.view.dao.ISbiViewForDocDAO;
+import it.eng.spagobi.view.dao.ISbiViewHierarchyDAO;
 import it.eng.spagobi.wapp.dao.IMenuDAO;
+import it.eng.spagobi.wapp.dao.IHomepageDAO;
 import it.eng.spagobi.wapp.dao.IMenuRolesDAO;
-import it.eng.spagobi.whatif.dao.IWhatifWorkflowDAO;
 import it.eng.spagobi.workspace.dao.IFunctionsOrganizerDAO;
 import it.eng.spagobi.workspace.dao.IObjFuncOrganizerDAO;
+
 
 /**
  * Contains all the data access object for all the BO objects defined into it.eng.spagobi.bo package.
  */
 public class DAOFactory {
 
-	static private Logger logger = Logger.getLogger(DAOFactory.class);
+	private static final String CONFIG_EMIT_AUTHORIZATION_EVENTS = "KNOWAGE.EMIT_AUTHORIZATION_EVENTS";
+	private static final String KNOWAGE_EMIT_AUTHORIZATION_EVENTS_IMPL = "kn.emit.authorization.event.impl";
+
+	private static final Logger LOGGER = LogManager.getLogger(DAOFactory.class);
 
 	private static String getDAOClass(String daoName) {
 		return DAOConfig.getMappings().get(daoName);
@@ -131,7 +138,7 @@ public class DAOFactory {
 		Object daoObject = null;
 		try {
 			daoObject = Class.forName(getDAOClass(daoName)).newInstance();
-		} catch (Throwable e) {
+		} catch (Exception e) {
 			throw new SpagoBIRuntimeException("Cannot instantiate " + daoName, e);
 		}
 		return daoObject;
@@ -145,6 +152,10 @@ public class DAOFactory {
 	 */
 	public static IBIObjectDAO getBIObjectDAO() {
 		return (IBIObjectDAO) createDAOInstance("BIObjectDAO");
+	}
+
+	public static IAuditDAO getAuditDAO() {
+		return (IAuditDAO) createDAOInstance("AuditDAO");
 	}
 
 	/**
@@ -189,6 +200,16 @@ public class DAOFactory {
 	 */
 	public static IDomainDAO getDomainDAO() {
 		return (IDomainDAO) createDAOInstance("DomainDAO");
+	}
+
+	/**
+	 * Creates a DAO instance for a categories.
+	 *
+	 * @return a DAO instance for categories
+	 *
+	 */
+	public static ICategoryDAO getCategoryDAO() {
+		return (ICategoryDAO) createDAOInstance("CategoryDAO");
 	}
 
 	/**
@@ -248,7 +269,11 @@ public class DAOFactory {
 	 *
 	 */
 	public static IRoleDAO getRoleDAO() {
-		return (IRoleDAO) createDAOInstance("RoleDAO");
+		IRoleDAO ret = (IRoleDAO) createDAOInstance("RoleDAO");
+
+		setEventEmitter(ret);
+
+		return ret;
 	}
 
 	/**
@@ -410,39 +435,6 @@ public class DAOFactory {
 	 *
 	 * @throws EMFUserError If an Exception occurred
 	 */
-	public static ISbiGeoMapsDAO getSbiGeoMapsDAO() {
-		return (ISbiGeoMapsDAO) createDAOInstance("GeoMapDAO");
-	}
-
-	/**
-	 * Creates a DAO instance for a BI object.
-	 *
-	 * @return a DAO instance for the BIObject
-	 *
-	 * @throws EMFUserError If an Exception occurred
-	 */
-	public static ISbiGeoFeaturesDAO getSbiGeoFeaturesDAO() {
-		return (ISbiGeoFeaturesDAO) createDAOInstance("GeoFeatureDAO");
-	}
-
-	/**
-	 * Creates a DAO instance for a BI object.
-	 *
-	 * @return a DAO instance for the BIObject
-	 *
-	 * @throws EMFUserError If an Exception occurred
-	 */
-	public static ISbiGeoMapFeaturesDAO getSbiGeoMapFeaturesDAO() {
-		return (ISbiGeoMapFeaturesDAO) createDAOInstance("GeoMapFeatureDAO");
-	}
-
-	/**
-	 * Creates a DAO instance for a BI object.
-	 *
-	 * @return a DAO instance for the BIObject
-	 *
-	 * @throws EMFUserError If an Exception occurred
-	 */
 	public static IUserFunctionalityDAO getUserFunctionalityDAO() {
 		return (IUserFunctionalityDAO) createDAOInstance("UserFunctionalityDAO");
 	}
@@ -478,6 +470,15 @@ public class DAOFactory {
 	 */
 	public static IMenuDAO getMenuDAO() {
 		return (IMenuDAO) createDAOInstance("MenuDAO");
+	}
+
+	/**
+	 * Gets the homepage dao.
+	 *
+	 * @return the homepage dao
+	 */
+	public static IHomepageDAO getHomepageDAO() {
+		return (IHomepageDAO) createDAOInstance("HomepageDAO");
 	}
 
 	/**
@@ -543,7 +544,11 @@ public class DAOFactory {
 	 * @throws EMFUserError If an Exception occurred
 	 */
 	public static ISbiUserDAO getSbiUserDAO() {
-		return (ISbiUserDAO) createDAOInstance("SbiUserDAO");
+		ISbiUserDAO ret = (ISbiUserDAO) createDAOInstance("SbiUserDAO");
+
+		setEventEmitter(ret);
+
+		return ret;
 	}
 
 	/**
@@ -647,10 +652,6 @@ public class DAOFactory {
 		return (IArtifactsDAO) createDAOInstance("ArtifactsDAO");
 	}
 
-	public static ISbiCommunityDAO getCommunityDAO() {
-		return (ISbiCommunityDAO) createDAOInstance("CommunityDAO");
-	}
-
 	public static ISbiGeoLayersDAO getSbiGeoLayerDao() {
 		return (ISbiGeoLayersDAO) createDAOInstance("GeoLayersDAO");
 	}
@@ -674,7 +675,7 @@ public class DAOFactory {
 		return (IGlossaryDAO) createDAOInstance("GlossaryDAO");
 	}
 
-	public static ICalendarDAO geCalendarDAO() {
+	public static ICalendarDAO getCalendarDAO() {
 		return (ICalendarDAO) createDAOInstance("CalendarDAO");
 	}
 
@@ -730,10 +731,10 @@ public class DAOFactory {
 	 *
 	 *
 	 */
-	public static IFeaturesProviderFileDAO getFeaturesProviderFileDAO() {
-		return (IFeaturesProviderFileDAO) createDAOInstance("IFeaturesProviderFileDAO");
-
-	}
+//	public static IFeaturesProviderFileDAO getFeaturesProviderFileDAO() {
+//		return (IFeaturesProviderFileDAO) createDAOInstance("IFeaturesProviderFileDAO");
+//
+//	}
 
 	/**
 	 * Gets the IFeaturesProviderWFSDAO dao.
@@ -742,9 +743,9 @@ public class DAOFactory {
 	 *
 	 *
 	 */
-	public static IFeaturesProviderWFSDAO getFeaturesProviderWFSDAO() {
-		return (IFeaturesProviderWFSDAO) createDAOInstance("IFeaturesProviderWFSDAO");
-	}
+//	public static IFeaturesProviderWFSDAO getFeaturesProviderWFSDAO() {
+//		return (IFeaturesProviderWFSDAO) createDAOInstance("IFeaturesProviderWFSDAO");
+//	}
 
 	/**
 	 * Gets the CrossNavigationDAO dao.
@@ -930,14 +931,18 @@ public class DAOFactory {
 		return (ICatalogFunctionDAO) createDAOInstance("ICatalogFunctionDAO");
 	}
 
+	/**
+	 * @deprecated Replaced by KNOWAGE_TM-513 TODO : Delete
+	 */
+	@Deprecated
 	public static IFunctionsOrganizerDAO getFunctionsOrganizerDAO() {
 		return (IFunctionsOrganizerDAO) createDAOInstance("IFunctionsOrganizerDAO");
 	}
 
-	public static IWhatifWorkflowDAO getWhatifWorkflowDAO() {
-		return (IWhatifWorkflowDAO) createDAOInstance("IWhatifWorkflowDAO");
-	}
-
+	/**
+	 * @deprecated Replaced by KNOWAGE_TM-513 TODO : Delete
+	 */
+	@Deprecated
 	public static IObjFuncOrganizerDAO getObjFuncOrganizerDAO() {
 		return (IObjFuncOrganizerDAO) createDAOInstance("IObjFuncOrganizerDAO");
 	}
@@ -950,10 +955,6 @@ public class DAOFactory {
 		return (ISbiDossierActivityDAO) createDAOInstance("DossierActivityDAO");
 	}
 
-	public static ISbiExportersDAO getExportersDao() {
-		return (ISbiExportersDAO) createDAOInstance("ExportersDAO");
-	}
-
 	public static IMetaModelParuseDAO getMetaModelParuseDao() {
 		return (IMetaModelParuseDAO) createDAOInstance("MetaModelParuseDAO");
 	}
@@ -964,5 +965,56 @@ public class DAOFactory {
 
 	public static ISbiTagDAO getSbiTagDao() {
 		return (ISbiTagDAO) createDAOInstance("ISbiTagDAO");
+	}
+
+	public static ISbiViewHierarchyDAO getSbiViewHierarchyDAO() {
+		return (ISbiViewHierarchyDAO) createDAOInstance("ISbiViewHierarchyDAO");
+	}
+
+	public static ISbiViewDAO getSbiViewDAO() {
+		return (ISbiViewDAO) createDAOInstance("ISbiViewDAO");
+	}
+
+	public static ISbiViewForDocDAO getSbiViewForDocDAO() {
+		return (ISbiViewForDocDAO) createDAOInstance("ISbiViewForDocDAO");
+	}
+
+	public static IDashboardThemeDAO getDashboardThemeDAO() {
+		return (IDashboardThemeDAO) createDAOInstance("DashboardThemeDAO");
+	}
+
+	private static boolean isAuthorizationEventsEmissionEnable() {
+		SingletonConfig config = SingletonConfig.getInstance();
+		String configValue = config.getConfigValue(CONFIG_EMIT_AUTHORIZATION_EVENTS);
+		return Boolean.parseBoolean(configValue);
+	}
+
+	private static AbstractEventEmittingImpl createAuthorizationEventsEmissionEnable() {
+		String configValue = Optional
+				.ofNullable(System.getProperty(KNOWAGE_EMIT_AUTHORIZATION_EVENTS_IMPL, System.getenv(KNOWAGE_EMIT_AUTHORIZATION_EVENTS_IMPL)))
+				.orElse(NoEventEmitting.class.getName());
+		AbstractEventEmittingImpl emitter = null;
+
+		try {
+			Class<AbstractEventEmittingImpl> clazz = (Class<AbstractEventEmittingImpl>) Class.forName(configValue);
+			emitter = clazz.newInstance();
+		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException ex) {
+			LOGGER.error("Cannot initialize class {}", configValue, ex);
+		}
+		return emitter;
+	}
+
+	private static void setEventEmitter(EmittingEventDAO ret) {
+		AbstractEventEmittingImpl eventToDatabaseEmittingCommand = null;
+		if (isAuthorizationEventsEmissionEnable()) {
+			eventToDatabaseEmittingCommand = createAuthorizationEventsEmissionEnable();
+
+		} else {
+			eventToDatabaseEmittingCommand = new NoEventEmitting();
+		}
+		ret.setEventEmittingCommand(eventToDatabaseEmittingCommand);
+	}
+
+	private DAOFactory() {
 	}
 }

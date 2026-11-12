@@ -20,34 +20,41 @@ package it.eng.spagobi.api.v2;
 import static it.eng.spagobi.tools.scheduler.utils.SchedulerUtilitiesV2.toJsonTreeLowFunctionality;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import it.eng.qbe.serializer.SerializationException;
+import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.functionalitytree.bo.LowFunctionality;
 import it.eng.spagobi.analiticalmodel.functionalitytree.dao.ILowFunctionalityDAO;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.bo.Role;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.IRoleDAO;
 import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
@@ -59,6 +66,7 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 import it.eng.spagobi.wapp.bo.Menu;
 import it.eng.spagobi.wapp.bo.MenuIcon;
 import it.eng.spagobi.wapp.dao.IMenuDAO;
+import it.eng.spagobi.wapp.util.MenuUtilities;
 
 /**
  * @author Radmila Selakovic (rselakov, radmila.selakovic@mht.net
@@ -66,7 +74,11 @@ import it.eng.spagobi.wapp.dao.IMenuDAO;
 @Path("/2.0/menu")
 @ManageAuthorization
 public class MenuResource extends AbstractSpagoBIResource {
-	private final String charset = "; charset=UTF-8";
+
+	private static final Logger LOGGER = LogManager.getLogger(MenuResource.class);
+
+	private static final String CHARSET = "; charset=UTF-8";
+	private static final String DEFAULT_ROLE_TOKEN = "default";
 
 	/**
 	 * Getting list of all menus. Arrays of Roles that belong to one menu are implemented to be like: One Role only with id and name
@@ -77,10 +89,10 @@ public class MenuResource extends AbstractSpagoBIResource {
 	@SuppressWarnings("unchecked")
 	@GET
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response getMenues() {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
 			UserProfile profile = getUserProfile();
@@ -94,20 +106,80 @@ public class MenuResource extends AbstractSpagoBIResource {
 			return Response.ok(allMenus).build();
 		} catch (Exception e) {
 			String errorString = "sbi.menu.load.menus.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
+	}
+
+	@GET
+	@Path("/preview/{label: .+}")
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
+	public Response previewMenuByRole(@PathParam("label") String label) {
+		return previewMenu(label);
+	}
+
+	@GET
+	@Path("/preview")
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
+	public Response previewMenuByRoleQuery(@QueryParam("role") String role) {
+		return previewMenu(role);
+	}
+
+	private Response previewMenu(String label) {
+		LOGGER.debug("IN");
+
+		try {
+			UserProfile profile = getUserProfile();
+			Role role = parseRole(profile, label);
+			if (role == null) {
+				List menuItems = MenuUtilities.getMenuItems(profile, true);
+				MenuUtilities.filterListForUserClickableElements(menuItems, profile);
+				return Response.ok(menuItems).build();
+			}
+
+			List menuItems = MenuUtilities.getMenuItemsForRole(profile, role.getName());
+			return Response.ok(menuItems).build();
+		} catch (NotFoundException e) {
+			throw e;
+		} catch (Exception e) {
+			String errorString = "sbi.menu.load.preview.error";
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
+		} finally {
+			LOGGER.debug("OUT");
+		}
+	}
+
+	private Role parseRole(UserProfile profile, String label) throws EMFUserError {
+		if (label == null) {
+			throw new NotFoundException();
+		}
+		String normalizedLabel = label.trim();
+		if (normalizedLabel.isEmpty()) {
+			throw new NotFoundException();
+		}
+		if (DEFAULT_ROLE_TOKEN.equalsIgnoreCase(normalizedLabel)) {
+			return null;
+		}
+
+		IRoleDAO roleDao = DAOFactory.getRoleDAO();
+		roleDao.setUserProfile(profile);
+		Role role = roleDao.loadByName(normalizedLabel);
+		if (role == null) {
+			throw new NotFoundException();
+		}
+		return role;
 	}
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Path("/functionalities")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public String getFunctionalities() {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		JSONObject resp = new JSONObject();
 		try {
 			ILowFunctionalityDAO lowfuncdao = DAOFactory.getLowFunctionalityDAO();
@@ -123,59 +195,35 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.menu.load.menus.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Path("/htmls")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response getHTMLs() {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
-			UserProfile profile = getUserProfile();
-			IMenuDAO dao = DAOFactory.getMenuDAO();
-
-			String resourcePath = SpagoBIUtilities.getResourcePath() + File.separatorChar + "static_menu";
-			File dir = new File(resourcePath);
-			String[] files = null;
-			String[] filesHtmls = null;
+			File dir = getStaticMenuDirectory(true);
+			String[] files = dir.list();
 			ArrayList<String> filesHtmlsArrayList = new ArrayList<>();
-			int count = 0;
-			if (!dir.isDirectory()) {
-				FileUtils.forceMkdir(new File(resourcePath));
-			}
-			if (dir != null) {
-				// get all avalaible files
-				files = dir.list();
 
-				for (int i = 0; i < files.length; i++) {
-					String fileName = files[i];
-					String ext = fileName.substring(fileName.indexOf(".") + 1);
-
-					if (ext.equalsIgnoreCase("html") || ext.equalsIgnoreCase("htm")) {
-						count++;
-					}
-				}
-				filesHtmls = new String[count];
-				for (int i = 0; i < files.length; i++) {
-					String fileName = files[i];
-					String ext = fileName.substring(fileName.indexOf(".") + 1);
-
-					if (ext.equalsIgnoreCase("html") || ext.equalsIgnoreCase("htm")) {
+			if (files != null) {
+				for (String fileName : files) {
+					if (isStaticHtmlFileName(fileName)) {
 						filesHtmlsArrayList.add(fileName);
 					}
-
 				}
-				filesHtmls = filesHtmlsArrayList.toArray(filesHtmls);
 			}
 			JSONArray njo = new JSONArray();
+			String[] filesHtmls = filesHtmlsArrayList.toArray(new String[0]);
 
 			for (int i = 0; i < filesHtmls.length; i++) {
 
@@ -192,16 +240,79 @@ public class MenuResource extends AbstractSpagoBIResource {
 			return Response.ok(njo.toString()).build();
 
 		} catch (SpagoBIRuntimeException e) {
-			logger.error(e.getMessage(), e);
-			throw new SpagoBIRestServiceException(e.getMessage(), buildLocaleFromSession(), e);
+			LOGGER.error(e.getMessage(), e);
+			throw new SpagoBIRestServiceException(e.getMessage(), getLocale(), e);
 
 		} catch (Exception e) {
 			String errorString = "sbi.menu.load.htmls.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
+	}
+
+	@GET
+	@Path("/htmls/{fileName}")
+	@Produces(MediaType.TEXT_HTML + CHARSET)
+	public Response getHTMLFile(@PathParam("fileName") String fileName) {
+		LOGGER.debug("IN");
+
+		try {
+			String normalizedFileName = normalizeStaticHtmlFileName(fileName);
+			if (normalizedFileName == null) {
+				return Response.status(Response.Status.BAD_REQUEST).build();
+			}
+
+			File staticMenuDirectory = getStaticMenuDirectory(false).getCanonicalFile();
+			File htmlFile = new File(staticMenuDirectory, normalizedFileName).getCanonicalFile();
+			if (!htmlFile.toPath().startsWith(staticMenuDirectory.toPath())) {
+				return Response.status(Response.Status.BAD_REQUEST).build();
+			}
+			if (!htmlFile.exists() || !htmlFile.isFile()) {
+				return Response.status(Response.Status.NOT_FOUND).build();
+			}
+
+			String htmlContent = FileUtils.readFileToString(htmlFile, StandardCharsets.UTF_8);
+			return Response.ok(htmlContent, MediaType.TEXT_HTML + CHARSET).build();
+		} catch (Exception e) {
+			String errorString = "sbi.menu.load.html.error";
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
+		} finally {
+			LOGGER.debug("OUT");
+		}
+	}
+
+	private File getStaticMenuDirectory(boolean createIfMissing) throws Exception {
+		File dir = new File(SpagoBIUtilities.getResourcePath() + File.separatorChar + "static_menu");
+		if (createIfMissing && !dir.isDirectory()) {
+			FileUtils.forceMkdir(dir);
+		}
+		return dir;
+	}
+
+	private boolean isStaticHtmlFileName(String fileName) {
+		return normalizeStaticHtmlFileName(fileName) != null;
+	}
+
+	private String normalizeStaticHtmlFileName(String fileName) {
+		if (fileName == null) {
+			return null;
+		}
+
+		String normalizedFileName = fileName.trim();
+		if (normalizedFileName.isEmpty() || normalizedFileName.contains("..") || normalizedFileName.contains("/")
+				|| normalizedFileName.contains("\\") || normalizedFileName.contains(":")) {
+			return null;
+		}
+
+		String lowerCaseFileName = normalizedFileName.toLowerCase(Locale.ROOT);
+		if (!lowerCaseFileName.endsWith(".html") && !lowerCaseFileName.endsWith(".htm")) {
+			return null;
+		}
+
+		return normalizedFileName;
 	}
 
 	/**
@@ -212,8 +323,8 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("moveUp/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getMenuMoveUp(@PathParam("id") Integer id) {
 
 		try {
@@ -222,8 +333,8 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.menu.load.menu.moveUp.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}
@@ -236,8 +347,8 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("moveDown/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getMenuMoveDown(@PathParam("id") Integer id) {
 
 		try {
@@ -246,16 +357,16 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.menu.load.menu.moveDown.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}
 
 	@GET
 	@Path("changeWithFather/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getMenuChangeWithFather(@PathParam("id") Integer id) {
 
 		try {
@@ -264,8 +375,8 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.menu.load.menu.changeWithFather.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}
@@ -278,7 +389,7 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response insertMenu(@javax.ws.rs.core.Context HttpServletRequest req) {
 
@@ -361,8 +472,8 @@ public class MenuResource extends AbstractSpagoBIResource {
 			return Response.ok(menu).build();
 		} catch (Exception e) {
 			String errorString = "sbi.menu.save.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}
@@ -375,7 +486,7 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 	@PUT
 	@Path("/{menuId}")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateMenu(@PathParam("menuId") Integer id, @javax.ws.rs.core.Context HttpServletRequest req) {
 		IMenuDAO objDao = null;
@@ -409,7 +520,7 @@ public class MenuResource extends AbstractSpagoBIResource {
 				menu.setExternalApplicationUrl(paramsObj.getString("externalApplicationUrl"));
 			}
 
-			if (paramsObj.has("functionality") == false || paramsObj.getString("functionality").equals("null")) {
+			if (!paramsObj.has("functionality") || paramsObj.getString("functionality").equals("null")) {
 				menu.setFunctionality(null);
 			} else {
 				menu.setFunctionality(paramsObj.getString("functionality"));
@@ -460,7 +571,7 @@ public class MenuResource extends AbstractSpagoBIResource {
 			} else {
 				MenuIcon menuIcon = new MenuIcon();
 				JSONObject jsonObject = paramsObj.getJSONObject("icon");
-				menuIcon.setId(jsonObject.getInt("id"));
+				menuIcon.setId(jsonObject.getString("id"));
 				menuIcon.setCategory(jsonObject.getString("category"));
 				menuIcon.setLabel(jsonObject.getString("label"));
 				menuIcon.setClassName(jsonObject.getString("className"));
@@ -498,8 +609,8 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.menu.modify.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 	}
 
@@ -524,15 +635,15 @@ public class MenuResource extends AbstractSpagoBIResource {
 			return Response.ok().build();
 		} catch (Exception e) {
 			String errorString = "sbi.menu.delete.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 	}
 
 	@GET
 	@Path("getParent/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.MENU_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MENU_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getParent(@PathParam("id") Integer id) {
 
 		try {
@@ -541,8 +652,8 @@ public class MenuResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			String errorString = "sbi.menu.load.parent.menu";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 
 	}

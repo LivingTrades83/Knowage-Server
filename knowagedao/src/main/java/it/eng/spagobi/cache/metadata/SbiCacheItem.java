@@ -36,6 +36,7 @@ public class SbiCacheItem extends SbiHibernateModel {
 	private Date creationDate;
 	private Date lastUsedDate;
 	private String properties;
+	private String parameters;
 
 	public SbiCacheItem() {
 	}
@@ -46,7 +47,7 @@ public class SbiCacheItem extends SbiHibernateModel {
 		this.name = name;
 	}
 
-	public SbiCacheItem(String tableName, String signature, String name, Long dimension, Date creationDate, Date lastUsedDate, String properties) {
+	public SbiCacheItem(String tableName, String signature, String name, Long dimension, Date creationDate, Date lastUsedDate, String properties, String parameters) {
 		this.tableName = tableName;
 		this.signature = signature;
 		this.name = name;
@@ -54,8 +55,13 @@ public class SbiCacheItem extends SbiHibernateModel {
 		this.creationDate = creationDate;
 		this.lastUsedDate = lastUsedDate;
 		this.properties = properties;
+		this.parameters = parameters;
 	}
 
+	public SbiCacheItem(String signature) {
+		this.signature = signature;
+	}
+	
 	public String getTableName() {
 		return this.tableName;
 	}
@@ -68,10 +74,14 @@ public class SbiCacheItem extends SbiHibernateModel {
 		return this.signature;
 	}
 
-	public void setSignature(String signature) {
+	private void setSignature(String signature) {
 		this.signature = signature;
 	}
 
+	public void changeSignature(String signature) {
+		this.setSignature(signature);
+	}
+	
 	public String getName() {
 		return this.name;
 	}
@@ -111,4 +121,8 @@ public class SbiCacheItem extends SbiHibernateModel {
 	public void setProperties(String properties) {
 		this.properties = properties;
 	}
+
+	public String getParameters() { return this.parameters; }
+
+	public void setParameters(String parameters) { this.parameters = parameters; }
 }

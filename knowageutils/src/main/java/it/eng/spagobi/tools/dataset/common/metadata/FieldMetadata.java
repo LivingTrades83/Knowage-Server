@@ -20,25 +20,31 @@ package it.eng.spagobi.tools.dataset.common.metadata;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.commons.lang3.builder.ToStringBuilder;
+
 public class FieldMetadata implements IFieldMetaData, Cloneable {
 
-	String name;
-	String alias;
-	Class type;
-	Map properties;
-	FieldType fieldType;
-	boolean multiValue;
-	int precision;
-	int scale;
+	private String name;
+	private String alias;
+	private Class type;
+	private Map properties;
+	private FieldType fieldType;
+	private boolean multiValue;
+	private int precision;
+	private int scale;
+
+	private boolean personal;
+	private boolean decrypt;
+	private boolean subjectId;
+
+	private String description;
 
 	public FieldMetadata() {
-		super();
 		this.properties = new HashMap();
 		fieldType = FieldType.ATTRIBUTE;
 	}
 
 	public FieldMetadata(String name, Class type) {
-		super();
 		setName(name);
 		setType(type);
 		this.properties = new HashMap();
@@ -125,8 +131,7 @@ public class FieldMetadata implements IFieldMetaData, Cloneable {
 
 	@Override
 	public String toString() {
-		return "FieldMetadata [name=" + name + ", alias=" + alias + ", type=" + type + ", properties=" + properties + ", fieldType=" + fieldType
-				+ ", multivalue=" + multiValue + "]";
+		return ToStringBuilder.reflectionToString(this);
 	}
 
 	@Override
@@ -139,16 +144,20 @@ public class FieldMetadata implements IFieldMetaData, Cloneable {
 
 	@Override
 	public boolean equals(Object obj) {
-		if (this == obj)
+		if (this == obj) {
 			return true;
-		if (obj == null)
+		}
+		if (obj == null) {
 			return false;
-		if (getClass() != obj.getClass())
+		}
+		if (getClass() != obj.getClass()) {
 			return false;
+		}
 		FieldMetadata other = (FieldMetadata) obj;
 		if (getId() == null) {
-			if (other.getId() != null)
+			if (other.getId() != null) {
 				return false;
+			}
 		} else if (!getId().equals(other.getId())) {
 			return false;
 		}
@@ -163,7 +172,7 @@ public class FieldMetadata implements IFieldMetaData, Cloneable {
 	}
 
 	@Override
-	public FieldMetadata clone() throws CloneNotSupportedException {
+	public final FieldMetadata clone() throws CloneNotSupportedException {
 		FieldMetadata clone = (FieldMetadata) super.clone();
 		clone.setProperties((Map) ((HashMap) properties).clone());
 		return clone;
@@ -201,6 +210,80 @@ public class FieldMetadata implements IFieldMetaData, Cloneable {
 	public int getScale() {
 		// TODO Auto-generated method stub
 		return scale;
+	}
+
+	/**
+	 * @return the personal
+	 */
+	@Override
+	public boolean isPersonal() {
+		return personal;
+	}
+
+	/**
+	 * @param personal the personal to set
+	 */
+	@Override
+	public void setPersonal(boolean personal) {
+		this.personal = personal;
+	}
+
+//	/**
+//	 * @return the masked
+//	 */
+//	@Override
+//	public boolean isMasked() {
+//		return masked;
+//	}
+//
+//	/**
+//	 * @param masked the masked to set
+//	 */
+//	@Override
+//	public void setMasked(boolean masked) {
+//		this.masked = masked;
+//	}
+
+	/**
+	 * @return the decrypt
+	 */
+	@Override
+	public boolean isDecrypt() {
+		return decrypt;
+	}
+
+	/**
+	 * @param decrypt the decrypt to set
+	 */
+	@Override
+	public void setDecrypt(boolean decrypt) {
+		this.decrypt = decrypt;
+	}
+
+	/**
+	 * @return the subjectId
+	 */
+	@Override
+	public boolean isSubjectId() {
+		return subjectId;
+	}
+
+	/**
+	 * @param subjectId the subjectId to set
+	 */
+	@Override
+	public void setSubjectId(boolean subjectId) {
+		this.subjectId = subjectId;
+	}
+
+	@Override
+	public String getDescription() {
+		return description;
+	}
+
+	@Override
+	public void setDescription(String description) {
+		this.description = description;
 	}
 
 }

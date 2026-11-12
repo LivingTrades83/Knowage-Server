@@ -31,21 +31,21 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import it.eng.knowage.parameter.ParameterManagerFactory;
 import it.eng.spago.base.SourceBean;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.commons.utilities.UserUtilities;
 import it.eng.spagobi.container.ObjectUtils;
 import it.eng.spagobi.tools.dataset.DatasetManagementAPI;
 import it.eng.spagobi.tools.dataset.bo.DataSetParametersList;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
 import it.eng.spagobi.tools.dataset.bo.VersionedDataSet;
-import it.eng.spagobi.tools.dataset.constants.CkanDataSetConstants;
 import it.eng.spagobi.tools.dataset.constants.DataSetConstants;
 import it.eng.spagobi.tools.dataset.constants.PythonDataSetConstants;
 import it.eng.spagobi.tools.dataset.constants.RESTDataSetConstants;
 import it.eng.spagobi.tools.dataset.constants.SPARQLDatasetConstants;
 import it.eng.spagobi.tools.dataset.constants.SolrDataSetConstants;
-import it.eng.spagobi.tools.dataset.service.ManageDatasets;
 import it.eng.spagobi.tools.tag.SbiTag;
 import it.eng.spagobi.user.UserProfileManager;
 import it.eng.spagobi.utilities.assertion.Assert;
@@ -57,6 +57,8 @@ import it.eng.spagobi.utilities.messages.EngineMessageBundle;
 public class DataSetJSONSerializer implements Serializer {
 
 	private static transient Logger logger = Logger.getLogger(DataSetJSONSerializer.class);
+
+	private static final String DEFAULT_VALUE_PARAM = "defaultValue";
 
 	public static final String DS_ID = "dsId";
 	public static final String VERSION_ID = "versId";
@@ -99,10 +101,6 @@ public class DataSetJSONSerializer implements Serializer {
 	private static final String QBE_SQL_QUERY = "qbeSQLQuery";
 
 	private static final String TRASFORMER_TYPE_CD = "trasfTypeCd";
-	private static final String PIVOT_COL_NAME = "pivotColName";
-	private static final String PIVOT_COL_VALUE = "pivotColValue";
-	private static final String PIVOT_ROW_NAME = "pivotRowName";
-	private static final String PIVOT_IS_NUM_ROWS = "pivotIsNumRows";
 
 	private static final String IS_PERSISTED = "isPersisted";
 	private static final String IS_PERSISTED_HDFS = "isPersistedHDFS";
@@ -132,18 +130,6 @@ public class DataSetJSONSerializer implements Serializer {
 	private static final String SCOPE_CD = "scopeCd";
 	private static final String SCOPE_ID = "scopeId";
 
-	public static final String CKAN_CSV_FILE_DELIMITER_CHARACTER = "ckanCsvDelimiter";
-	public static final String CKAN_CSV_FILE_QUOTE_CHARACTER = "ckanCsvQuote";
-	public static final String CKAN_CSV_FILE_ENCODING = "ckanCsvEncoding";
-	public static final String CKAN_FILE_TYPE = "ckanFileType";
-	public static final String CKAN_CSV_DATE_FORMAT = "ckanDateFormat";
-
-	public static final String CKAN_XSL_FILE_SKIP_ROWS = "ckanSkipRows";
-	public static final String CKAN_XSL_FILE_LIMIT_ROWS = "ckanLimitRows";
-	public static final String CKAN_XSL_FILE_SHEET_NUMBER = "ckanXslSheetNumber";
-
-	public static final String CKAN_URL = "ckanUrl";
-	public static final String CKAN_ID = "ckanId";
 	public static final String FEDERATION_ID = "federationId";
 	public static final String FEDERATION_NAME = "federationName";
 
@@ -162,7 +148,8 @@ public class DataSetJSONSerializer implements Serializer {
 		JSONObject result = null;
 
 		if (!(o instanceof IDataSet)) {
-			throw new SerializationException("DataSetJSONSerializer is unable to serialize object of type: " + o.getClass().getName());
+			throw new SerializationException(
+					"DataSetJSONSerializer is unable to serialize object of type: " + o.getClass().getName());
 		}
 
 		try {
@@ -209,8 +196,13 @@ public class DataSetJSONSerializer implements Serializer {
 						JSONObject jsonPar = new JSONObject();
 						jsonPar.put("name", name);
 						jsonPar.put("type", type);
-						jsonPar.put(ManageDatasets.DEFAULT_VALUE_PARAM, defaultValue);
 						jsonPar.put("multiValue", multiValue);
+
+						Object defaultValueAsObject = ParameterManagerFactory.getInstance().defaultManager()
+								.fromBeToFe(type, defaultValue, multiValue);
+
+						jsonPar.put(DEFAULT_VALUE_PARAM, defaultValueAsObject);
+
 						parsListJSON.put(jsonPar);
 					}
 				}
@@ -274,8 +266,12 @@ public class DataSetJSONSerializer implements Serializer {
 
 			String config = JSONUtils.escapeJsonString(ds.getConfiguration());
 			JSONObject jsonConf = ObjectUtils.toJSONObject(config);
+			UserProfile profile = UserProfileManager.getProfile();
+			boolean isAdmin = UserUtilities.hasAdministratorRole(profile);
+			boolean isDeveloper = UserUtilities.hasDeveloperRole(profile);
+
 			try {
-				if (type.equalsIgnoreCase(DataSetConstants.FILE) || type.equalsIgnoreCase(DataSetConstants.CKAN)) {
+				if (type.equalsIgnoreCase(DataSetConstants.FILE)) {
 					String fileName = jsonConf.getString(DataSetConstants.FILE_NAME);
 					if (fileName != null) {
 						result.put(FILE_NAME, fileName);
@@ -333,64 +329,10 @@ public class DataSetJSONSerializer implements Serializer {
 						result.put(XSL_FILE_SHEET_NUMBER, xslSheetNumber);
 					}
 
-					if (type.equalsIgnoreCase(DataSetConstants.CKAN)) {
-
-						String ckanFileType = jsonConf.getString(CkanDataSetConstants.CKAN_FILE_TYPE);
-						if (ckanFileType != null) {
-							result.put(CKAN_FILE_TYPE, ckanFileType);
-						}
-						String ckanCsvDelimiter = jsonConf.getString(CkanDataSetConstants.CKAN_CSV_FILE_DELIMITER_CHARACTER);
-						if (ckanCsvDelimiter != null) {
-							result.put(CKAN_CSV_FILE_DELIMITER_CHARACTER, ckanCsvDelimiter);
-						}
-						String ckanCsvQuote = jsonConf.getString(CkanDataSetConstants.CKAN_CSV_FILE_QUOTE_CHARACTER);
-						if (ckanCsvQuote != null) {
-							result.put(CKAN_CSV_FILE_QUOTE_CHARACTER, ckanCsvQuote);
-						}
-						// added this check for retrocompatibility
-						if (jsonConf.has(CkanDataSetConstants.CKAN_CSV_FILE_ENCODING)) {
-							String ckanCsvEncoding = jsonConf.getString(CkanDataSetConstants.CKAN_CSV_FILE_ENCODING);
-							if (ckanCsvEncoding != null) {
-								result.put(CKAN_CSV_FILE_ENCODING, ckanCsvEncoding);
-							}
-						} else {
-							result.put(CKAN_CSV_FILE_ENCODING, "");
-						}
-
-						if (jsonConf.has(CkanDataSetConstants.CKAN_CSV_DATE_FORMAT)) {
-							String dateFormat = jsonConf.getString(CkanDataSetConstants.CKAN_CSV_DATE_FORMAT);
-							if (dateFormat != null) {
-								result.put(CKAN_CSV_DATE_FORMAT, dateFormat);
-							}
-						} else {
-							result.put(CKAN_CSV_DATE_FORMAT, "");
-						}
-						String ckanSkipRows = jsonConf.getString(CkanDataSetConstants.CKAN_XSL_FILE_SKIP_ROWS);
-						if (ckanSkipRows != null) {
-							result.put(CKAN_XSL_FILE_SKIP_ROWS, ckanSkipRows);
-						}
-						String ckanLimitRows = jsonConf.getString(CkanDataSetConstants.CKAN_XSL_FILE_LIMIT_ROWS);
-						if (ckanLimitRows != null) {
-							result.put(CKAN_XSL_FILE_LIMIT_ROWS, ckanLimitRows);
-						}
-						String ckanXslSheetNumber = jsonConf.getString(CkanDataSetConstants.CKAN_XSL_FILE_SHEET_NUMBER);
-						if (ckanXslSheetNumber != null) {
-							result.put(CKAN_XSL_FILE_SHEET_NUMBER, ckanXslSheetNumber);
-						}
-
-						String ckanUrl = jsonConf.getString(CkanDataSetConstants.CKAN_URL);
-						if (ckanUrl != null) {
-							result.put(CKAN_URL, ckanUrl);
-						}
-
-						String ckanId = jsonConf.getString(CkanDataSetConstants.CKAN_ID);
-						if (ckanId != null) {
-							result.put(CKAN_ID, ckanId);
-						}
-					}
-
 				} else if (type.equalsIgnoreCase(DataSetConstants.QUERY)) {
-					result.put(QUERY, jsonConf.getString(DataSetConstants.QUERY));
+					if (isAdmin || isDeveloper) {
+						result.put(QUERY, jsonConf.getString(DataSetConstants.QUERY));
+					}
 					result.put(QUERY_SCRIPT, jsonConf.getString(DataSetConstants.QUERY_SCRIPT));
 					result.put(QUERY_SCRIPT_LANGUAGE, jsonConf.getString(DataSetConstants.QUERY_SCRIPT_LANGUAGE));
 					result.put(DATA_SOURCE, jsonConf.getString(DataSetConstants.DATA_SOURCE));
@@ -399,13 +341,19 @@ public class DataSetJSONSerializer implements Serializer {
 					// jsonConf.getString(DataSetConstants.QBE_SQL_QUERY));
 					result.put(QBE_JSON_QUERY, jsonConf.getString(DataSetConstants.QBE_JSON_QUERY));
 					result.put(QBE_DATA_SOURCE, jsonConf.getString(DataSetConstants.QBE_DATA_SOURCE));
-					Integer dataSourceId = DAOFactory.getDataSourceDAO().loadDataSourceByLabel(jsonConf.getString(DataSetConstants.QBE_DATA_SOURCE)).getDsId();
+					Integer dataSourceId = DAOFactory.getDataSourceDAO()
+							.loadDataSourceByLabel(jsonConf.getString(DataSetConstants.QBE_DATA_SOURCE)).getDsId();
 					result.put(QBE_DATA_SOURCE_ID, dataSourceId);
 					result.put(QBE_DATAMARTS, jsonConf.getString(DataSetConstants.QBE_DATAMARTS));
+				} else if (type.equalsIgnoreCase(DataSetConstants.DERIVED)) {
+					result.put("sqlQuery", jsonConf.getString("sqlQuery"));
+					result.put("sourceDatasetLabel", jsonConf.getString("sourceDatasetLabel"));
+					result.put(QBE_JSON_QUERY, jsonConf.getString(DataSetConstants.QBE_JSON_QUERY));
 				} else if (type.equalsIgnoreCase(DataSetConstants.FEDERATED)) {
 					result.put(QBE_JSON_QUERY, jsonConf.getString(DataSetConstants.QBE_JSON_QUERY));
 					result.put(QBE_DATA_SOURCE, jsonConf.getString(DataSetConstants.QBE_DATA_SOURCE));
-					Integer dataSourceId = DAOFactory.getDataSourceDAO().loadDataSourceByLabel(jsonConf.getString(DataSetConstants.QBE_DATA_SOURCE)).getDsId();
+					Integer dataSourceId = DAOFactory.getDataSourceDAO()
+							.loadDataSourceByLabel(jsonConf.getString(DataSetConstants.QBE_DATA_SOURCE)).getDsId();
 					result.put(QBE_DATA_SOURCE_ID, dataSourceId);
 					result.put(FEDERATION_ID, ds.getDatasetFederation().getFederation_id());
 					result.put(FEDERATION_NAME, ds.getDatasetFederation().getName());
@@ -455,6 +403,10 @@ public class DataSetJSONSerializer implements Serializer {
 					manageSolrDataSet(jsonConf, result);
 				} else if (type.equalsIgnoreCase(DataSetConstants.SPARQL)) {
 					manageSPARQLDataSet(jsonConf, result);
+				} else if (type.equalsIgnoreCase(DataSetConstants.code2name.get(DataSetConstants.PREPARED_DATASET))) {
+					result.put(DataSetConstants.DATA_PREPARATION_INSTANCE_ID, jsonConf.optString(DataSetConstants.DATA_PREPARATION_INSTANCE_ID));
+					result.put(DataSetConstants.TABLE_NAME, jsonConf.optString(DataSetConstants.TABLE_NAME));
+					result.put(DATA_SOURCE, jsonConf.optString(DataSetConstants.DATA_SOURCE));
 				}
 			} catch (Exception e) {
 				String msg = "Error while defining dataset configuration.";
@@ -463,10 +415,6 @@ public class DataSetJSONSerializer implements Serializer {
 			}
 
 			result.put(TRASFORMER_TYPE_CD, ds.getTransformerCd());
-			result.put(PIVOT_COL_NAME, ds.getPivotColumnName());
-			result.put(PIVOT_COL_VALUE, ds.getPivotColumnValue());
-			result.put(PIVOT_ROW_NAME, ds.getPivotRowName());
-			result.put(PIVOT_IS_NUM_ROWS, ds.isNumRows());
 			result.put(IS_PERSISTED, ds.isPersisted());
 			result.put(IS_PERSISTED_HDFS, ds.isPersistedHDFS());
 			result.put(PERSIST_TABLE_NAME, ds.getPersistTableName());
@@ -493,14 +441,15 @@ public class DataSetJSONSerializer implements Serializer {
 			}
 			result.put(TAGS, tags);
 
-			UserProfile profile = UserProfileManager.getProfile();
 			try {
-				new DatasetManagementAPI(profile).canLoadData(ds);
+				DatasetManagementAPI datasetManagementAPI = new DatasetManagementAPI(profile);
+				datasetManagementAPI.canLoadData(ds);
 				result.put(CAN_LOAD_DATA, true);
 			} catch (ActionNotPermittedException e) {
 				logger.warn("User " + profile + " cannot preview the dataset with label " + ds.getLabel());
 				result.put(CAN_LOAD_DATA, false);
-				result.put(CANNOT_LOAD_DATA_MESSAGE, EngineMessageBundle.getMessage(e.getI18NCode(), "MessageFiles.messages", locale));
+				result.put(CANNOT_LOAD_DATA_MESSAGE,
+						EngineMessageBundle.getMessage(e.getI18NCode(), "MessageFiles.messages", locale));
 			}
 
 		} catch (Throwable t) {
@@ -508,7 +457,8 @@ public class DataSetJSONSerializer implements Serializer {
 			if (ds instanceof VersionedDataSet) {
 				ds = ((VersionedDataSet) ds).getWrappedDataset();
 			}
-			throw new SerializationException("An error occurred to dataset (" + ds.getLabel() + ") while serializing object: " + o, t);
+			throw new SerializationException(
+					"An error occurred to dataset (" + ds.getLabel() + ") while serializing object: " + o, t);
 		} finally {
 
 		}
@@ -554,7 +504,7 @@ public class DataSetJSONSerializer implements Serializer {
 		for (String ja : RESTDataSetConstants.REST_JSON_OBJECT_ATTRIBUTES) {
 			Object prop = conf.get(ja);
 			if (prop != null) {
-				result.put(ja, new JSONObject(prop));
+				result.put(ja, new JSONObject(prop).toString());
 			}
 		}
 

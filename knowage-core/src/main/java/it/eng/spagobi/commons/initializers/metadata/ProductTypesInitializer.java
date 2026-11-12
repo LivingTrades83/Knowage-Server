@@ -39,7 +39,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  *
  */
 public class ProductTypesInitializer extends SpagoBIInitializer {
-	static private Logger logger = Logger.getLogger(ProductTypesInitializer.class);
+	private static Logger logger = Logger.getLogger(ProductTypesInitializer.class);
 
 	public ProductTypesInitializer() {
 		targetComponentName = "ProductType";
@@ -137,8 +137,9 @@ public class ProductTypesInitializer extends SpagoBIInitializer {
 				}
 				// Retrieving all the product types in the DB with the specified label
 				logger.debug("Retrieving all the product types in the DB with the specified label");
-				String hql = "from SbiProductType where label = '" + label + "'";
+				String hql = "from SbiProductType where label = :label";
 				Query hqlQuery = aSession.createQuery(hql);
+				hqlQuery.setParameter("label", label);
 				List result = hqlQuery.list();
 
 				logger.debug("Retrieving all the product types in the XML file with the specified label");
@@ -157,7 +158,7 @@ public class ProductTypesInitializer extends SpagoBIInitializer {
 			}
 		}
 
-		//update engines of product types
+		// update engines of product types
 		it = productTypesList.iterator();
 		while (it.hasNext()) {
 			SourceBean aProductTypeSB = (SourceBean) it.next();
@@ -228,9 +229,7 @@ public class ProductTypesInitializer extends SpagoBIInitializer {
 
 			association.setCommonInfo(commonInfo);
 
-			SbiProductTypeEngineId id = new SbiProductTypeEngineId();
-			id.setProductTypeId(aProductType.getProductTypeId());
-			id.setEngineId(anEngine.getEngineId());
+			SbiProductTypeEngineId id = new SbiProductTypeEngineId(anEngine.getEngineId(),aProductType.getProductTypeId());
 			association.setId(id);
 
 			aSession.save(association);
@@ -251,8 +250,9 @@ public class ProductTypesInitializer extends SpagoBIInitializer {
 			SbiEngines anEngine = findEngine(aSession, (String) anEngineSB.getAttribute("label"));
 			SbiProductType aProductType = findProductType(aSession, (String) aProductTypeSB.getAttribute("label"));
 
-			SbiProductTypeEngine association = findProductEngineType(aSession,  (String) anEngineSB.getAttribute("label"), (String) aProductTypeSB.getAttribute("label"));
-			if(association==null) {
+			SbiProductTypeEngine association = findProductEngineType(aSession, (String) anEngineSB.getAttribute("label"),
+					(String) aProductTypeSB.getAttribute("label"));
+			if (association == null) {
 				association = new SbiProductTypeEngine();
 				association.setSbiProductType(aProductType);
 				association.setSbiEngines(anEngine);
@@ -262,9 +262,7 @@ public class ProductTypesInitializer extends SpagoBIInitializer {
 
 				association.setCommonInfo(commonInfo);
 
-				SbiProductTypeEngineId id = new SbiProductTypeEngineId();
-				id.setProductTypeId(aProductType.getProductTypeId());
-				id.setEngineId(anEngine.getEngineId());
+				SbiProductTypeEngineId id = new SbiProductTypeEngineId(anEngine.getEngineId(),aProductType.getProductTypeId());
 				association.setId(id);
 
 				aSession.save(association);

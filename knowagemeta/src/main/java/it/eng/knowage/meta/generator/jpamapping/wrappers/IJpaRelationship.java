@@ -18,11 +18,7 @@
 package it.eng.knowage.meta.generator.jpamapping.wrappers;
 
 import it.eng.knowage.meta.generator.jpamapping.wrappers.impl.AbstractJpaTable;
-import it.eng.knowage.meta.generator.jpamapping.wrappers.impl.JpaColumn;
 import it.eng.knowage.meta.generator.jpamapping.wrappers.impl.JpaRelationshipColumnsNames;
-import it.eng.knowage.meta.model.business.SimpleBusinessColumn;
-
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -31,16 +27,16 @@ import java.util.List;
  */
 public interface IJpaRelationship {
 	
-	final static String ONE_TO_MANY = "one-to-many";
-	final static String MANY_TO_ONE = "many-to-one";
-	final static String MANY_TO_MANY = "many-to-many";
-	final static String ONE_TO_ONE = "one-to-one";
-	final static String OPTIONAL_ONE_TO_ONE = "optional-one-to-one";
-	final static String ONE_TO_OPTIONAL_ONE = "one-to-optional-one";
-	final static String OPTIONAL_ONE_TO_MANY = "optional-one-to-many";
-	final static String ONE_TO_OPTIONAL_MANY = "one-to-optional-many";
-	final static String OPTIONAL_MANY_TO_ONE = "optional-many-to-one";
-	final static String MANY_TO_OPTIONAL_ONE = "many-to-optional-one";
+	static final String ONE_TO_MANY = "one-to-many";
+	static final String MANY_TO_ONE = "many-to-one";
+	static final String MANY_TO_MANY = "many-to-many";
+	static final String ONE_TO_ONE = "one-to-one";
+	static final String OPTIONAL_ONE_TO_ONE = "optional-one-to-one";
+	static final String ONE_TO_OPTIONAL_ONE = "one-to-optional-one";
+	static final String OPTIONAL_ONE_TO_MANY = "optional-one-to-many";
+	static final String ONE_TO_OPTIONAL_MANY = "one-to-optional-many";
+	static final String OPTIONAL_MANY_TO_ONE = "optional-many-to-one";
+	static final String MANY_TO_OPTIONAL_ONE = "many-to-optional-one";
 	
 
 	
@@ -76,6 +72,8 @@ public interface IJpaRelationship {
 	List<JpaRelationshipColumnsNames> getRelationshipColumnsNames();
 	
 	public String getSimpleSourceColumnName();
+
+	public String getSimpleDestinationColumnName();
 	
 	public String getCollectionType();
 	

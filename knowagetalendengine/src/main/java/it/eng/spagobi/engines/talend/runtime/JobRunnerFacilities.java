@@ -12,7 +12,6 @@ import it.eng.spagobi.utilities.callbacks.audit.AuditAccessUtils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -25,7 +24,7 @@ import org.apache.log4j.Logger;
 
 public class JobRunnerFacilities {
 	
-	private static transient Logger logger = Logger.getLogger(JobRunnerFacilities.class);
+	private static final Logger logger = Logger.getLogger(JobRunnerFacilities.class);
 
 	public static final String TALEND_ROLES_HANDLER_CLASS_NAME = "it.eng.spagobi.engines.drivers.talend.TalendRolesHandler";
 	public static final String TALEND_PRESENTAION_HANDLER_CLASS_NAME = "it.eng.spagobi.engines.drivers.talend.TalendEventPresentationHandler";
@@ -153,7 +152,6 @@ public class JobRunnerFacilities {
 				try {
 					input.close();
 				} catch (IOException e) {
-					e.printStackTrace();
 					logger.error("IO error");
 				}
 			}

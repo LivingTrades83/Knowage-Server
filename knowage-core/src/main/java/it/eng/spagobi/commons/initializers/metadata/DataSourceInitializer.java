@@ -33,6 +33,7 @@ import it.eng.spagobi.commons.metadata.SbiOrganizationDatasource;
 import it.eng.spagobi.commons.metadata.SbiOrganizationDatasourceId;
 import it.eng.spagobi.commons.metadata.SbiTenant;
 import it.eng.spagobi.commons.utilities.HibernateSessionManager;
+import it.eng.spagobi.security.utils.EncryptionPBEWithMD5AndDESManager;
 import it.eng.spagobi.tools.datasource.metadata.SbiDataSource;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
@@ -42,7 +43,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class DataSourceInitializer extends SpagoBIInitializer {
 
-	static private Logger logger = Logger.getLogger(DataSourceInitializer.class);
+	private static Logger logger = Logger.getLogger(DataSourceInitializer.class);
 
 	public DataSourceInitializer() {
 		targetComponentName = "DataSource";
@@ -91,7 +92,9 @@ public class DataSourceInitializer extends SpagoBIInitializer {
 			aDataSource.setJndi(jndi);
 			aDataSource.setUrl_connection((String) dataSourceSB.getAttribute("urlConnection"));
 			aDataSource.setUser((String) dataSourceSB.getAttribute("username"));
-			aDataSource.setPwd((String) dataSourceSB.getAttribute("pwd"));
+			String password = (String) dataSourceSB.getAttribute("pwd");
+			String encPassword = EncryptionPBEWithMD5AndDESManager.encrypt(password);
+			aDataSource.setPwd(encPassword);
 			aDataSource.setDriver((String) dataSourceSB.getAttribute("driver"));
 
 			String dialect = HibernateSessionManager.determineDialectFromJNDIResource(jndi);
@@ -104,10 +107,11 @@ public class DataSourceInitializer extends SpagoBIInitializer {
 			}
 			aDataSource.setDialect(sbiDomainsDialect);
 
-			aDataSource.setMultiSchema(((String) dataSourceSB.getAttribute("multiSchema")).equals("false") ? false : true);
+			aDataSource.setMultiSchema("true".equals(dataSourceSB.getAttribute("multiSchema")));
 			aDataSource.setSchemaAttribute((String) dataSourceSB.getAttribute("attrSchema"));
-			aDataSource.setReadOnly(((String) dataSourceSB.getAttribute("readOnly")).equals("false") ? false : true);
-			aDataSource.setWriteDefault(((String) dataSourceSB.getAttribute("writeDefault")).equals("false") ? false : true);
+			aDataSource.setReadOnly("true".equals(dataSourceSB.getAttribute("readOnly")));
+			aDataSource.setWriteDefault("true".equals(dataSourceSB.getAttribute("writeDefault")));
+			aDataSource.setUseForDataprep("true".equals(dataSourceSB.getAttribute("useForDataprep")));
 			aDataSource.setJdbcPoolConfiguration((String) dataSourceSB.getAttribute("jdbcAdvancedConfiguration"));
 
 			String organization = (String) dataSourceSB.getAttribute("organization");
@@ -126,9 +130,7 @@ public class DataSourceInitializer extends SpagoBIInitializer {
 			SbiOrganizationDatasource sbiOrganizationDatasource = new SbiOrganizationDatasource();
 			sbiOrganizationDatasource.setSbiDataSource(aDataSource);
 			sbiOrganizationDatasource.setSbiOrganizations(tenant);
-			SbiOrganizationDatasourceId idRel = new SbiOrganizationDatasourceId();
-			idRel.setDatasourceId(newId);
-			idRel.setOrganizationId(tenant.getId());
+			SbiOrganizationDatasourceId idRel = new SbiOrganizationDatasourceId(newId,tenant.getId());
 			sbiOrganizationDatasource.setCommonInfo(sbiCommonInfo);
 			sbiOrganizationDatasource.setId(idRel);
 

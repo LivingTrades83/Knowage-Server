@@ -35,7 +35,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class DomainsInitializer extends SpagoBIInitializer {
 
-	static private Logger logger = Logger.getLogger(DomainsInitializer.class);
+	private static Logger logger = Logger.getLogger(DomainsInitializer.class);
 
 	public DomainsInitializer() {
 		targetComponentName = "Domains";
@@ -113,8 +113,9 @@ public class DomainsInitializer extends SpagoBIInitializer {
 				}
 				// Retrieving all the domains in the DB with the specified domain Code
 				logger.debug("Retrieving all the domains in the DB with the specified domain Code");
-				String hql = "from SbiDomains where domainCd = '" + domainCd + "'";
+				String hql = "from SbiDomains where domainCd = :domainCd";
 				Query hqlQuery = aSession.createQuery(hql);
+				hqlQuery.setParameter("domainCd", domainCd);
 				List result = hqlQuery.list();
 
 				logger.debug("Retrieving all the domains in the XML file with the specified domain Code");

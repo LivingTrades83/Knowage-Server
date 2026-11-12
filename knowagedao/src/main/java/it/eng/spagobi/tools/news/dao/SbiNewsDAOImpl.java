@@ -49,26 +49,18 @@ public class SbiNewsDAOImpl extends AbstractHibernateDAO implements ISbiNewsDAO 
 	private static Logger logger = Logger.getLogger(SbiNewsDAOImpl.class);
 
 	@Override
-	public List<BasicNews> getAllNews() {
+	public List<SbiNews> getAllSbiNews() {
 
 		logger.debug("IN");
-		List<BasicNews> listOfNews = new ArrayList<>();
 		Session session = null;
+		List<SbiNews> hibList = null;
 
 		try {
 			session = getSession();
 			String hql = " from SbiNews s";
 			Query query = session.createQuery(hql);
 
-			List hibList = query.list();
-			Iterator iterator = hibList.iterator();
-			while (iterator.hasNext()) {
-				SbiNews hibNews = (SbiNews) iterator.next();
-				if (hibNews != null) {
-					BasicNews news = new BasicNews(hibNews.getId(), hibNews.getName(), hibNews.getDescription(), hibNews.getCategoryId());
-					listOfNews.add(news);
-				}
-			}
+			hibList = query.list();
 
 		} catch (HibernateException e) {
 			logException(e);
@@ -77,6 +69,27 @@ public class SbiNewsDAOImpl extends AbstractHibernateDAO implements ISbiNewsDAO 
 		} finally {
 			if (session != null && session.isOpen())
 				session.close();
+		}
+
+		logger.debug("OUT");
+		return hibList;
+	}
+
+	@Override
+	public List<BasicNews> getAllNews() {
+
+		logger.debug("IN");
+		List<BasicNews> listOfNews = new ArrayList<>();
+
+		List<SbiNews> hibList = getAllSbiNews();
+		Iterator<SbiNews> iterator = hibList.iterator();
+		while (iterator.hasNext()) {
+			SbiNews hibNews = iterator.next();
+			if (hibNews != null) {
+				BasicNews news = new BasicNews(hibNews.getId(), hibNews.getName(), hibNews.getDescription(),
+						hibNews.getCategoryId());
+				listOfNews.add(news);
+			}
 		}
 
 		logger.debug("OUT");
@@ -159,7 +172,7 @@ public class SbiNewsDAOImpl extends AbstractHibernateDAO implements ISbiNewsDAO 
 		news.setExpirationDate(hibNews.getExpirationDate());
 
 		try {
-			Set listOfRoles = new HashSet();
+			Set<Role> listOfRoles = new HashSet<>();
 			Set<SbiExtRoles> setOfRoles = hibNews.getSbiNewsRoles();
 			Iterator<SbiExtRoles> iterator = setOfRoles.iterator();
 			while (iterator.hasNext()) {
@@ -248,8 +261,8 @@ public class SbiNewsDAOImpl extends AbstractHibernateDAO implements ISbiNewsDAO 
 			hibNews.setExpirationDate(aNews.getExpirationDate());
 			hibNews.setActive(aNews.getActive());
 			hibNews.setCategoryId(aNews.getType());
-			Set roles = aNews.getRoles();
-			Set extRoles = new HashSet<>();
+			Set<Role> roles = aNews.getRoles();
+			Set<SbiExtRoles> extRoles = new HashSet<>();
 			Iterator<Role> iterator = roles.iterator();
 
 			while (iterator.hasNext()) {
@@ -268,7 +281,7 @@ public class SbiNewsDAOImpl extends AbstractHibernateDAO implements ISbiNewsDAO 
 			hibNews.setSbiNewsRoles(extRoles);
 
 			if (aNews.getId() != null) {
-				hibNews.setId(aNews.getId());
+				hibNews.changeId(aNews.getId());
 			}
 
 			updateSbiCommonInfo4Insert(hibNews);
@@ -306,13 +319,14 @@ public class SbiNewsDAOImpl extends AbstractHibernateDAO implements ISbiNewsDAO 
 			String hql = " from SbiNews s where s.active=true and s.expirationDate >= current_date";
 			Query query = session.createQuery(hql);
 
-			List hibList = query.list();
-			Iterator iterator = hibList.iterator();
+			List<SbiNews> hibList = query.list();
+			Iterator<SbiNews> iterator = hibList.iterator();
 			while (iterator.hasNext()) {
-				SbiNews hibNews = (SbiNews) iterator.next();
+				SbiNews hibNews = iterator.next();
 				hibNews = getAvailableNews(hibNews, profile);
 				if (hibNews != null) {
-					BasicNews basicNews = new BasicNews(hibNews.getId(), hibNews.getName(), hibNews.getDescription(), hibNews.getCategoryId());
+					BasicNews basicNews = new BasicNews(hibNews.getId(), hibNews.getName(), hibNews.getDescription(),
+							hibNews.getCategoryId());
 					setOfNews.add(basicNews);
 				}
 			}
@@ -331,7 +345,7 @@ public class SbiNewsDAOImpl extends AbstractHibernateDAO implements ISbiNewsDAO 
 		}
 
 		logger.debug("OUT");
-		return new ArrayList<BasicNews>(setOfNews);
+		return new ArrayList<>(setOfNews);
 	}
 
 	public SbiNews getAvailableNews(SbiNews hibNews, IEngUserProfile profile) {

@@ -20,7 +20,6 @@ package it.eng.spagobi.dataset.cache.impl.sqldbcache.test.postgres;
 import org.apache.log4j.Logger;
 
 import it.eng.spagobi.dataset.cache.impl.sqldbcache.test.AbstractSQLDBCacheMetadatTest;
-import it.eng.spagobi.dataset.cache.impl.sqldbcache.test.AbstractSQLDBCacheTest;
 import it.eng.spagobi.dataset.cache.test.TestConstants;
 import it.eng.spagobi.dataset.cache.test.TestDataSourceFactory;
 
@@ -30,7 +29,7 @@ import it.eng.spagobi.dataset.cache.test.TestDataSourceFactory;
  */
 public class PostgresSQLDBCacheMetadataTest extends AbstractSQLDBCacheMetadatTest {
 	
-	static private Logger logger = Logger.getLogger(PostgresSQLDBCacheMetadataTest.class);
+	private static Logger logger = Logger.getLogger(PostgresSQLDBCacheMetadataTest.class);
 
 	//Create Datasources specific for this test
 	@Override
@@ -40,6 +39,7 @@ public class PostgresSQLDBCacheMetadataTest extends AbstractSQLDBCacheMetadatTes
 	}
 	
 	//Generic tests imported from parent class	
+	@Override
 	public void testGetRequiredMemory(){
 		super.testGetRequiredMemory();
 	}

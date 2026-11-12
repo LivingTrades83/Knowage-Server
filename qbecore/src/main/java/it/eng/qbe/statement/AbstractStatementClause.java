@@ -44,7 +44,7 @@ import it.eng.qbe.query.serializer.json.QuerySerializationConstants;
 import it.eng.qbe.serializer.SerializationManager;
 import it.eng.qbe.statement.hive.HiveQLStatement;
 import it.eng.spagobi.tools.dataset.common.query.CustomFunction;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.sql.SqlUtils;
@@ -103,8 +103,8 @@ public abstract class AbstractStatementClause implements IStatementClause {
 		newExpression = cf.getExpression();
 
 		entityAliases = (Map) entityAliasesMaps.get(query.getId());
-		fieldQueryNames = new ArrayList<String>();
-		fieldExpressionNames = new ArrayList<String>();
+		fieldQueryNames = new ArrayList<>();
+		fieldExpressionNames = new ArrayList<>();
 
 		try {
 			StatementTockenizer tokenizer = new StatementTockenizer(cf.getExpression());
@@ -252,7 +252,7 @@ public abstract class AbstractStatementClause implements IStatementClause {
 			if (s == null || s.trim().length() == 0)
 				return expr;
 			JSONArray slotsJSON = new JSONArray(s);
-			List<Slot> slots = new ArrayList<Slot>();
+			List<Slot> slots = new ArrayList<>();
 			for (int i = 0; i < slotsJSON.length(); i++) {
 				Slot slot = (Slot) SerializationManager.deserialize(slotsJSON.get(i), "application/json", Slot.class);
 				slots.add(slot);
@@ -376,7 +376,7 @@ public abstract class AbstractStatementClause implements IStatementClause {
 			} else if (dialect.equalsIgnoreCase(QuerySerializationConstants.DIALECT_HSQL)) {
 				try {
 					DateFormat daf;
-					if (StringUtils.isBounded(toReturn, "'")) {
+					if (KnowageStringUtils.isBounded(toReturn, "'")) {
 						daf = new SimpleDateFormat("'dd/MM/yyyy HH:mm:SS'");
 					} else {
 						daf = new SimpleDateFormat("dd/MM/yyyy HH:mm:SS");
@@ -419,7 +419,7 @@ public abstract class AbstractStatementClause implements IStatementClause {
 				 */
 				try {
 					DateFormat dateFormat;
-					if (StringUtils.isBounded(toReturn, "'")) {
+					if (KnowageStringUtils.isBounded(toReturn, "'")) {
 						dateFormat = new SimpleDateFormat("'dd/MM/yyyy'");
 					} else {
 						dateFormat = new SimpleDateFormat("dd/MM/yyyy");
@@ -430,6 +430,12 @@ public abstract class AbstractStatementClause implements IStatementClause {
 				} catch (Exception e) {
 					logger.error("Error parsing the date " + toReturn, e);
 					throw new SpagoBIRuntimeException("Error parsing the date " + toReturn + ".");
+				}
+			} else if (dialect.equalsIgnoreCase(QuerySerializationConstants.DIALECT_VERTICA)) {
+				if (toReturn.startsWith("'") && toReturn.endsWith("'")) {
+					toReturn = " TO_DATE(" + toReturn + ",'DD/MM/YYYY HH:MI:SS') ";
+				} else {
+					toReturn = " TO_DATE('" + toReturn + "','DD/MM/YYYY HH:MI:SS') ";
 				}
 			}
 		}
@@ -465,7 +471,7 @@ public abstract class AbstractStatementClause implements IStatementClause {
 			} else if (dialect.equalsIgnoreCase(QuerySerializationConstants.DIALECT_HSQL)) {
 				try {
 					DateFormat daf;
-					if (StringUtils.isBounded(toReturn, "'")) {
+					if (KnowageStringUtils.isBounded(toReturn, "'")) {
 						daf = new SimpleDateFormat("'dd/MM/yyyy '");
 					} else {
 						daf = new SimpleDateFormat("dd/MM/yyyy ");
@@ -508,7 +514,7 @@ public abstract class AbstractStatementClause implements IStatementClause {
 				 */
 				try {
 					DateFormat dateFormat;
-					if (StringUtils.isBounded(toReturn, "'")) {
+					if (KnowageStringUtils.isBounded(toReturn, "'")) {
 						dateFormat = new SimpleDateFormat("'dd/MM/yyyy'");
 					} else {
 						dateFormat = new SimpleDateFormat("dd/MM/yyyy");
@@ -519,6 +525,12 @@ public abstract class AbstractStatementClause implements IStatementClause {
 				} catch (Exception e) {
 					logger.error("Error parsing the date " + toReturn, e);
 					throw new SpagoBIRuntimeException("Error parsing the date " + toReturn + ".");
+				}
+			} else if (dialect.equalsIgnoreCase(QuerySerializationConstants.DIALECT_VERTICA)) {
+				if (toReturn.startsWith("'") && toReturn.endsWith("'")) {
+					toReturn = " TO_DATE(" + toReturn + ",'DD/MM/YYYY') ";
+				} else {
+					toReturn = " TO_DATE('" + toReturn + "','DD/MM/YYYY') ";
 				}
 			}
 		}

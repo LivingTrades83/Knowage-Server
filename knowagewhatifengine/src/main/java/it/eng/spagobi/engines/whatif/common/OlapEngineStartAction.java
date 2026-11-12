@@ -18,14 +18,13 @@
 
 package it.eng.spagobi.engines.whatif.common;
 
+import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
+import org.apache.log4j.Logger;
+
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-
-import org.apache.log4j.Logger;
-
-import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 
 @Path("/olap/startolap")
 @ManageAuthorization
@@ -37,7 +36,7 @@ public class OlapEngineStartAction extends WhatIfEngineAbstractStartAction {
 	@Path("/")
 	@Produces("text/html")
 	public void startActionOlapGet() {
-		startAction();
+        startAction();
 
 	}
 
@@ -45,15 +44,15 @@ public class OlapEngineStartAction extends WhatIfEngineAbstractStartAction {
 	@Path("/")
 	@Produces("text/html")
 	public void startActionOlapPost() {
-		startAction();
-
+        startAction();
 	}
 
 	/**
+	 * @return
 	 *
 	 */
 	private void startAction() {
 		logger.debug("Starting OLAP");
-		startAction(false);
+        startAction(false);
 	}
 }

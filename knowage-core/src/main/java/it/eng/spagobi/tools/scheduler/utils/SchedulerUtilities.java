@@ -210,7 +210,7 @@ public class SchedulerUtilities {
 						iterativeParameters.addAll(Arrays.asList(iterativeParametersArray));
 					}
 					SourceBean loadAtRuntimeSB = (SourceBean) jobParSB.getFilteredSourceBeanAttribute("JOB_PARAMETER", "name", biobjlbl + "_loadAtRuntime");
-					Map<String, String> loadAtRuntimeParameters = new HashMap<String, String>();
+					Map<String, String> loadAtRuntimeParameters = new HashMap<>();
 					if (loadAtRuntimeSB != null) {
 						String loadAtRuntimeStr = (String) loadAtRuntimeSB.getAttribute("value");
 						String[] loadAtRuntimeArray = loadAtRuntimeStr.split(";");
@@ -223,7 +223,7 @@ public class SchedulerUtilities {
 						}
 					}
 					SourceBean useFormulaSB = (SourceBean) jobParSB.getFilteredSourceBeanAttribute("JOB_PARAMETER", "name", biobjlbl + "_useFormula");
-					Map<String, String> useFormulaParameters = new HashMap<String, String>();
+					Map<String, String> useFormulaParameters = new HashMap<>();
 					if (useFormulaSB != null) {
 						String useFormulaStr = (String) useFormulaSB.getAttribute("value");
 						String[] useFormulaArray = useFormulaStr.split(";");
@@ -306,14 +306,17 @@ public class SchedulerUtilities {
 		String startTime = (String) triggerInfoSB.getAttribute("triggerStartTime");
 		String chronString = (String) triggerInfoSB.getAttribute("triggerChronString");
 		String endDate = (String) triggerInfoSB.getAttribute("triggerEndDate");
-		if (endDate == null)
+		if (endDate == null) {
 			endDate = "";
+		}
 		String endTime = (String) triggerInfoSB.getAttribute("triggerEndTime");
-		if (endTime == null)
+		if (endTime == null) {
 			endTime = "";
+		}
 		String triggerRepeatInterval = (String) triggerInfoSB.getAttribute("triggerRepeatInterval");
-		if (triggerRepeatInterval == null)
+		if (triggerRepeatInterval == null) {
 			triggerRepeatInterval = "";
+		}
 		triggerInfo.setEndDate(endDate);
 		triggerInfo.setEndTime(endTime);
 		triggerInfo.setRepeatInterval(triggerRepeatInterval);
@@ -326,7 +329,7 @@ public class SchedulerUtilities {
 		JobInfo jobInfo = SchedulerUtilities.getJobInfoFromJobSourceBean(jobInfoSB);
 		triggerInfo.setJobInfo(jobInfo);
 
-		Map<String, DispatchContext> saveOptions = new HashMap<String, DispatchContext>();
+		Map<String, DispatchContext> saveOptions = new HashMap<>();
 		List<Integer> biobjIds = jobInfo.getDocumentIds();
 		int index = 0;
 		for (Integer biobjId : biobjIds) {
@@ -363,9 +366,12 @@ public class SchedulerUtilities {
 			if (couple.trim().equals("")) {
 				continue;
 			}
-			String[] couplevals = couple.split("=");
+			String[] couplevals = couple.split("=", 2);
 			String name = couplevals[0];
-			String value = couplevals[1];
+			String value = couplevals.length > 1 ? couplevals[1] : "";
+			if (couplevals.length == 1) {
+				logger.warn("Malformed dispatch context token [" + couple + "] found while decoding dispatch context");
+			}
 
 			if (name.equals("saveasfile")) {
 				dispatchContext.setFileSystemDisptachChannelEnabled(true);
@@ -502,6 +508,9 @@ public class SchedulerUtilities {
 			}
 			if (name.equals("zipFileName")) {
 				dispatchContext.setZipFileName(value);
+			}
+			if (name.equals("outputType")) {
+				dispatchContext.setOutputTypeTrigger(value);
 			}
 
 		}

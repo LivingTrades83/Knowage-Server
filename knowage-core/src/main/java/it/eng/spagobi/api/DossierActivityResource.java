@@ -41,11 +41,14 @@ import javax.ws.rs.core.Response.ResponseBuilder;
 
 import org.apache.clerezza.jaxrs.utils.form.FormFile;
 import org.apache.clerezza.jaxrs.utils.form.MultiPartBody;
+import org.apache.clerezza.jaxrs.utils.form.ParameterValue;
 import org.apache.log4j.Logger;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import it.eng.knowage.commons.security.PathTraversalChecker;
 import it.eng.knowage.engine.dossier.activity.bo.DossierActivity;
+import it.eng.knowage.engines.dossier.utils.DossierDocumentType;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
@@ -53,6 +56,7 @@ import it.eng.spagobi.dossier.dao.ISbiDossierActivityDAO;
 import it.eng.spagobi.tools.massiveExport.bo.ProgressThread;
 import it.eng.spagobi.tools.massiveExport.dao.IProgressThreadDAO;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
  * @author Nikola Simovic (nikola.simovic@mht.net)
@@ -60,21 +64,21 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 @Path("/dossier")
 public class DossierActivityResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(DossierActivityResource.class);
+	private static final Logger LOGGER = Logger.getLogger(DossierActivityResource.class);
 
 	@GET
 	@Path("/activities/{docId}")
 	public List<DossierActivity> loadAllActivitiesByDocument(@PathParam("docId") Integer documentId) {
 
 		ISbiDossierActivityDAO sdaDAO;
-		List<DossierActivity> daList = new ArrayList<DossierActivity>();
+		List<DossierActivity> daList = new ArrayList<>();
 		try {
 			sdaDAO = DAOFactory.getDossierActivityDao();
-			logger.debug("Loading all activities for document with id: " + documentId);
+			LOGGER.debug("Loading all activities for document with id: " + documentId);
 			daList = sdaDAO.loadAllActivities(documentId);
-			logger.debug("Successfully loaded " + daList.size() + " activities for document with id: " + documentId);
+			LOGGER.debug("Successfully loaded " + daList.size() + " activities for document with id: " + documentId);
 		} catch (Exception e) {
-			logger.error("Error while loading activities for document with id: " + documentId, e);
+			LOGGER.error("Error while loading activities for document with id: " + documentId, e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 		return daList;
@@ -88,11 +92,11 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 		DossierActivity dossierActivity;
 		try {
 			sdaDAO = DAOFactory.getDossierActivityDao();
-			logger.debug("Loading activity with id: " + activityId);
+			LOGGER.debug("Loading activity with id: " + activityId);
 			dossierActivity = sdaDAO.loadActivity(activityId);
-			logger.debug("Successfully loaded activity with id: " + activityId);
+			LOGGER.debug("Successfully loaded activity with id: " + activityId);
 		} catch (Exception e) {
-			logger.error("Error while loading activity with id: " + activityId, e);
+			LOGGER.error("Error while loading activity with id: " + activityId, e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 		return dossierActivity;
@@ -109,30 +113,30 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 
 		try {
 			ptDAO = DAOFactory.getProgressThreadDAO();
-			logger.debug("Loading random key with progress id: " + progressId);
+			LOGGER.debug("Loading random key with progress id: " + progressId);
 			pt = ptDAO.loadProgressThreadById(progressId);
 			randomKey = pt.getRandomKey();
-			logger.debug("Successfully loaded random key of progress thread with id: " + progressId);
+			LOGGER.debug("Successfully loaded random key of progress thread with id: " + progressId);
 			return randomKey;
 		} catch (Exception e) {
-			logger.error("Error while loading random key of progress thread with id: " + progressId, e);
+			LOGGER.error("Error while loading random key of progress thread with id: " + progressId, e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 	}
 
 	@GET
 	@Path("/resourcePath")
-	public Response getresourcePath(@QueryParam("templateName") String fileName) throws JSONException {
-		String separator = File.separator;
+	public Response getresourcePath(@QueryParam("templateName") String fileName, @QueryParam("documentId") Integer documentId) throws JSONException {
 		if (fileName.endsWith("?"))
 			fileName = fileName.substring(0, fileName.length() - 1);
-		String outPath = SpagoBIUtilities.getResourcePath() + separator + "dossier" + separator + fileName;
+
+		File file = PathTraversalChecker.get(SpagoBIUtilities.getResourcePath(), "dossier", "" + documentId, fileName);
+
 		ResponseBuilder responseBuilder = null;
-		byte[] bytes;
-		File file = new File(outPath);
+
 		JSONObject response = new JSONObject();
 		try {
-			bytes = Files.readAllBytes(file.toPath());
+			byte[] bytes = Files.readAllBytes(file.toPath());
 			responseBuilder = Response.ok(bytes);
 			responseBuilder.header("Content-Disposition", "attachment; filename=" + fileName);
 			responseBuilder.header("filename", fileName);
@@ -140,10 +144,10 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 		} catch (Exception e) {
 			response.put("STATUS", "KO");
 			response.put("ERROR", e.getMessage());
-			logger.error(e);
+			LOGGER.error(e);
 			return Response.status(200).entity(response.toString()).build();
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 
 		}
 
@@ -152,24 +156,23 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/checkPathFile")
-	public Response checkPathFile(@QueryParam("templateName") String fileName) throws JSONException {
-		String separator = File.separator;
+	public Response checkPathFile(@QueryParam("templateName") String fileName, @QueryParam("documentId") Integer documentId) throws JSONException {
 		if (fileName.endsWith("?"))
 			fileName = fileName.substring(0, fileName.length() - 1);
-		String outPath = SpagoBIUtilities.getResourcePath() + separator + "dossier" + separator + fileName;
-		byte[] bytes;
-		File file = new File(outPath);
+
+		File file = PathTraversalChecker.get(SpagoBIUtilities.getResourcePath(), "dossier", "" + documentId, fileName);
+
 		JSONObject response = new JSONObject();
 		try {
-			bytes = Files.readAllBytes(file.toPath());
+			Files.readAllBytes(file.toPath());
 			response.put("STATUS", "OK");
 		} catch (Exception e) {
 			response.put("STATUS", "KO");
 			response.put("ERROR", e.getMessage());
-			logger.error(e);
+			LOGGER.error(e);
 			return Response.status(200).entity(response.toString()).build();
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 
 		}
 
@@ -183,27 +186,39 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 		byte[] archiveBytes = null;
 		JSONObject response = new JSONObject();
 		try {
-
-			String separator = File.separator;
 			final FormFile file = multipartFormDataInput.getFormFileParameterValues("file")[0];
+			ParameterValue[] documentIdArray = multipartFormDataInput.getParameteValues("documentId");
+			String identifier = "";
+
 			String fileName = file.getFileName();
 			archiveBytes = file.getContent();
-			File dossierDir = new File(SpagoBIUtilities.getResourcePath() + separator + "dossier");
+
+			File dossierDir = null;
+			if (documentIdArray.length == 1) {
+				identifier = documentIdArray[0].toString();
+				dossierDir = PathTraversalChecker.get(SpagoBIUtilities.getResourcePath(), "dossier", identifier);
+			} else {
+				identifier = multipartFormDataInput.getParameteValues("uuid")[0].toString();
+				dossierDir = PathTraversalChecker.get(System.getProperty("java.io.tmpdir"), identifier);
+			}
+
 			if (!dossierDir.exists()) {
 				dossierDir.mkdir();
 			}
-			File f = new File(SpagoBIUtilities.getResourcePath() + separator + "dossier" + separator + fileName);
-			FileOutputStream outputStream = new FileOutputStream(f);
-			outputStream.write(archiveBytes);
-			outputStream.close();
+
+			File f = PathTraversalChecker.get(dossierDir.getAbsolutePath(), fileName);
+
+			try (FileOutputStream outputStream = new FileOutputStream(f)) {
+				outputStream.write(archiveBytes);
+			}
 			response.put("STATUS", "OK");
 		} catch (Exception e) {
-			logger.error("Error while import file", e);
+			LOGGER.error("Error while import file", e);
 			response.put("STATUS", "KO");
 			response.put("ERROR", e.getMessage());
-			logger.error(e);
+			LOGGER.error(e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 
 		}
 
@@ -226,11 +241,11 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 
 			sdaDAO = DAOFactory.getDossierActivityDao();
 			sdaDAO.setUserProfile(profile);
-			logger.debug("Creating new dossier activity");
+			LOGGER.debug("Creating new dossier activity");
 			id = sdaDAO.insertNewActivity(dossierActivity);
-			logger.debug("Successfully created new dossier activity with id: " + id);
+			LOGGER.debug("Successfully created new dossier activity with id: " + id);
 		} catch (Exception e) {
-			logger.error("Error while creating new activity", e);
+			LOGGER.error("Error while creating new activity", e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 		return id.toString();
@@ -252,11 +267,11 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 			sdaDAO = DAOFactory.getDossierActivityDao();
 			sdaDAO.setUserProfile(profile);
 			DossierActivity dossierActivity = sdaDAO.loadActivity(activityId);
-			logger.debug("Updating dossier activity with id: " + dossierActivity.getId());
+			LOGGER.debug("Updating dossier activity with id: " + dossierActivity.getId());
 			id = sdaDAO.updateActivity(dossierActivity, file, type);
-			logger.debug("Successfully updated dossier activity with id: " + dossierActivity.getId());
+			LOGGER.debug("Successfully updated dossier activity with id: " + dossierActivity.getId());
 		} catch (Exception e) {
-			logger.error("Error while updating new activity", e);
+			LOGGER.error("Error while updating new activity", e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 		return id;
@@ -269,7 +284,7 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 
 		ISbiDossierActivityDAO sdaDAO;
 		DossierActivity activity;
-		byte[] file;
+		byte[] file = null;
 
 		Calendar cal = Calendar.getInstance();
 		SimpleDateFormat format = new SimpleDateFormat("dd-MM-yyyy");
@@ -277,21 +292,41 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 
 		try {
 			sdaDAO = DAOFactory.getDossierActivityDao();
-			logger.debug("Downloading PPT file with activity id: " + activityId + ". Activity name: " + activityName);
+			LOGGER.debug("Downloading PPT file with activity id: " + activityId + ". Activity name: " + activityName);
 			activity = sdaDAO.loadActivity(activityId);
-			if (type.equals("doc")) {
+			String extension = "";
+
+			switch (type) {
+			case "doc":
+			case "docx":
 				file = activity.getDocBinContent();
-			} else {
+				extension = DossierDocumentType.DOCX.getType();
+				break;
+			case "ppt":
 				file = activity.getBinContent();
+				extension = DossierDocumentType.PPT.getType();
+				break;
+			case "pptv2":
+				file = activity.getPptV2BinContent();
+				extension = DossierDocumentType.PPTX.getType();
+				break;
+			default:
+				break;
+			}
+
+			if (file == null) {
+				String message = "Error while matching the file extesion";
+				LOGGER.error(message + " " + type);
+				throw new SpagoBIRuntimeException(message);
 			}
 
 			ResponseBuilder response = Response.ok(file);
-			response.header("Content-Disposition", "attachment; filename=" + activityName + "_" + formattedDate + "." + type);
-			response.header("filename", activityName + "_" + formattedDate + "." + type);
+			response.header("Content-Disposition", "attachment; filename=" + activityName + "_" + formattedDate + "." + extension);
+			response.header("filename", activityName + "_" + formattedDate + "." + extension);
 			return response.build();
 
 		} catch (Exception e) {
-			logger.error("Error while downloading file with activity id: " + activityId + " for activity: " + activityName, e);
+			LOGGER.error("Error while downloading file with activity id: " + activityId + " for activity: " + activityName, e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 
@@ -304,11 +339,11 @@ public class DossierActivityResource extends AbstractSpagoBIResource {
 		ISbiDossierActivityDAO sdaDAO;
 		try {
 			sdaDAO = DAOFactory.getDossierActivityDao();
-			logger.debug("Deleting activity with id: " + activityId);
+			LOGGER.debug("Deleting activity with id: " + activityId);
 			sdaDAO.deleteActivity(activityId);
-			logger.debug("Successfully deleted activity with id: " + activityId);
+			LOGGER.debug("Successfully deleted activity with id: " + activityId);
 		} catch (Exception e) {
-			logger.error("Error while deleting activity with id: " + activityId, e);
+			LOGGER.error("Error while deleting activity with id: " + activityId, e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 	}

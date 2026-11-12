@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -33,6 +34,7 @@ import it.eng.qbe.model.properties.IModelProperties;
 import it.eng.qbe.model.properties.SimpleModelProperties;
 import it.eng.qbe.model.structure.HierarchicalDimensionField;
 import it.eng.qbe.model.structure.IModelEntity;
+import it.eng.qbe.model.structure.IModelGroupDescriptor;
 import it.eng.qbe.model.structure.IModelRelationshipDescriptor;
 import it.eng.qbe.model.structure.IModelStructure;
 import it.eng.qbe.model.structure.IModelViewEntityDescriptor;
@@ -48,14 +50,14 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 
 	String modelName;
 	Map<String, Object> dataSourceProperties;
-
+	private static Logger logger = Logger.getLogger(CompositeDataSourceConfiguration.class);
 	List<IDataSourceConfiguration> subConfigurations;
 
 	public CompositeDataSourceConfiguration(String modelName, Map<String, Object> dataSourceProperties) {
 		this.modelName = modelName;
 		this.dataSourceProperties = dataSourceProperties;
 
-		this.subConfigurations = new ArrayList<IDataSourceConfiguration>();
+		this.subConfigurations = new ArrayList<>();
 	}
 
 	public CompositeDataSourceConfiguration() {
@@ -64,11 +66,12 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 
 	public CompositeDataSourceConfiguration(String modelName) {
 		this.modelName = modelName;
-		this.dataSourceProperties = new HashMap<String, Object>();
+		this.dataSourceProperties = new HashMap<>();
 
-		this.subConfigurations = new ArrayList<IDataSourceConfiguration>();
+		this.subConfigurations = new ArrayList<>();
 	}
 
+	@Override
 	public String getModelName() {
 		return modelName;
 	}
@@ -82,6 +85,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * 
 	 * @see it.eng.qbe.datasource.configuration.IDataSourceConfiguration#getDataSourceProperties()
 	 */
+	@Override
 	public Map<String, Object> loadDataSourceProperties() {
 		return dataSourceProperties;
 	}
@@ -99,6 +103,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * 
 	 * @see it.eng.qbe.datasource.configuration.IDataSourceConfiguration#getModelProperties()
 	 */
+	@Override
 	public IModelProperties loadModelProperties() {
 		SimpleModelProperties properties = new SimpleModelProperties();
 		Iterator<IDataSourceConfiguration> it = subConfigurations.iterator();
@@ -116,6 +121,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * 
 	 * @see it.eng.qbe.datasource.configuration.IDataSourceConfiguration#getModelLabels()
 	 */
+	@Override
 	public SimpleModelProperties loadModelI18NProperties() {
 		return loadModelI18NProperties(null);
 	}
@@ -125,6 +131,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * 
 	 * @see it.eng.qbe.datasource.configuration.IDataSourceConfiguration#getModelLabels(java.util.Locale)
 	 */
+	@Override
 	public SimpleModelProperties loadModelI18NProperties(Locale locale) {
 		SimpleModelProperties properties = new SimpleModelProperties();
 		Iterator<IDataSourceConfiguration> it = subConfigurations.iterator();
@@ -142,6 +149,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * 
 	 * @see it.eng.qbe.datasource.configuration.IDataSourceConfiguration#getCalculatedFields()
 	 */
+	@Override
 	public Map<String, List<ModelCalculatedField>> loadCalculatedFields() {
 		// TODO Auto-generated method stub
 		return null;
@@ -152,6 +160,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * 
 	 * @see it.eng.qbe.datasource.configuration.IDataSourceConfiguration#setCalculatedFields(java.util.Map)
 	 */
+	@Override
 	public void saveCalculatedFields(Map<String, List<ModelCalculatedField>> calculatedFields) {
 
 		Iterator<List<ModelCalculatedField>> it = calculatedFields.values().iterator();
@@ -182,7 +191,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * @return the calculated field defined for the specified datamart
 	 */
 	private Map<String, List<ModelCalculatedField>> getCalculatedFieldsForDatamart(IModelStructure structure, String datamartName) {
-		Map<String, List<ModelCalculatedField>> toReturn = new HashMap<String, List<ModelCalculatedField>>();
+		Map<String, List<ModelCalculatedField>> toReturn = new HashMap<>();
 		Map<String, List<ModelCalculatedField>> calculatedFields = structure.getCalculatedFields();
 		Set keys = calculatedFields.keySet();
 		Iterator keysIt = keys.iterator();
@@ -200,26 +209,39 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 
 
 
+	@Override
 	public List<IModelViewEntityDescriptor> loadViews() {
-		List<IModelViewEntityDescriptor> views = new ArrayList<IModelViewEntityDescriptor>();
+		List<IModelViewEntityDescriptor> views = new ArrayList<>();
 		for (IDataSourceConfiguration subConfiguration : subConfigurations) {
 			views.addAll(subConfiguration.loadViews());
 		}
 		return views;
 	}
 
+	@Override
+	public List<IModelGroupDescriptor> loadGroups() {
+		List<IModelGroupDescriptor> groups = new ArrayList<>();
+		for (IDataSourceConfiguration subConfiguration : subConfigurations) {
+			groups.addAll(subConfiguration.loadGroups());
+		}
+		return groups;
+	}
+
+	@Override
 	public HashMap<String, InLineFunction> loadInLineFunctions(String dialect) {
-		HashMap<String, InLineFunction> functions = new HashMap<String, InLineFunction>();
+		HashMap<String, InLineFunction> functions = new HashMap<>();
 		functions = subConfigurations.get(0).loadInLineFunctions(dialect);
 
 		return functions;
 	}
 
+	@Override
 	public Map<String, HierarchicalDimensionField> loadHierarchicalDimension() {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
+	@Override
 	public List<IModelRelationshipDescriptor> loadRelationships() {
 		// check if the relations are configured for this configurations
 		if (dataSourceProperties != null) {
@@ -239,7 +261,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	 * @return
 	 */
 	private List<IModelRelationshipDescriptor> loadSubRelationships() {
-		List<IModelRelationshipDescriptor> relationships = new ArrayList<IModelRelationshipDescriptor>();
+		List<IModelRelationshipDescriptor> relationships = new ArrayList<>();
 		for (IDataSourceConfiguration subConfiguration : subConfigurations) {
 			relationships.addAll(subConfiguration.loadRelationships());
 		}
@@ -255,7 +277,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 	private List<IModelRelationshipDescriptor> loadMyRelationships(JSONObject relationshipsConfJSON) {
 		List<IModelRelationshipDescriptor> relationship;
 
-		relationship = new ArrayList<IModelRelationshipDescriptor>();
+		relationship = new ArrayList<>();
 
 		try {
 			JSONArray relationshipsJSON = relationshipsConfJSON.optJSONArray("relationships");
@@ -267,7 +289,7 @@ public class CompositeDataSourceConfiguration implements IDataSourceConfiguratio
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			logger.error("loadMyRelationships",e);
 		}
 
 		return relationship;

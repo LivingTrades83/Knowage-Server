@@ -157,7 +157,7 @@ public class ModelField extends AbstractModelNode implements IModelField {
 		field.setType(this.type);
 		field.setLength(this.length);
 		field.setPrecision(this.precision);
-		Map<String, Object> properties2 = new HashMap<String, Object>();
+		Map<String, Object> properties2 = new HashMap<>();
 		for (Iterator iterator = properties.keySet().iterator(); iterator.hasNext();) {
 			String key = (String) iterator.next();
 			String o = (String) properties.get(key);
@@ -191,6 +191,12 @@ public class ModelField extends AbstractModelNode implements IModelField {
 	public void setJavaClass(Class javaClass) {
 		this.javaClass = javaClass;
 
+	}
+
+	@Override
+	public boolean isEncrypted() {
+		String decryptValue = getPropertyAsString("decrypt");
+		return new Boolean(decryptValue);
 	}
 
 }

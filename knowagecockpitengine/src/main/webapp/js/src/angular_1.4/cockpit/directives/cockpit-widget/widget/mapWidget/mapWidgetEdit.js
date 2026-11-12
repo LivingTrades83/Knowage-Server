@@ -42,11 +42,40 @@ function mapWidgetEditControllerFunction(
 	$scope.availableBackgroundLayers = [];
 	$scope.availableOperators = [{'label':'==','value':'=='},{'label':'!=','value':'!='},{'label':'<','value':'<','range':true},{'label':'>','value':'>','range':true},{'label':'<=','value':'<=','range':true},{'label':'>=','value':'>=','range':true}];
 	$scope.availableChoroplethOperators = [{'label':'>=','value':'>='},{'label':'<','value':'<'}];
-	$scope.visualizationTypes = [{"name":"markers","enabled":true,"class":"markers"},{"name":"clusters","enabled":true,"class":"clusters"},{"name":"heatmap","enabled":true,"class":"heatmap"},{"name":"choropleth","enabled":true,"class":"choropleth"}];
+	$scope.visualizationTypes = [
+		{"name":"markers","enabled":true,"class":"markers"},
+		{"name":"balloons","enabled":true,"class":"balloons"},
+		{"name":"pies","enabled":true,"class":"pies"},
+		{"name":"clusters","enabled":true,"class":"clusters"},
+		{"name":"heatmap","enabled":true,"class":"heatmap"},
+		{"name":"choropleth","enabled":true,"class":"choropleth"}
+	];
 	$scope.uploadImg = {};
 	$scope.widgetSpinner = false;
 	$scope.availableLegendAlignments = [{'label':$scope.translate.load('sbi.cockpit.style.textAlign.left'),'value':'left'},{'label':$scope.translate.load('sbi.cockpit.style.textAlign.center'),'value':'center'},{'label':$scope.translate.load('sbi.cockpit.style.textAlign.right'),'value':'right'}];
 	$scope.availableVisualizationTypes = ['Linear Gradient', 'Range'];
+	$scope.availableLegendPosition = [
+		{
+			'label':$scope.translate.load('sbi.cockpit.style.legend.position.north'),
+			'value':'north'
+		},
+		{
+			'label':$scope.translate.load('sbi.cockpit.style.legend.position.south'),
+			'value':'south'
+		},
+		{
+			'label':$scope.translate.load('sbi.cockpit.style.legend.position.west'),
+			'value':'west'
+		},
+		{
+			'label':$scope.translate.load('sbi.cockpit.style.legend.position.east'),
+			'value':'east'
+		},
+		{
+			'label':$scope.translate.load('sbi.cockpit.style.legend.position.drag'),
+			'value':'drag'
+		}
+	];
 
 	$scope.getTemplateUrl = function(template){
 		return cockpitModule_generalServices.getTemplateUrl('mapWidget',template);
@@ -64,6 +93,9 @@ function mapWidgetEditControllerFunction(
 		layer.visualizationType = type;
 		if(layer.clusterConf && layer.clusterConf.enabled) layer.clusterConf.enabled = false;
 		if(layer.heatmapConf && layer.heatmapConf.enabled) layer.heatmapConf.enabled = false;
+		if(type == 'markers'){
+			layer.clusterConf = layer.clusterConf || {};
+		}
 		if(type == 'clusters'){
 			layer.clusterConf = layer.clusterConf || {};
 			layer.clusterConf.enabled = true;
@@ -72,6 +104,37 @@ function mapWidgetEditControllerFunction(
 			layer.heatmapConf = layer.heatmapConf || {};
 			layer.heatmapConf.enabled = true;
 		}
+		if(type == "balloons"){
+			layer.balloonConf             = layer.balloonConf             || {};
+			layer.balloonConf.borderColor = layer.balloonConf.borderColor || "rgba(0, 0, 0, 0.5)";
+			layer.balloonConf.fromColor   = layer.balloonConf.fromColor   || "rgba( 65,  65,  65, 0.5)";
+			layer.balloonConf.toColor     = layer.balloonConf.toColor     || "rgba(192, 192, 192, 0.5)";
+			layer.balloonConf.minSize     = layer.balloonConf.minSize     || 5;
+			layer.balloonConf.maxSize     = layer.balloonConf.maxSize     || 35;
+			layer.balloonConf.method      = layer.balloonConf.method      || "CLASSIFY_BY_EQUAL_INTERVALS";
+			layer.balloonConf.classes     = layer.balloonConf.classes     || 3;
+		}
+		if(type == "pies"){
+			layer.pieConf              = layer.pieConf              || {};
+			layer.pieConf.categorizeBy = layer.pieConf.categorizeBy || getFirstAttribute(layer);
+			layer.pieConf.type         = layer.pieConf.type         || "pie"; 
+			layer.pieConf.borderColor  = layer.pieConf.borderColor  || "rgba(0, 0, 0, 0.5)";
+			layer.pieConf.fromColor    = layer.pieConf.fromColor    || "rgba(63, 63, 63, 0.5)";
+			layer.pieConf.toColor      = layer.pieConf.toColor      || "rgba(191, 191, 191, 0.5)";
+			layer.pieConf.minSize      = layer.pieConf.minSize      || 5;
+			layer.pieConf.maxSize      = layer.pieConf.maxSize      || 35;
+			layer.pieConf.method       = layer.pieConf.method       || "CLASSIFY_BY_EQUAL_INTERVALS";
+			layer.pieConf.classes      = layer.pieConf.classes      || 3;
+			delete layer.pieConf.color;
+		}
+	}
+
+	function getFirstAttribute(layer) {
+		return layer.content.columnSelectedOfDataset.find(function(e) { return e.fieldType == "ATTRIBUTE" });
+	}
+
+	$scope.getAttributes = function(layer) {
+		return layer.content.columnSelectedOfDataset.filter(function(e) { return e.fieldType == "ATTRIBUTE" });
 	}
 
 	$scope.expandRow = function(layer,content){
@@ -176,6 +239,20 @@ function mapWidgetEditControllerFunction(
 
 	}
 
+	$scope.setAnimateOn = function(column, layer){
+		var columnsList = layer.content.columnSelectedOfDataset;
+		layer.animateOnColumn = (column.properties.animateOn) ? column.alias : undefined;
+
+		for(var i in columnsList){
+			if(columnsList[i].alias !== column.alias){
+				columnsList[i].properties.animateOn = false;
+			} else {
+				columnsList[i].properties.aggregateBy = true;
+			}
+		}
+
+	}
+
 	$scope.deleteColumn = function(layer,column){
 		var columns = layer.content.columnSelectedOfDataset;
 		columns.splice(columns.indexOf(column),1);
@@ -257,8 +334,12 @@ function mapWidgetEditControllerFunction(
 								currCol.aliasToShow = currCol.alias;
 
 								// Initialize columns
-								if (currCol.fieldType == 'ATTRIBUTE' || currCol.fieldType == 'SPATIAL_ATTRIBUTE') {
+								if (currCol.fieldType == 'SPATIAL_ATTRIBUTE') {
+									currCol.properties.aggregateBy = true;
+								} else if (currCol.fieldType == 'ATTRIBUTE' || currCol.fieldType == 'SPATIAL_ATTRIBUTE') {
 									currCol.properties.aggregateBy = false;
+								} else if (currCol.fieldType == 'MEASURE') {
+									currCol.aggregationSelected = $scope.availableAggregationFunctionsForMeasures[0];
 								}
 
 								columnSelected.push(currCol);
@@ -316,11 +397,8 @@ function mapWidgetEditControllerFunction(
 		  clickOutsideToClose:true,
 		  locals: {  }
 		})
-//	    $scope.hideWidgetSpinner();
 		$scope.widgetSpinner = false;
-//		$scope.safeApply();
 	}
-//  	$scope.colorPickerOptions = {format:'hex'};
 	$scope.colorPickerOptions = {format:'rgb'};
 	$scope.setIconType = function(layer,type) {
 		if (!layer.markerConf) layer.markerConf={};
@@ -491,13 +569,15 @@ function mapWidgetEditControllerFunction(
 		})
 	}
 
-	$scope.getChoroplethThresholds = function(ev, analysisConf) {
+	$scope.getRangeClassificationThresholds = function(ev, analysisConf) {
 
 		$mdDialog.show({
 			controller: function ($scope,$mdDialog) {
 
 				$scope.activeAnalysisConf = {};
+				
 				angular.copy(analysisConf,$scope.activeAnalysisConf);
+				
 				if(!$scope.activeAnalysisConf.properties) $scope.activeAnalysisConf.properties = {};
 
 				$scope.addThreshold = function() {
@@ -512,7 +592,7 @@ function mapWidgetEditControllerFunction(
 				}
 
 				$scope.set = function(){
-					angular.copy($scope.activeAnalysisConf,analysisConf);
+					angular.copy($scope.activeAnalysisConf, analysisConf);
 					$mdDialog.hide();
 				}
 				$scope.cancel = function(){
@@ -521,10 +601,10 @@ function mapWidgetEditControllerFunction(
 			},
 			scope: $scope,
 			preserveScope:true,
-		  templateUrl: $scope.getTemplateUrl('mapWidgetChoroplethThresholds'),
-		  targetEvent: ev,
-		  clickOutsideToClose:true,
-		  locals: {  }
+			templateUrl: $scope.getTemplateUrl('mapWidgetRangeClassificationThresholds'),
+			targetEvent: ev,
+			clickOutsideToClose:true,
+			locals: {}
 		})
 	}
 
@@ -541,6 +621,8 @@ function mapWidgetEditControllerFunction(
 		if($scope.newModel.content.layers.length == 1){ // force target if only one layer is defined
 			$scope.newModel.content.layers[0].targetDefault = true;
 		}
+
+		if(!$scope.newModel.style.legend) $scope.newModel.style.legend = {};
 
 		$scope.addToDatasets();
 		mdPanelRef.close();
@@ -616,13 +698,8 @@ function mapWidgetEditControllerFunction(
 	}
 
 	$scope.needsBorderColor = function(layer) {
-		return layer.content
-			.columnSelectedOfDataset
-			.find(function(e) {
-					return e.fieldType == "SPATIAL_ATTRIBUTE";
-				})
-			.properties
-			.coordType != "string";
+		return layer.content.columnSelectedOfDataset.find(function(e) { return e.fieldType == "SPATIAL_ATTRIBUTE"; }).properties.coordType != "string"
+			|| layer.visualizationType == "balloons";
 	}
 
 	$scope.changeCoordType = function(layer) {

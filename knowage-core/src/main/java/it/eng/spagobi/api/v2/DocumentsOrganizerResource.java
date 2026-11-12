@@ -17,16 +17,6 @@
  */
 package it.eng.spagobi.api.v2;
 
-import it.eng.spago.error.EMFUserError;
-import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
-import it.eng.spagobi.services.rest.annotations.UserConstraint;
-import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
-import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
-import it.eng.spagobi.workspace.dao.IObjFuncOrganizerDAO;
-
 import java.sql.SQLException;
 import java.util.List;
 
@@ -39,29 +29,47 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.hibernate.HibernateException;
 
+import it.eng.spago.error.EMFUserError;
+import it.eng.spagobi.api.AbstractSpagoBIResource;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
+import it.eng.spagobi.services.rest.annotations.UserConstraint;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
+import it.eng.spagobi.workspace.bo.DocumentOrganizer;
+import it.eng.spagobi.workspace.dao.IObjFuncOrganizerDAO;
+
+/**
+ * @deprecated Replaced by KNOWAGE_TM-513
+ * TODO : Delete
+ */
 @Path("/2.0/organizer/documents")
 @ManageAuthorization
+@Deprecated
 public class DocumentsOrganizerResource extends AbstractSpagoBIResource {
 
-	IObjFuncOrganizerDAO objFuncOrganizer;
+	private static final Logger LOGGER = LogManager.getLogger(DocumentsOrganizerResource.class);
 
 	@GET
 	@Path("/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
-	public List loadDocumentsForFolder(@PathParam("id") Integer folderId) {
-		logger.debug("IN");
+	public List<DocumentOrganizer> loadDocumentsForFolder(@PathParam("id") Integer folderId) {
+		LOGGER.debug("IN");
 		try {
-			objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
+			IObjFuncOrganizerDAO objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
 			objFuncOrganizer.setUserProfile(getUserProfile());
-			List documents = objFuncOrganizer.loadDocumentsByFolder(folderId);
+			List<DocumentOrganizer> documents = objFuncOrganizer.loadDocumentsByFolder(folderId);
 			return documents;
 		} catch (Exception exception) {
-			logger.error("Error while loading documents from organizer.", exception);
-			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.load", buildLocaleFromSession(), exception);
+			LOGGER.error("Error while loading documents from organizer.", exception);
+			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.load", getLocale(), exception);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
@@ -75,42 +83,41 @@ public class DocumentsOrganizerResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/")
 	@Produces(MediaType.APPLICATION_JSON)
-	public List loadDocumentsForFolder() {
+	public List<DocumentOrganizer> loadDocumentsForFolder() {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
-
-			objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
+			IObjFuncOrganizerDAO objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
 			objFuncOrganizer.setUserProfile(getUserProfile());
-			List documents = objFuncOrganizer.loadAllOrganizerDocuments();
+			List<DocumentOrganizer> documents = objFuncOrganizer.loadAllOrganizerDocuments();
 			return documents;
 
 		} catch (HibernateException he) {
 
-			logger.error("Error while loading all documents from the Organizer.", he);
-			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.load", buildLocaleFromSession(), he);
+			LOGGER.error("Error while loading all documents from the Organizer.", he);
+			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.load", getLocale(), he);
 
 		} catch (Exception exception) {
 
-			logger.error("Error while loading all documents from the Organizer.", exception);
-			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.load", buildLocaleFromSession(), exception);
+			LOGGER.error("Error while loading all documents from the Organizer.", exception);
+			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.load", getLocale(), exception);
 
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 
 	}
 
 	@POST
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.SAVE_INTO_FOLDER_FUNCTIONALITY })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SAVE_INTO_FOLDER_FUNCTIONALITY })
 	public Response addDocumentToOrganizer(@PathParam("id") Integer documentId) throws EMFUserError {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
-			objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
+			IObjFuncOrganizerDAO objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
 			objFuncOrganizer.setUserProfile(getUserProfile());
 			objFuncOrganizer.addDocumentToOrganizer(documentId);
 			return Response.ok().build();
@@ -122,7 +129,7 @@ public class DocumentsOrganizerResource extends AbstractSpagoBIResource {
 		 */
 		// catch (Exception exception) {
 		// logger.error("Error while saving document in organizer.", exception);
-		// throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.post", buildLocaleFromSession(), exception);
+		// throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.post", getLocale(), exception);
 		//
 		// }
 		catch (HibernateException he) {
@@ -137,31 +144,31 @@ public class DocumentsOrganizerResource extends AbstractSpagoBIResource {
 			String state = ((SQLException) he.getCause().getCause()).getSQLState();
 
 			if (state.equals("23000")) {
-				logger.error("Document duplication while adding document to the Organizer", he);
+				LOGGER.error("Document duplication while adding document to the Organizer", he);
 				throw new SpagoBIRuntimeException("sbi.workspace.organizer.document.addtoorganizer.error.duplicateentry", he);
 			} else {
-				logger.error("Error while adding document to the Organizer", he);
+				LOGGER.error("Error while adding document to the Organizer", he);
 				throw new SpagoBIRuntimeException("sbi.workspace.organizer.document.addtoorganizer.error.general", he);
 			}
 
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
 	@DELETE
 	@Path("/{folderId}/{docId}")
 	public Response deleteDocumentFromOrganizer(@PathParam("folderId") Integer folderId, @PathParam("docId") Integer docId) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		try {
-			objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
+			IObjFuncOrganizerDAO objFuncOrganizer = DAOFactory.getObjFuncOrganizerDAO();
 			objFuncOrganizer.removeDocumentFromOrganizer(folderId, docId);
 			return Response.ok().build();
 		} catch (Exception exception) {
-			logger.error("Error while deleting a document in organizer.", exception);
-			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.delete", buildLocaleFromSession(), exception);
+			LOGGER.error("Error while deleting a document in organizer.", exception);
+			throw new SpagoBIRestServiceException("sbi.workspace.organizer.error.delete", getLocale(), exception);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 

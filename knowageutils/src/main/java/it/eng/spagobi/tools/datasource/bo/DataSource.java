@@ -28,6 +28,7 @@ import javax.naming.NamingException;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -58,7 +59,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  * serialization only.
  */
 @JsonInclude(Include.NON_NULL)
-@JsonIgnoreProperties(value = { "pwd" }, allowGetters = false, allowSetters = true)
+@JsonIgnoreProperties(value = { "pwd", "type" }, allowGetters = false, allowSetters = true, ignoreUnknown = true)
 public class DataSource implements Serializable, IDataSource {
 
 	private static transient Logger logger = Logger.getLogger(DataSource.class);
@@ -111,6 +112,7 @@ public class DataSource implements Serializable, IDataSource {
 
 	private Boolean readOnly;
 	private Boolean writeDefault;
+	private Boolean useForDataprep;
 
 	// Advanced Options - JDBCPoolConfiguration
 	private JDBCDataSourcePoolConfiguration jdbcPoolConfiguration;
@@ -118,12 +120,17 @@ public class DataSource implements Serializable, IDataSource {
 	// Owner of DataSource - UserIn column in Database
 	private String owner;
 
+	@Override
 	public Boolean getReadOnly() {
 		return readOnly;
 	}
 
 	public Boolean getWriteDefault() {
 		return writeDefault;
+	}
+
+	public Boolean getUseForDataprep() {
+		return useForDataprep;
 	}
 
 	@Override
@@ -167,6 +174,8 @@ public class DataSource implements Serializable, IDataSource {
 		sbd.setSchemaAttribute(schemaAttribute);
 		sbd.setReadOnly(readOnly);
 		sbd.setWriteDefault(writeDefault);
+		sbd.setUseForDataprep(useForDataprep);
+
 		if (jdbcPoolConfiguration != null) {
 			sbd.setJdbcPoolConfiguration((String) new JDBCDataSourcePoolConfigurationJSONSerializer().serialize(jdbcPoolConfiguration));
 		}
@@ -237,14 +246,13 @@ public class DataSource implements Serializable, IDataSource {
 				attributeValue = profile.getUserAttribute(attributeName);
 				if (attributeValue != null) {
 					schema = attributeValue.toString();
-					Assert.assertNotEmpty(schema.trim(), "Attibute value of current User profile is not provided");
 				}
 			} catch (Exception e) {
 				throw new SpagoBIRuntimeException("Cannot get attribute [" + attributeName + "] from user profile object", e);
 			}
 			logger.debug("Attribute " + attributeName + " is " + attributeValue);
 
-			jndiName = getJndi() + schema;
+			jndiName = getJndi() + (StringUtils.isNotBlank(schema) ? schema : "");
 			logger.debug("OUT: JNDI name is [" + jndiName + "]");
 
 			return jndiName;
@@ -277,7 +285,7 @@ public class DataSource implements Serializable, IDataSource {
 	 */
 	@JsonIgnore
 	private Connection getDirectConnection() throws ClassNotFoundException, SQLException {
-		return DataSourceManager.getConnection(this);
+		return DataSourceManager.getInstance().getConnection(this);
 	}
 
 	/*
@@ -523,10 +531,22 @@ public class DataSource implements Serializable, IDataSource {
 	}
 
 	@Override
+	public void setUseForDataprep(Boolean useForDataprep) {
+		this.useForDataprep = useForDataprep;
+	}
+
+	@Override
 	public Boolean checkIsReadOnly() {
 		if (readOnly == null)
 			readOnly = true;
 		return readOnly;
+	}
+
+	@Override
+	public Boolean checkUseForDataprep() {
+		if (useForDataprep == null)
+			useForDataprep = false;
+		return useForDataprep;
 	}
 
 	@Override
@@ -598,6 +618,8 @@ public class DataSource implements Serializable, IDataSource {
 		result = prime * result + ((urlConnection == null) ? 0 : urlConnection.hashCode());
 		result = prime * result + ((user == null) ? 0 : user.hashCode());
 		result = prime * result + ((writeDefault == null) ? 0 : writeDefault.hashCode());
+		result = prime * result + ((useForDataprep == null) ? 0 : useForDataprep.hashCode());
+		result = prime * result + ((jdbcPoolConfiguration == null) ? 0 : jdbcPoolConfiguration.hashCode());
 		return result;
 	}
 
@@ -666,6 +688,11 @@ public class DataSource implements Serializable, IDataSource {
 			if (other.user != null)
 				return false;
 		} else if (!user.equals(other.user))
+			return false;
+		if (jdbcPoolConfiguration == null) {
+			if (other.jdbcPoolConfiguration != null)
+				return false;
+		} else if (!jdbcPoolConfiguration.equals(other.jdbcPoolConfiguration))
 			return false;
 		return true;
 	}

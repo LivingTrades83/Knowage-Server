@@ -15,12 +15,14 @@ public class SaveDocumentDTO {
 	@JsonProperty("action")
 	private String action;
 	@JsonProperty("pathInfo")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	private String pathInfo;
 	@JsonProperty("customData")
 	private CustomDataDTO customData;
 	@JsonProperty("sourceData")
 	private SourceDatasetDTO sourceData;
 	@JsonProperty("folders")
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	private List<FolderDTO> folders;
 
 	public SaveDocumentDTO() {
@@ -92,6 +94,12 @@ public class SaveDocumentDTO {
 
 	public void setFolders(List<FolderDTO> folders) {
 		this.folders = folders;
+	}
+
+	@Override
+	public String toString() {
+		return "SaveDocumentDTO [updateFromWorkspace=" + updateFromWorkspace + ", document=" + document + ", action=" + action + ", pathInfo=" + pathInfo
+				+ ", customData=" + customData + ", sourceData=" + sourceData + ", folders=" + folders + "]";
 	}
 
 }

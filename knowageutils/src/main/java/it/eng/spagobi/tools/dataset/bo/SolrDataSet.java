@@ -20,7 +20,6 @@ package it.eng.spagobi.tools.dataset.bo;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -72,14 +71,14 @@ public class SolrDataSet extends RESTDataSet {
 		evaluationStrategy = DatasetEvaluationStrategyType.SOLR;
 	}
 
-	public SolrDataSet(JSONObject jsonConf, HashMap<String, String> parametersMap) {
+	public SolrDataSet(JSONObject jsonConf, Map<String, String> parametersMap) {
 		this.setParamsMap(parametersMap);
 		setConfiguration(jsonConf.toString());
 		initConf(jsonConf, true);
 		evaluationStrategy = DatasetEvaluationStrategyType.SOLR;
 	}
 
-	public SolrDataSet(JSONObject jsonConf, HashMap<String, String> parametersMap, UserProfile userProfile) {
+	public SolrDataSet(JSONObject jsonConf, Map<String, String> parametersMap, UserProfile userProfile) {
 		this.setParamsMap(parametersMap);
 		setConfiguration(jsonConf.toString());
 		initConf(jsonConf, true, userProfile);
@@ -237,7 +236,7 @@ public class SolrDataSet extends RESTDataSet {
 				String jsonPathType = JSONPathDataReader.JSONPathAttribute.getJsonPathTypeFromSolrFieldType(type);
 				jsonPathAttributes.add(new JSONPathDataReader.JSONPathAttribute(name, "$." + name, jsonPathType, multiValued));
 			} catch (JSONException e) {
-				throw new RuntimeException("Cannot parse Solr schema: " + String.valueOf(solrField), e);
+				throw new RuntimeException("Cannot parse Solr schema: " + solrField, e);
 			}
 		}
 		return jsonPathAttributes;
@@ -291,8 +290,7 @@ public class SolrDataSet extends RESTDataSet {
 		String body = null;
 		String address = null;
 		/*
-		 * In case in the future we will let the user to choose
-		 * between GET and POST...
+		 * In case in the future we will let the user to choose between GET and POST...
 		 */
 		HttpMethod method = HttpMethod.Post;
 		if (method == HttpMethod.Get) {
@@ -300,7 +298,7 @@ public class SolrDataSet extends RESTDataSet {
 		} else if (method == HttpMethod.Post) {
 			address = solrConfiguration.toString(false);
 			body = solrConfiguration.getQueryParameters();
-			requestHeaders.put("Content-Type", "application/x-www-form-urlencoded; charset=utf-8"); 
+			requestHeaders.put("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
 		}
 		setDataProxy(new SolrDataProxy(address, method, body, facetField, requestHeaders, offset, fetchSize, maxResults, isFacet()));
 	}
@@ -353,7 +351,7 @@ public class SolrDataSet extends RESTDataSet {
 	}
 
 	public void setSolrQuery(SolrQuery solrQuery) {
-		setSolrQuery(solrQuery, Collections.EMPTY_MAP);
+		setSolrQuery(solrQuery, Collections.emptyMap());
 	}
 
 	public void setSolrQuery(SolrQuery solrQuery, Map<String, String> facets) {
@@ -465,7 +463,7 @@ public class SolrDataSet extends RESTDataSet {
 		String paramValue = paramValues.get(paramName);
 		String[] values = null;
 		if (isMultiValue) {
-			List<String> list = new ArrayList<String>();
+			List<String> list = new ArrayList<>();
 			boolean paramValueConsumed = false;
 			try {
 				JSONArray jsonArray = new JSONArray(paramValue);
@@ -480,15 +478,6 @@ public class SolrDataSet extends RESTDataSet {
 				list.add(paramValue);
 			}
 			values = list.toArray(new String[0]);
-			if (values != null && values.length == 1 && !values[0].isEmpty()) {
-				String valuesString = values[0];
-//				if (valuesString.startsWith("'") && valuesString.endsWith("'")) {
-//					// patch for KNOWAGE-4600: An error occurs when propagating a driver value with commas through cross navigation.
-//					// Do nothing, keep values as it is
-//				} else {
-//					values = valuesString.split(",");
-//				}
-			}
 		} else {
 			values = Arrays.asList(paramValue).toArray(new String[0]);
 		}
@@ -496,19 +485,19 @@ public class SolrDataSet extends RESTDataSet {
 	}
 
 	private static String getParametersNotValorized(List<JSONObject> parameters, Map<String, String> parametersValues) throws JSONException {
-		String toReturn = "";
+		StringBuilder toReturn = new StringBuilder("");
 
 		for (Iterator<JSONObject> iterator = parameters.iterator(); iterator.hasNext();) {
 			JSONObject parameter = iterator.next();
 			String parameterName = parameter.getString("namePar");
 			if (parametersValues.get(parameterName) == null) {
-				toReturn += parameterName;
+				toReturn.append(parameterName);
 				if (iterator.hasNext()) {
-					toReturn += ", ";
+					toReturn.append(", ");
 				}
 			}
 		}
-		return toReturn;
+		return toReturn.toString();
 	}
 
 	/**
@@ -541,19 +530,20 @@ public class SolrDataSet extends RESTDataSet {
 			String value = values[j].trim();
 			if (!value.isEmpty()) {
 				if (value.startsWith(delim) && value.endsWith(delim)) {
-					if (value.contains("','")) {
+					if (value.contains(",")) {
 						value = value.substring(1, value.length() - 1);
-						String[] valuesArray = value.split("','");
+						String[] valuesArray = value.split(",");
 						String newValuesFromArray = "";
 						for (int i = 0; i < valuesArray.length; i++) {
 							String temp = valuesArray[i];
 							if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim))
 								temp = temp.substring(1, temp.length() - 1);
-							temp = temp.replaceAll("'", "''");
+							temp = temp.replaceAll("'", "\"");
 							if (i == 0) {
 								if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim)) {
 									temp = temp.substring(1, temp.length() - 1);
 								}
+								temp = "\"" + temp + "\"";
 								newValuesFromArray = (temp);
 							}
 
@@ -561,7 +551,8 @@ public class SolrDataSet extends RESTDataSet {
 								if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim)) {
 									temp = temp.substring(1, temp.length() - 1);
 								}
-								newValuesFromArray = newValuesFromArray + "," + (temp);
+								temp = "\"" + temp + "\"";
+								newValuesFromArray = newValuesFromArray + " , " + (temp);
 							}
 
 						}

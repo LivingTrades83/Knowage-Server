@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.Calendar;
 import java.util.Date;
 
-import javax.portlet.PortletSession;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
@@ -35,6 +34,7 @@ import com.auth0.jwt.exceptions.JWTVerificationException;
 import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
 import it.eng.spagobi.security.hmacfilter.HMACUtils;
+import it.eng.spagobi.security.saml.FederatedTokenGuard;
 import it.eng.spagobi.services.security.exceptions.SecurityException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
@@ -43,9 +43,9 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class JWTTokenAsUserUniqueIdentifierSsoService implements SsoServiceInterface {
 
-	static private Logger logger = Logger.getLogger(JWTTokenAsUserUniqueIdentifierSsoService.class);
+	private static Logger logger = Logger.getLogger(JWTTokenAsUserUniqueIdentifierSsoService.class);
 	
-	static private Algorithm algorithm;
+	private static Algorithm algorithm;
 
 	static {
 		try {
@@ -73,6 +73,7 @@ public class JWTTokenAsUserUniqueIdentifierSsoService implements SsoServiceInter
 		}
 	}
 	
+	@Override
 	public String readUserIdentifier(HttpServletRequest request) {
 		try {
 			String jwtToken = request.getParameter(SsoServiceInterface.USER_ID);
@@ -80,9 +81,9 @@ public class JWTTokenAsUserUniqueIdentifierSsoService implements SsoServiceInter
 				logger.debug("JWT token not found in request");
 				return null;
 			}
-			logger.debug("JWT token retrieved : [" + jwtToken + "]");
+			logger.debug("JWT token retrieved : [" + (FederatedTokenGuard.isFederated(jwtToken) ? "federated credential redacted" : jwtToken) + "]");
 			JWTVerifier verifier = JWT.require(algorithm).build();
-			verifier.verify(jwtToken);
+			FederatedTokenGuard.checkDecoded(verifier.verify(jwtToken));
 			logger.debug("JWT token verified properly");
 			return jwtToken; // we consider the JWT token as user unique identifier
 		} catch (JWTVerificationException e) {
@@ -90,11 +91,7 @@ public class JWTTokenAsUserUniqueIdentifierSsoService implements SsoServiceInter
 		}
 	}
 
-	public String readUserIdentifier(PortletSession session) {
-		logger.debug("NOT Implemented");
-		return "";
-	}
-
+	@Override
 	public String readTicket(HttpSession session) throws IOException {
 		Calendar date = Calendar.getInstance();
 		long t = date.getTimeInMillis();
@@ -106,12 +103,14 @@ public class JWTTokenAsUserUniqueIdentifierSsoService implements SsoServiceInter
 		return token;
 	}
 
+	@Override
 	public void validateTicket(String ticket, String userId) throws SecurityException {
 		try {
+			FederatedTokenGuard.check(userId);
 			String jwtToken = ticket;
-			logger.debug("JWT token in input : [" + jwtToken + "]");
+			logger.debug("JWT token in input : [" + (FederatedTokenGuard.isFederated(jwtToken) ? "federated credential redacted" : jwtToken) + "]");
 			JWTVerifier verifier = JWT.require(algorithm).withIssuer("knowage").build();
-			verifier.verify(jwtToken);
+			FederatedTokenGuard.checkDecoded(verifier.verify(jwtToken));
 			logger.debug("JWT token verified properly");
 		} catch (JWTVerificationException e) {
 			throw new SecurityException("Invalid JWT token!", e);

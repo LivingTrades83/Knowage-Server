@@ -5,13 +5,29 @@
 		xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
-		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-		version="3.1" >
+		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+		version="4.0" >
+
+	<distributable/>
 
 	<display-name>knowagesdk</display-name>
 
 	<welcome-file-list>
 		<welcome-file>index.jsp</welcome-file>
 	</welcome-file-list>
+	<error-page>
+		<exception-type>java.lang.Throwable</exception-type>
+		<location>/html/error.html</location>
+	</error-page>
+
+	<error-page>
+		<error-code>404</error-code>
+		<location>/html/error.html</location>
+	</error-page>
+
+	<error-page>
+		<error-code>500</error-code>
+		<location>/html/error.html</location>
+	</error-page>
 
 </web-app>

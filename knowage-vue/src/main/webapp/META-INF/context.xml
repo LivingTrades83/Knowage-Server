@@ -1,3 +1,0 @@
-<Context docBase="knowage-vue" path="/knowage-vue" reloadable="true">
-	<CookieProcessor sameSiteCookies="strict" />
-</Context>

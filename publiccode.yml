@@ -1,8 +1,8 @@
-# This repository adheres to the publiccode.yml standard by including this 
+# This repository adheres to the publiccode.yml standard by including this
 # metadata file that makes public software easily discoverable.
 # More info at https://github.com/italia/publiccode.yml
 
-publiccodeYmlVersion: '0.2'
+publiccodeYmlVersion: "0.4.0"
 applicationSuite: Knowage Suite
 categories:
   - data-analytics
@@ -12,66 +12,86 @@ dependsOn:
   open:
     - name: Java
       optional: false
-      version: '8'
-      versionMax: ''
-      versionMin: ''
+      version: "8"
+      versionMax: ""
+      versionMin: ""
 description:
   it:
-    apiDocumentation: 'https://knowage.docs.apiary.io/'
     awards:
-      - OW2CON '18 Best Project - Market award
-    documentation: 'https://knowage-suite.readthedocs.io/'
+      - OW2CON '18 Best Project - Market Award
+      - OW2CON '20 best Project - Technology Award
+    documentation: "https://knowage-suite.readthedocs.io/"
     features:
-      - >-
-        La suite è composta da diversi moduli, ognuno concepito per uno
-        specifico dominio analitico
-      - >-
-        Sono utilizzabili singolarmente o combinati garantendo maggior copertura
-        dei requisiti dell'utente
-      - >-
-        BIG DATA per unire i dati strutturati aziendali con quelli esterni multi
-        strutturati
-      - >-
-        SMART INTELLIGENCE per la tipica BI su dati strutturati, incentrata su
-        selfservice/ad-hoc reporting
+      - "KNOWAGE è composto di due moduli autonomi:"
       - ENTERPRISE REPORTING per la produzione e distribuzione di report statici
-      - >-
-        LOCATION INTELLIGENCE per unire business data con informazioni
-        geografiche o spaziali
-      - >-
-        PERFORMANCE MANAGEMENT per gestire i KPI e organizzare scorecards, per
-        il monitoraggio in realtime
-      - >-
-        PREDICTIVE ANALYSIS per analisi avanzate, ad esempio previsionali o
-        prescrittive
-    genericName: Business Analytics suite
-    longDescription: >
-      Knowage è la suite open source per la business analytics moderna che
+      - |-
+        SMART INTELLIGENCE per la tipica BI su dati strutturati, incentrata su
+        self-service/ad-hoc reporting
+      - |-
+        Questi moduli possono essere utilizzati singolarmente o combinati tra
+        loro.
+      - |-
+        Il modulo SMART INTELLIGENCE può essere arricchito con 4 diversi
+        plugins:
+      - |-
+        LOCATION INTELLIGENCE: combina i dati di business con informazioni
+        spaziali o geografiche
+      - |-
+        PERFORMANCE MANAGEMENT: gestisce KPI e relative soglie, organizza
+        scorecard con alert in real time
+      - |-
+        CUSTOM ANALYTICS: svolge analisi avanzate, dalla simulazione what-if
+        all’embed di script R e Python
+      - |-
+        SMART DATA: combina indici Solr con altre fonti dati e abilita faceted
+        views e full text search
+    # DEPRECATED : genericName: Business Intelligence e Analytics
+    longDescription: |
+      KNOWAGE è la suite open source per la business intelligence e gli analytics che
       affianca alle tradizionali capacità di business intelligence, strumenti
       agili che promuovono l’autonomia degli utenti business e funzionalità
       avanzate rivolte al segmento emergente dei data scientist. E’ quindi un
       prodotto per la piena valorizzazione del patrimonio dati aziendale, anche
       in relazione a sorgenti informative esterne ed eterogenee, cogliendo in
-      pieno il significato del fenomeno dei big data. La suite Knowage è
-      supportata dal Gruppo Engineering, uno dei principali players nel campo
-      della digital transformation per il settore pubblico e privato, con oltre
-      12.000 professionisti e 65 sedi nel mondo.
+      pieno il significato del fenomeno dei big data. La suite KNOWAGE è
+      supportata dal Gruppo Engineering, la Digital Transformation Company,
+      leader in Italia e in continua espansione nel mondo, con circa 12.000
+      dipendenti e oltre 60 sedi distribuite in Europa, Stati Uniti e Sud
+      America.
     screenshots:
-      - >-
-        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/screenshots/knowage-covid-italy-regional.png
-      - >-
-        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/screenshots/knowage-cockpit2.jpg
-      - >-
-        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/screenshots/knowage-cockpit.jpg
-      - >-
-        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/screenshots/knowage-map.jpg
-      - >-
-        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/screenshots/knowage-responsive2.jpg
-    shortDescription: Suite open source completa per la moderna Business Analytics
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage_market_cockpit.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-advanced-analytics.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-alert.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-customization.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-dashboard-transportation.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-healthcare1-cockpit.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-retail-cockpit.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-sintesi-homenergia.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-developments-homenergia.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-covid-italy-regional.png
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-cockpit2.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-cockpit.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-map.jpg
+      - |-
+        https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/screenshots/knowage-responsive2.jpg
+    shortDescription: Suite open source completa per la Business Intelligence e gli Analytics
     videos:
-      - 'https://www.youtube.com/watch?v=-fZIsVh_qsc'
-      - 'https://www.youtube.com/watch?v=59SAgrY_Hoo'
-      - 'https://www.youtube.com/watch?v=0r7opJ9P0jc'
+      - "https://www.youtube.com/watch?v=-fZIsVh_qsc"
+      - "https://www.youtube.com/watch?v=59SAgrY_Hoo"
+      - "https://www.youtube.com/watch?v=0r7opJ9P0jc"
 developmentStatus: stable
 intendedAudience:
   scope:
@@ -100,13 +120,13 @@ it:
     lineeGuidaDesign: false
     misureMinimeSicurezza: false
     modelloInteroperabilita: false
-  countryExtensionVersion: '0.2'
+  countryExtensionVersion: "0.2"
   piattaforme:
     anpr: false
     cie: false
     pagopa: false
     spid: false
-landingURL: 'https://www.knowage-suite.com/site/home/'
+landingURL: "https://github.com/KnowageLabs/Knowage-Server"
 legal:
   license: AGPL-3.0-only
   mainCopyrightOwner: Engineering Ingegneria Informatica S.p.A.
@@ -117,19 +137,30 @@ localisation:
     - en
     - fr
     - es
+    - de
+    - bg
+    - da
+    - hu
+    - ja
+    - ar
+    - ko
+    - tr
+    - pt
+    - zh
+    - ru
   localisationReady: true
-logo: >-
-  https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/logo/logo.svg
+logo: |-
+  https://raw.githubusercontent.com/KnowageLabs/Knowage-Server/master/images/logo/logo.svg
 maintenance:
   contacts:
     - email: angelo.bernabei@eng.it
       name: Angelo Bernabei
-    - email: davide.zerbetto@eng.it
-      name: Davide Zerbetto
+    - email: davide.vernassa@eng.it
+      name: Davide Vernassa
   contractors:
     - name: Engineering Ingegneria Informatica S.p.A.
-      until: '2050-12-31'
-      website: 'https://www.eng.it/'
+      until: "2050-12-31"
+      website: "https://www.eng.it/"
   type: contract
 name: Knowage Server
 platforms:
@@ -137,11 +168,11 @@ platforms:
   - windows
   - mac
   - linux
-releaseDate: '2021-04-06'
-roadmap: 'https://github.com/KnowageLabs/Knowage-Server/blob/master/ROADMAP.md'
+releaseDate: "2022-07-16"
+roadmap: "https://github.com/KnowageLabs/Knowage-Server/blob/master/ROADMAP.md"
 softwareType: standalone/web
-softwareVersion: 7.4.2
-url: 'https://github.com/KnowageLabs/Knowage-Server.git'
+softwareVersion: "9.0"
+url: "https://github.com/KnowageLabs/Knowage-Server.git"
 usedBy:
   - Azienda Unità Locale Sanitaria di Modena
   - Enav S.p.A.

@@ -5,15 +5,31 @@
 		xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
-		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-		version="3.1" >
+		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+		version="4.0" >
 
-	<display-name>Knowage Jasperreport Engine</display-name>
+	<distributable/>
+
+	<display-name>knowagejasperreportengine</display-name>
 	<description>Knowage Jasperreport Engine</description>
+	<distributable/>
 
-	<!--  ============================================================================ -->
-	<!--  FILTERS                                                                      -->
-	<!--  ============================================================================ -->
+	<!-- 
+		Logger Setup Filter.
+		
+		Set the logger according the HTTP request data.
+	 -->
+	<filter>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<filter-class>it.eng.knowage.utils.filters.LoggerSetupFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+	</filter-mapping>
+
+
 
 	<filter>
 		<filter-name>EncodingFilter</filter-name>
@@ -147,10 +163,12 @@
 		<servlet-class>it.eng.spagobi.engines.jasperreport.services.JRImageServlet</servlet-class>
 	</servlet>
 
+	<!--  TO REMOVE  
 	<servlet>
 		<servlet-name>SpagoBIDrillServlet</servlet-name>
 		<servlet-class>it.eng.spagobi.utilities.callbacks.drill.SpagoBIDrillServlet</servlet-class>
 	</servlet>
+	-->
 
 	<servlet>
 		<servlet-name>EngineTestServlet</servlet-name>
@@ -176,11 +194,12 @@
 		<url-pattern>/JRImageServlet</url-pattern>
 	</servlet-mapping>
 
+	<!-- 
 	<servlet-mapping>
 		<servlet-name>SpagoBIDrillServlet</servlet-name>
 		<url-pattern>/SpagoBIDrillServlet</url-pattern>
 	</servlet-mapping>
-
+     -->
 	<servlet-mapping>
 		<servlet-name>EngineTestServlet</servlet-name>
 		<url-pattern>/JasperReportServletTest</url-pattern>

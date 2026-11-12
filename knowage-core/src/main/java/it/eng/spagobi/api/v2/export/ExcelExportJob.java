@@ -1,234 +1,245 @@
-/*
- * Knowage, Open Source Business Intelligence suite
- * Copyright (C) 2016 Engineering Ingegneria Informatica S.p.A.
- *
- * Knowage is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Knowage is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// File: `src/main/java/it/eng/spagobi/api/v2/export/ExcelExportJob.java`
 package it.eng.spagobi.api.v2.export;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.math.BigDecimal;
-import java.sql.Timestamp;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
-import org.apache.log4j.LogMF;
+import it.eng.knowage.commons.multitenant.OrganizationImageManager;
+import it.eng.spagobi.tenant.TenantManager;
+import it.eng.spagobi.tools.dataset.bo.IDataSet;
+import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
+import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
+import it.eng.spagobi.tools.dataset.common.iterator.ResultSetIterator;
+import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
+import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import org.apache.log4j.Logger;
 import org.apache.poi.ss.SpreadsheetVersion;
-import org.apache.poi.ss.usermodel.BorderStyle;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.CreationHelper;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
-import it.eng.spagobi.tools.dataset.bo.IDataSet;
-import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
-import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
-import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import java.io.*;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.sql.ResultSetMetaData;
+import java.sql.Timestamp;
+import java.util.*;
+import org.apache.commons.lang3.SystemUtils;
 
 public class ExcelExportJob extends AbstractExportJob {
+	private static final Logger LOGGER = Logger.getLogger(ExcelExportJob.class);
 
 	private static final String DATE_FORMAT = "dd/MM/yyyy";
-
-	private static final Logger logger = Logger.getLogger(ExcelExportJob.class);
-
 	private static final String TIMESTAMP_FORMAT = "dd/MM/yyyy HH:mm:ss.SSS";
+
+	private String imageB64 = "";
+	private String documentName = "";
 
 	@Override
 	protected void export(JobExecutionContext context) throws JobExecutionException {
 
-		logger.debug("Start Excel export for dataSetId " + getDataSetId() + " with id " + getId() + " by user " + getUserProfile().getUserId());
+        Path spillFile = null;
+        try (OutputStream exportFileOS = getDataOutputStream()) {
+            spillFile = null;
+            IDataSet dataSet = getDataSet();
+            IMetaData dataSetMetadata = dataSet.getMetadata();
 
-		OutputStream exportFileOS = getDataOutputStream();
+            if (SystemUtils.IS_OS_UNIX) {
+                FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
+                spillFile = Files.createTempFile("excel-export-", ".tsv", attr);
+            } else {
+                File f = Files.createTempFile("excel-export-", ".tsv").toFile();
+                f.setReadable(true, true);
+                f.setWritable(true, true);
+                spillFile = f.toPath();
+            }
+
+            // Phase 1: DB read -> TSV spill (holds pool connection only here)
+            List<IFieldMetaData> filteredMetadata;
+            filteredMetadata = spillToTsvAndCloseIterator(dataSet, dataSetMetadata, spillFile);
+
+            // Phase 2: TSV -> XLSX (no DB connection held)
+            writeXlsxFromTsv(exportFileOS, dataSet.getLabel(), filteredMetadata, spillFile);
+
+            exportFileOS.flush();
+        } catch (Exception e) {
+            String msg = String.format("Error writing data file `%s`\\!", getDataFile());
+            LOGGER.error(msg, e);
+            throw new JobExecutionException(msg, e);
+        } finally {
+
+            if (spillFile != null) {
+                try {
+                    Files.deleteIfExists(spillFile);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+	private List<IFieldMetaData> spillToTsvAndCloseIterator(IDataSet dataSet, IMetaData dataSetMetadata, Path spillFile) throws Exception {
+		DataIterator iterator = null;
 		try {
+			iterator = dataSet.iterator();
 
-			IDataSet dataSet = getDataSet();
-
-			SimpleDateFormat timeStampFormat = new SimpleDateFormat(TIMESTAMP_FORMAT, getLocale());
-			SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT, getLocale());
-
-			// create WB
-			try(Workbook wb = new SXSSFWorkbook()) {
-				Sheet sheet = wb.createSheet("dataset");
-				CreationHelper createHelper = wb.getCreationHelper();
-
-				// STYLE CELL
-				CellStyle borderStyleHeader = wb.createCellStyle();
-				borderStyleHeader.setBorderBottom(BorderStyle.THIN);
-				borderStyleHeader.setBorderLeft(BorderStyle.THIN);
-				borderStyleHeader.setBorderRight(BorderStyle.THIN);
-				borderStyleHeader.setBorderTop(BorderStyle.THIN);
-				borderStyleHeader.setAlignment(HorizontalAlignment.CENTER);
-
-				CellStyle borderStyleRow = wb.createCellStyle();
-				borderStyleRow.setBorderBottom(BorderStyle.THIN);
-				borderStyleRow.setBorderLeft(BorderStyle.THIN);
-				borderStyleRow.setBorderRight(BorderStyle.THIN);
-				borderStyleRow.setBorderTop(BorderStyle.THIN);
-				borderStyleRow.setAlignment(HorizontalAlignment.RIGHT);
-
-				CellStyle tsCellStyle = wb.createCellStyle();
-				tsCellStyle.setDataFormat(createHelper.createDataFormat().getFormat(TIMESTAMP_FORMAT));
-				tsCellStyle.setBorderBottom(BorderStyle.THIN);
-				tsCellStyle.setBorderLeft(BorderStyle.THIN);
-				tsCellStyle.setBorderRight(BorderStyle.THIN);
-				tsCellStyle.setBorderTop(BorderStyle.THIN);
-				tsCellStyle.setAlignment(HorizontalAlignment.RIGHT);
-
-				CellStyle dateCellStyle = wb.createCellStyle();
-				dateCellStyle.setDataFormat(createHelper.createDataFormat().getFormat(DATE_FORMAT));
-				dateCellStyle.setBorderBottom(BorderStyle.THIN);
-				dateCellStyle.setBorderLeft(BorderStyle.THIN);
-				dateCellStyle.setBorderRight(BorderStyle.THIN);
-				dateCellStyle.setBorderTop(BorderStyle.THIN);
-				dateCellStyle.setAlignment(HorizontalAlignment.RIGHT);
-
-				CellStyle intCellStyle = wb.createCellStyle();
-				intCellStyle.setDataFormat(createHelper.createDataFormat().getFormat("0"));
-				intCellStyle.setBorderBottom(BorderStyle.THIN);
-				intCellStyle.setBorderLeft(BorderStyle.THIN);
-				intCellStyle.setBorderRight(BorderStyle.THIN);
-				intCellStyle.setBorderTop(BorderStyle.THIN);
-				intCellStyle.setAlignment(HorizontalAlignment.RIGHT);
-
-				CellStyle decimalCellStyle = wb.createCellStyle();
-				decimalCellStyle.setDataFormat(createHelper.createDataFormat().getFormat("#,##0.00"));
-				decimalCellStyle.setBorderBottom(BorderStyle.THIN);
-				decimalCellStyle.setBorderLeft(BorderStyle.THIN);
-				decimalCellStyle.setBorderRight(BorderStyle.THIN);
-				decimalCellStyle.setBorderTop(BorderStyle.THIN);
-				decimalCellStyle.setAlignment(HorizontalAlignment.RIGHT);
-
-				IMetaData dataSetMetadata = dataSet.getMetadata();
-
-				// CREATE HEADER SHEET
-				Row header;
-				header = sheet.createRow((short) 0); // first row
-				if (dataSetMetadata != null && dataSetMetadata.getFieldCount() > 0) {
-					for (int i = 0; i <= dataSetMetadata.getFieldCount() - 1; i++) {
-						Cell cell = header.createCell(i);
-						cell.setCellValue(dataSetMetadata.getFieldAlias(i));
-						cell.setCellStyle(borderStyleHeader);
+			// Determine SQL column order once
+			ResultSetMetaData rsmd = ((ResultSetIterator) iterator).getRs().getMetaData();
+			List<IFieldMetaData> filteredMetadata = new ArrayList<>();
+			for (int c = 1; c <= rsmd.getColumnCount(); c++) {
+				String columnName = rsmd.getColumnName(c);
+				for (IFieldMetaData m : dataSetMetadata.getFieldsMeta()) {
+					if (m.getName() != null && m.getName().equalsIgnoreCase(columnName)) {
+						filteredMetadata.add(m);
+						break;
 					}
 				}
+			}
 
-				// FILL CELL RECORD
-				try (DataIterator iterator = dataSet.iterator()) {
+			// Spill rows quickly
+			try (BufferedWriter w = Files.newBufferedWriter(spillFile, StandardCharsets.UTF_8)) {
+				while (iterator.hasNext()) {
+					IRecord record = iterator.next();
+					int cols = Math.min(record.getFields().size(), filteredMetadata.size());
 
-					int i = 0;
-					final int recordLimit = SpreadsheetVersion.EXCEL2007.getLastRowIndex();
-					while (iterator.hasNext() && i < recordLimit) {
-
-						try {
-							IRecord dataSetRecord = iterator.next();
-
-							Row row = sheet.createRow(i + 1); // starting from 2nd row
-
-							for (int k = 0; k <= dataSetRecord.getFields().size() - 1; k++) {
-								Class<?> clazz = dataSetMetadata.getFieldType(k);
-								Object value = dataSetRecord.getFieldAt(k).getValue();
-								Cell cell = row.createCell(k);
-
-								try {
-									if (value != null) {
-
-										if (Timestamp.class.isAssignableFrom(clazz)) {
-											String formatedTimestamp = timeStampFormat.format(value);
-											Date ts = timeStampFormat.parse(formatedTimestamp);
-											cell.setCellValue(ts);
-											cell.setCellStyle(tsCellStyle);
-										} else if (Date.class.isAssignableFrom(clazz)) {
-											String formatedDate = dateFormat.format(value);
-											Date date = dateFormat.parse(formatedDate);
-											cell.setCellValue(date);
-											cell.setCellStyle(dateCellStyle);
-										} else if (Integer.class.isAssignableFrom(clazz) || Long.class.isAssignableFrom(clazz) || Double.class.isAssignableFrom(clazz)
-												|| Float.class.isAssignableFrom(clazz) || BigDecimal.class.isAssignableFrom(clazz)) {
-											// Format Numbers
-											if (Integer.class.isAssignableFrom(clazz) || Long.class.isAssignableFrom(clazz)) {
-												cell.setCellValue(Double.parseDouble(value.toString()));
-												cell.setCellStyle(intCellStyle);
-											} else {
-												cell.setCellValue(Double.parseDouble(value.toString()));
-												cell.setCellStyle(decimalCellStyle);
-											}
-
-										} else {
-											cell.setCellValue(value.toString());
-											cell.setCellStyle(borderStyleRow);
-										}
-
-									} else {
-										cell.setCellStyle(borderStyleRow);
-									}
-								} catch (ParseException e) {
-									String msg = "Error parsing values";
-									logger.error(msg, e);
-									throw new IllegalStateException(msg, e);
-								}
-
-							}
-
-						} catch (Exception e) {
-							String msg = "Error generating Excel file";
-							logger.error(msg, e);
-							throw new IllegalStateException(msg, e);
+					for (int k = 0; k < cols; k++) {
+						Object v = record.getFieldAt(k).getValue();
+						if (k > 0) w.write('\t');
+						if (v != null) {
+							// Encode tabs/newlines safely
+							String s = v.toString();
+							s = s.replace("\\r", " ").replace("\\n", " ").replace("\\t", " ");
+							w.write(s);
 						}
-
-						i++;
 					}
+					w.write('\n');
 				}
-
-				wb.write(exportFileOS);
-				exportFileOS.flush();
-				exportFileOS.close();
 			}
-		} catch (Exception e) {
-			String msg = String.format("Error writing data file \"%s\"!", getDataFile());
-			logger.error(msg, e);
-			throw new JobExecutionException(msg, e);
+
+			return filteredMetadata;
 		} finally {
-			if (exportFileOS != null) {
-				try {
-					exportFileOS.close();
-				} catch (IOException e) {
-					// Yes, it's mute!
+			// Critical: release pool connection/cursor as soon as spill is done
+			closeQuietly(iterator);
+		}
+	}
+
+	private void writeXlsxFromTsv(OutputStream out, String sheetName, List<IFieldMetaData> meta, Path spillFile) throws Exception {
+		try (SXSSFWorkbook wb = new SXSSFWorkbook(100)) {
+			wb.setCompressTempFiles(true);
+
+			Sheet sheet = wb.createSheet(sheetName);
+			if (sheet instanceof SXSSFSheet s) s.setRandomAccessWindowSize(100);
+
+			CreationHelper createHelper = wb.getCreationHelper();
+
+			CellStyle tsCellStyle = wb.createCellStyle();
+			tsCellStyle.setDataFormat(createHelper.createDataFormat().getFormat(TIMESTAMP_FORMAT));
+
+			CellStyle dateCellStyle = wb.createCellStyle();
+			dateCellStyle.setDataFormat(createHelper.createDataFormat().getFormat(DATE_FORMAT));
+
+			CellStyle intCellStyle = wb.createCellStyle();
+			intCellStyle.setDataFormat(createHelper.createDataFormat().getFormat("0"));
+
+			CellStyle decimalCellStyle = wb.createCellStyle();
+			decimalCellStyle.setDataFormat(createHelper.createDataFormat().getFormat("#,##0.00"));
+
+			this.imageB64 = OrganizationImageManager.getOrganizationB64ImageWide(TenantManager.getTenant().getName());
+
+			int headerIndex = createBrandedHeaderSheet(
+					sheet,
+					this.imageB64,
+					0,
+					35,
+					2,
+					0,
+					25,
+					2,
+					10,
+					10,
+					this.documentName,
+					sheet.getSheetName()
+			);
+
+			// Header
+			Row header = sheet.createRow(headerIndex + 1);
+			for (int c = 0; c < meta.size(); c++) {
+				Cell cell = header.createCell(c);
+				cell.setCellValue(meta.get(c).getAlias());
+			}
+
+			final int recordLimit = SpreadsheetVersion.EXCEL2007.getLastRowIndex();
+			int outRow = headerIndex + 2;
+			int flushEvery = 500;
+
+			try (BufferedReader r = Files.newBufferedReader(spillFile, StandardCharsets.UTF_8)) {
+				String line;
+				while ((line = r.readLine()) != null && outRow < recordLimit) {
+					Row row = sheet.createRow(outRow);
+					String[] parts = line.split("\\t", -1);
+
+					int cols = Math.min(parts.length, meta.size());
+					for (int k = 0; k < cols; k++) {
+						IFieldMetaData fmd = meta.get(k);
+						Class<?> clazz = fmd.getType();
+						String raw = parts[k];
+
+						Cell cell = row.createCell(k);
+						if (raw == null || raw.isEmpty()) continue;
+
+						// Best-effort typing; avoids DB connection entirely
+						if (Timestamp.class.isAssignableFrom(clazz)) {
+							// Leave as text unless you have an agreed serialization format in spill
+							cell.setCellValue(raw);
+							cell.setCellStyle(tsCellStyle);
+						} else if (Date.class.isAssignableFrom(clazz)) {
+							cell.setCellValue(raw);
+							cell.setCellStyle(dateCellStyle);
+						} else if (Integer.class.isAssignableFrom(clazz) || Long.class.isAssignableFrom(clazz)) {
+							try {
+								cell.setCellValue(Long.parseLong(raw));
+								cell.setCellStyle(intCellStyle);
+							} catch (NumberFormatException nfe) {
+								cell.setCellValue(raw);
+							}
+						} else if (Double.class.isAssignableFrom(clazz) || Float.class.isAssignableFrom(clazz) || BigDecimal.class.isAssignableFrom(clazz)) {
+							try {
+								cell.setCellValue(Double.parseDouble(raw));
+								cell.setCellStyle(decimalCellStyle);
+							} catch (NumberFormatException nfe) {
+								cell.setCellValue(raw);
+							}
+						} else {
+							cell.setCellValue(raw);
+						}
+					}
+
+					if (sheet instanceof SXSSFSheet s && (outRow % flushEvery == 0)) {
+						s.flushRows(flushEvery);
+					}
+					outRow++;
 				}
 			}
+
+			wb.write(out);
 		}
+	}
 
-		LogMF.info(logger, "XLSX export completed for user {0}. DataSet is {1}. Final file: dimension (in bytes): {2,number}, path: [{3}], ",
-				this.getUserProfile().getUserId(), this.getDataSet().getLabel(), getDataFile().toFile().length(), getDataFile().toString());
-
+	private void closeQuietly(Object it) {
+		if (it == null) return;
+		try {
+			if (it instanceof AutoCloseable c) c.close();
+		} catch (Exception ex) {
+            LOGGER.warn("Error while closing connection", ex);
+        }
 	}
 
 	@Override
-	protected String extension() {
-		return "xlsx";
-	}
+	protected String extension() { return "xlsx"; }
 
 	@Override
-	protected String mime() {
-		return "application/vnd.ms-excel";
-	}
-
+	protected String mime() { return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; }
 }

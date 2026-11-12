@@ -4,15 +4,31 @@
 		xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
-		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-		version="3.1" >
+		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+		version="4.0" >
+
+	<distributable/>
 
 	<display-name>knowagetalendengine</display-name>
 	<description>Knowage Talend Engine</description>
+	<distributable/>
 
-	<!--  ============================================================================ -->
-	<!--  FILTERS								 									   -->
-	<!--  ============================================================================ -->
+	<!-- 
+		Logger Setup Filter.
+		
+		Set the logger according the HTTP request data.
+	 -->
+	<filter>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<filter-class>it.eng.knowage.utils.filters.LoggerSetupFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+	</filter-mapping>
+
+
 
 	<filter>
 		<filter-name>EncodingFilter</filter-name>

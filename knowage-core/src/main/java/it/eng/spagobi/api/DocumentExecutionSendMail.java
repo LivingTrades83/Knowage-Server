@@ -1,22 +1,14 @@
 package it.eng.spagobi.api;
 
-import java.io.ByteArrayInputStream;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 
-import javax.activation.DataHandler;
-import javax.activation.DataSource;
-import javax.mail.Message;
-import javax.mail.Multipart;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMultipart;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -25,18 +17,24 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import it.eng.knowage.mail.MailSessionBuilder;
-import it.eng.knowage.mail.MailSessionBuilder.SessionFacade;
+import it.eng.knowage.mailsender.IMailSender;
+import it.eng.knowage.mailsender.dto.MessageMailDto;
+import it.eng.knowage.mailsender.dto.ProfileNameMailEnum;
+import it.eng.knowage.mailsender.dto.TypeMailEnum;
+import it.eng.knowage.mailsender.factory.FactoryMailSender;
 import it.eng.spago.base.SourceBeanAttribute;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectDAO;
 import it.eng.spagobi.analiticalmodel.document.handlers.ExecutionController;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.BIObjectParameter;
+import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.ExecutionProxy;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
@@ -45,6 +43,8 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 @Path("/1.0/documentexecutionmail")
 @ManageAuthorization
 public class DocumentExecutionSendMail extends AbstractSpagoBIResource {
+
+	private static final Logger LOGGER = LogManager.getLogger(DocumentExecutionSendMail.class);
 
 	@POST
 	@Path("/sendMail")
@@ -65,21 +65,20 @@ public class DocumentExecutionSendMail extends AbstractSpagoBIResource {
 		String object = requestVal.optString("OBJECT");
 		JSONObject jsonParameters = requestVal.optJSONObject("parameters");
 
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
-		final String OK = "10";
-		String ERROR = "Error. Mail not sent";
-		final String TONOTFOUND = "90";
+		String error = "Error. Mail not sent";
+
 		// String retCode = "";
 
 		try {
 
 			if (to.equals("")) {
 				// retCode = TONOTFOUND;
-				ERROR = "To Address not found";
-				logger.error("To Address not found");
+				error = "To Address not found";
+				LOGGER.error("To Address not found");
 				throw new Exception("To Address not found");
 			}
 
@@ -98,7 +97,7 @@ public class DocumentExecutionSendMail extends AbstractSpagoBIResource {
 			ExecutionController execCtrl = new ExecutionController();
 			execCtrl.setBiObject(biobj);
 
-			List<BIObjectParameter> listBioParams = new ArrayList<BIObjectParameter>();
+			List<BIObjectParameter> listBioParams = new ArrayList<>();
 			// fill parameters
 			String queryStr = "user_id=" + userId + "&ACTION_NAME=SEND_TO_ACTION&SBI_ENVIRONMENT=DOCBROWSER";
 			for (BIObjectParameter biParam : biobj.getDrivers()) {
@@ -142,60 +141,38 @@ public class DocumentExecutionSendMail extends AbstractSpagoBIResource {
 			// } end if (execCtrl.directExecution()) {
 			// SEND MAIL
 
-			SessionFacade facade = MailSessionBuilder.newInstance()
-				.usingUserProfile()
-				.setFromAddress(from)
-				.setUser(login)
-				.setPassword(pass)
-				.build();
+			MessageMailDto messageMailDto = new MessageMailDto();
+			messageMailDto.setProfileName((ProfileNameMailEnum.USER_FROM_PWS));
+			messageMailDto.setFrom(from);
+			messageMailDto.setLogin(login);
+			messageMailDto.setPassword(pass);
 
-			// create a message
-			Message msg = facade.createNewMimeMessage();
-
-			InternetAddress[] addressTo = new InternetAddress[recipients.length];
-			for (int i = 0; i < recipients.length; i++) {
-				addressTo[i] = new InternetAddress(recipients[i]);
-			}
-			msg.setRecipients(Message.RecipientType.TO, addressTo);
+			messageMailDto.setRecipients(recipients);
 			if ((cc != null) && !cc.trim().equals("")) {
 				recipients = cc.split(",");
-				InternetAddress[] addressCC = new InternetAddress[recipients.length];
-				for (int i = 0; i < recipients.length; i++) {
-					String cc_add = recipients[i];
-					if ((cc_add != null) && !cc_add.trim().equals("")) {
-						addressCC[i] = new InternetAddress(recipients[i]);
-					}
-				}
-				msg.setRecipients(Message.RecipientType.CC, addressCC);
+				messageMailDto.setRecipientsCC(recipients);
 			}
 			// Setting the Subject and Content Type
-			msg.setSubject(object);
+			messageMailDto.setSubject(object);
 
-			// create and fill the first message part
-			MimeBodyPart mbp1 = new MimeBodyPart();
-			mbp1.setText(message, "utf-8", "html");
-			// create the second message part
-			MimeBodyPart mbp2 = new MimeBodyPart();
-			// attach the file to the message
-			SchedulerDataSource sds = new SchedulerDataSource(documentBytes, returnedContentType, "result" + fileextension);
-			mbp2.setDataHandler(new DataHandler(sds));
-			mbp2.setFileName(sds.getName());
-			// create the Multipart and add its parts to it
-			Multipart mp = new MimeMultipart();
-			mp.addBodyPart(mbp1);
-			mp.addBodyPart(mbp2);
-			// add the Multipart to the message
-			msg.setContent(mp);
+			messageMailDto.setTypeMailEnum(TypeMailEnum.MULTIPART);
+			messageMailDto.setText(message);
+			messageMailDto.setCharset(UTF_8.name());
+			messageMailDto.setSubtype("html");
+			messageMailDto.setAttach(documentBytes);
+			messageMailDto.setContainedFileName("result");
+			messageMailDto.setFileExtension(fileextension);
+			messageMailDto.setContentType(returnedContentType);
 
 			// send message
-			facade.sendMessage(msg);
+			FactoryMailSender.getMailSender(SingletonConfig.getInstance().getConfigValue(IMailSender.MAIL_SENDER)).sendMail(messageMailDto);
 
 			// retCode = OK;
 			resultAsMap.put("success", "Mail Sent");
 
 		} catch (Exception e) {
-			logger.error("Error while executing and sending object ", e);
-			resultAsMap.put("errors", ERROR);
+			LOGGER.error("Error while executing and sending object ", e);
+			resultAsMap.put("errors", error);
 		} finally {
 			// try {
 			// response.getOutputStream().write(retCode.getBytes());
@@ -204,82 +181,47 @@ public class DocumentExecutionSendMail extends AbstractSpagoBIResource {
 			// logger.error("Error while sending response to client", ex);
 			// }
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 
 		return Response.ok(resultAsMap).build();
-	}
-
-	private class SchedulerDataSource implements DataSource {
-
-		byte[] content = null;
-		String name = null;
-		String contentType = null;
-
-		@Override
-		public String getContentType() {
-			return contentType;
-		}
-
-		@Override
-		public InputStream getInputStream() throws IOException {
-			ByteArrayInputStream bais = new ByteArrayInputStream(content);
-			return bais;
-		}
-
-		@Override
-		public String getName() {
-			return name;
-		}
-
-		@Override
-		public OutputStream getOutputStream() throws IOException {
-			return null;
-		}
-
-		public SchedulerDataSource(byte[] content, String contentType, String name) {
-			this.content = content;
-			this.contentType = contentType;
-			this.name = name;
-		}
-
 	}
 
 	/**
 	 * Add the description to the BIObjectparameters
 	 *
-	 * @param BIObjectParameters
+	 * @param biObjectParameters
 	 * @param attributes
 	 */
-	public void setParametersDescription(List<BIObjectParameter> BIObjectParameters, List<SourceBeanAttribute> attributes) {
-		Map<String, String> parameterNameDescriptionMap = new HashMap<String, String>();
+	public void setParametersDescription(List<BIObjectParameter> biObjectParameters,
+			List<SourceBeanAttribute> attributes) {
+		Map<String, String> parameterNameDescriptionMap = new HashMap<>();
 		// we create a map: parameter name, parameter description
 		for (int i = 0; i < attributes.size(); i++) {
 			SourceBeanAttribute sba = attributes.get(i);
 			// the name of parameter in the request with the description is parametername+ field_visible_description
 			int descriptionPosition = sba.getKey().indexOf("field_visible_description");
 			if (descriptionPosition > 0) {
-				parameterNameDescriptionMap.put(sba.getKey().substring(0, descriptionPosition - 1), (String) sba.getValue());
+				parameterNameDescriptionMap.put(sba.getKey().substring(0, descriptionPosition - 1),
+						(String) sba.getValue());
 			}
 		}
-		for (int i = 0; i < BIObjectParameters.size(); i++) {
-			String bobjName = BIObjectParameters.get(i).getParameterUrlName();
+		for (int i = 0; i < biObjectParameters.size(); i++) {
+			String bobjName = biObjectParameters.get(i).getParameterUrlName();
 			String value = parameterNameDescriptionMap.get(bobjName);
 			if (value != null) {
-				BIObjectParameters.get(i).setParameterValuesDescription(parseDescriptionString(value));
+				biObjectParameters.get(i).setParameterValuesDescription(parseDescriptionString(value));
 			}
 		}
 	}
 
 	/**
-	 * Parse a string with the description of the parameter and return a list with description.. This transformation is necessary because the multivalues
-	 * parameters
+	 * Parse a string with the description of the parameter and return a list with description.. This transformation is necessary because the multivalues parameters
 	 *
-	 * @param s
-	 *            the string with the description
+	 * @param s the string with the description
 	 * @return the list of descriptions
 	 */
 	public List<String> parseDescriptionString(String s) {
-		List<String> descriptions = new ArrayList<String>();
+		List<String> descriptions = new ArrayList<>();
 		StringTokenizer stk = new StringTokenizer(s, ";");
 		while (stk.hasMoreTokens()) {
 			descriptions.add(stk.nextToken());

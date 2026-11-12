@@ -34,10 +34,10 @@ import it.eng.spago.base.SourceBean;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.commons.utilities.UserUtilities;
 import it.eng.spagobi.mapcatalogue.bo.GeoLayer;
 import it.eng.spagobi.mapcatalogue.dao.ISbiGeoLayersDAO;
 import it.eng.spagobi.services.common.EnginConf;
+import it.eng.spagobi.user.UserProfileManager;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
@@ -52,7 +52,7 @@ public class GeoReportEngineConfig {
 
 	List<Properties> levels;
 
-	private static transient Logger logger = Logger.getLogger(GeoReportEngineConfig.class);
+	private static Logger logger = Logger.getLogger(GeoReportEngineConfig.class);
 
 	// -- singleton pattern --------------------------------------------
 	private static GeoReportEngineConfig instance;
@@ -126,9 +126,9 @@ public class GeoReportEngineConfig {
 
 	// -- PARSE Methods -------------------------------------------------
 
-	private final static String INCLUDES_TAG = "INCLUDES";
-	private final static String INCLUDE_TAG = "INCLUDE";
-	private final static String URL_TAG = "URL";
+	private static final String INCLUDES_TAG = "INCLUDES";
+	private static final String INCLUDE_TAG = "INCLUDE";
+	private static final String URL_TAG = "URL";
 
 	public void initIncludes() {
 		SourceBean includesSB;
@@ -181,14 +181,14 @@ public class GeoReportEngineConfig {
 		logger.debug("IN");
 
 		try {
-			List<GeoLayer> geoLayers = new ArrayList<GeoLayer>();
+			List<GeoLayer> geoLayers = new ArrayList<>();
 
 			try {
 				ISbiGeoLayersDAO geoLayersDAO = DAOFactory.getSbiGeoLayerDao();
-				IEngUserProfile profile = UserUtilities.getUserProfile();
+				IEngUserProfile profile = UserProfileManager.getProfile();
 				geoLayers = geoLayersDAO.loadAllLayers(null, profile);
 				if (geoLayers != null) {
-					levels = new ArrayList<Properties>();
+					levels = new ArrayList<>();
 					for (int i = 0; i < geoLayers.size(); i++) {
 						GeoLayer level = geoLayers.get(i);
 						String name = level.getName();

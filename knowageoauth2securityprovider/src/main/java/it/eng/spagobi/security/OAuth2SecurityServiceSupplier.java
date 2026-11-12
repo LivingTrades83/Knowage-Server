@@ -5,17 +5,9 @@
  * If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 package it.eng.spagobi.security;
 
-import it.eng.spagobi.commons.SingletonConfig;
-import it.eng.spagobi.security.OAuth2.OAuth2Client;
-import it.eng.spagobi.security.OAuth2.OAuth2Config;
-import it.eng.spagobi.services.security.bo.SpagoBIUserProfile;
-import it.eng.spagobi.services.security.service.ISecurityServiceSupplier;
-import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Properties;
 
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpStatus;
@@ -25,12 +17,20 @@ import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import it.eng.spagobi.commons.SingletonConfig;
+import it.eng.spagobi.security.OAuth2.OAuth2Client;
+import it.eng.spagobi.security.OAuth2.OAuth2Config;
+import it.eng.spagobi.services.security.bo.SpagoBIUserProfile;
+import it.eng.spagobi.services.security.service.ISecurityServiceSupplier;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
+
 /**
  * @author Alessandro Daniele (alessandro.daniele@eng.it)
  *
  */
 public class OAuth2SecurityServiceSupplier implements ISecurityServiceSupplier {
-	static private Logger logger = Logger.getLogger(OAuth2SecurityServiceSupplier.class);
+
+	private static Logger logger = Logger.getLogger(OAuth2SecurityServiceSupplier.class);
 
 	@Override
 	public SpagoBIUserProfile createUserProfile(String userUniqueIdentifier) {
@@ -38,20 +38,23 @@ public class OAuth2SecurityServiceSupplier implements ISecurityServiceSupplier {
 
 		SpagoBIUserProfile profile;
 		try {
-			Properties config = OAuth2Config.getInstance().getConfig();
+			OAuth2Config config = OAuth2Config.getInstance();
 
 			OAuth2Client oauth2Client = new OAuth2Client();
 
 			HttpClient httpClient = oauth2Client.getHttpClient();
 
 			// We call the OAuth2 provider to get user's info
-			GetMethod httpget = new GetMethod(config.getProperty("USER_INFO_URL") + "?access_token=" + userUniqueIdentifier);
+			GetMethod httpget = new GetMethod(config.getUserInfoUrl() + "?access_token=" + userUniqueIdentifier);
 			int statusCode = httpClient.executeMethod(httpget);
 			byte[] response = httpget.getResponseBody();
 			if (statusCode != HttpStatus.SC_OK) {
-				logger.error("Error while getting user information from OAuth2 provider: server returned statusCode = " + statusCode);
+				logger.error("Error while getting user information from OAuth2 provider: server returned statusCode = "
+						+ statusCode);
 				LogMF.error(logger, "Server response is:\n{0}", new Object[] { new String(response) });
-				throw new SpagoBIRuntimeException("Error while getting user information from OAuth2 provider: server returned statusCode = " + statusCode);
+				throw new SpagoBIRuntimeException(
+						"Error while getting user information from OAuth2 provider: server returned statusCode = "
+								+ statusCode);
 			}
 
 			String responseStr = new String(response);
@@ -65,22 +68,20 @@ public class OAuth2SecurityServiceSupplier implements ISecurityServiceSupplier {
 
 			profile = new SpagoBIUserProfile();
 			profile.setUniqueIdentifier(userUniqueIdentifier); // The OAuth2
-																// access token
+																 // access token
 			profile.setUserId(userId);
 			profile.setUserName(userName);
 			profile.setOrganization("DEFAULT_TENANT");
 
 			/*
-			 * If the user's email is the same as the owner of the application
-			 * (as configured in the oauth2.config.properties file) we consider
-			 * him as the superadmin
+			 * If the user's email is the same as the owner of the application (as configured in the oauth2.config.properties file) we consider him as the superadmin
 			 */
-			String adminEmail = config.getProperty("ADMIN_EMAIL");
+			String adminEmail = config.getAdminEmail();
 			String email = jsonObject.getString("email");
 			profile.setIsSuperadmin(email.equalsIgnoreCase(adminEmail));
 
 			JSONArray jsonRolesArray = jsonObject.getJSONArray("roles");
-			List<String> roles = new ArrayList<String>();
+			List<String> roles = new ArrayList<>();
 
 			// Read roles
 			String name;
@@ -120,16 +121,18 @@ public class OAuth2SecurityServiceSupplier implements ISecurityServiceSupplier {
 			String[] rolesString = new String[roles.size()];
 			profile.setRoles(roles.toArray(rolesString));
 
-			HashMap<String, String> attributes = new HashMap<String, String>();
+			HashMap<String, String> attributes = new HashMap<>();
 			attributes.put("userUniqueIdentifier", userUniqueIdentifier);
 			attributes.put("userId", userId);
 			attributes.put("userName", userName);
 			attributes.put("email", email);
-			profile.setAttributes(attributes);
+			profile.getAttributes().putAll(attributes);
 
 			return profile;
 		} catch (Exception e) {
-			throw new SpagoBIRuntimeException("Error while trying to read JSon object containing user profile's information from OAuth2 provider", e);
+			throw new SpagoBIRuntimeException(
+					"Error while trying to read JSon object containing user profile's information from OAuth2 provider",
+					e);
 		} finally {
 			logger.debug("OUT");
 		}

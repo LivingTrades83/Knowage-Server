@@ -26,10 +26,12 @@ import java.util.Locale.Builder;
 import java.util.Map;
 import java.util.StringTokenizer;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.w3c.dom.Document;
 
@@ -61,7 +63,7 @@ import it.eng.spagobi.utilities.assertion.Assert;
  */
 public class ChartDriver extends GenericDriver {
 
-	static private Logger logger = Logger.getLogger(ChartDriver.class);
+	private static Logger logger = Logger.getLogger(ChartDriver.class);
 	private Locale locale;
 
 	/**
@@ -179,9 +181,9 @@ public class ChartDriver extends GenericDriver {
 		return engineURL;
 	}
 
-	private final static String PARAM_SERVICE_NAME = "ACTION_NAME";
-	private final static String PARAM_NEW_SESSION = "NEW_SESSION";
-	private final static String PARAM_MODALITY = "MODALITY";
+	private static final String PARAM_SERVICE_NAME = "ACTION_NAME";
+	private static final String PARAM_NEW_SESSION = "NEW_SESSION";
+	private static final String PARAM_MODALITY = "MODALITY";
 
 	private Map applyService(Map parameters, BIObject biObject) {
 		ObjTemplate template;
@@ -191,7 +193,7 @@ public class ChartDriver extends GenericDriver {
 		String family = null;
 		try {
 			template = getTemplate(biObject);
-			DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+			DocumentBuilder builder = getFactory().newDocumentBuilder();
 			Document doc = builder.parse(new ByteArrayInputStream(template.getContent()));
 			family = doc.getChildNodes().item(0).getNodeName();
 		} catch (Throwable t) {
@@ -222,6 +224,23 @@ public class ChartDriver extends GenericDriver {
 			logger.debug("OUT");
 		}
 		return parameters;
+	}
+
+	private static DocumentBuilderFactory getFactory() {
+		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+		try {
+			dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+			dbf.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+			dbf.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+			dbf.setFeature("http://xml.org/sax/features/external-general-entities", false);
+		} catch (ParserConfigurationException e) {
+			logger.error("Error configuring DocumentBuilderFactory: " + e.getMessage(), e);
+			throw new SecurityException("Error configuring DocumentBuilderFactory: " + e.getMessage(), e);
+		}
+
+		dbf.setXIncludeAware(false);
+		dbf.setExpandEntityReferences(false);
+		return dbf;
 	}
 
 	@Override
@@ -325,7 +344,7 @@ public class ChartDriver extends GenericDriver {
 	}
 
 	private String replaceMessagesInString(String targetString) {
-		StringBuffer sb = new StringBuffer();
+		StringBuilder sb = new StringBuilder();
 
 		IMessageBuilder engineMessageBuilder = MessageBuilderFactory.getMessageBuilder();
 
@@ -365,7 +384,7 @@ public class ChartDriver extends GenericDriver {
 	}
 
 	private String replaceMessagesInValue(String valueString, boolean addFinalSpace) {
-		StringBuffer sb = new StringBuffer();
+		StringBuilder sb = new StringBuilder();
 		StringTokenizer st = new StringTokenizer(valueString);
 		IMessageBuilder engineMessageBuilder = MessageBuilderFactory.getMessageBuilder();
 		while (st.hasMoreTokens()) {
@@ -519,15 +538,6 @@ public class ChartDriver extends GenericDriver {
 
 		return ret;
 
-	}
-
-	public static void main(String[] args) {
-		ChartDriver driver = new ChartDriver();
-		// String str = "xxx $R{pippo}tail head$R{pippo}tail $R{pippo} xxx";
-		String str = "dnsadn dknwk ldwnd lkwndxlkw xnwlknd";
-		logger.debug(str);
-		String newStr = driver.replaceMessagesInString(str);
-		logger.debug(newStr);
 	}
 
 }

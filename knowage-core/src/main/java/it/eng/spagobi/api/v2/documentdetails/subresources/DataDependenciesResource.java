@@ -35,7 +35,7 @@ import org.hibernate.HibernateException;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ObjParuse;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IObjParuseDAO;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.assertion.Assert;
@@ -44,12 +44,12 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 @Path("/")
 public class DataDependenciesResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(DataDependenciesResource.class);
+	protected static Logger logger = Logger.getLogger(DataDependenciesResource.class);
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public List<ObjParuse> getDataDependeciesForDocumentDriver(@PathParam("id") Integer id, @QueryParam("driverId") Integer driverId) {
 		logger.debug("IN");
 		List<ObjParuse> dataDependencies = null;
@@ -59,7 +59,7 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 			dataDependencies = parameterUseDAO.loadObjParuses(driverId);
 		} catch (HibernateException e) {
 			logger.error("Data Dependencies can not be loaded", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
 		}
 		logger.debug("OUT");
 		return dataDependencies;
@@ -68,7 +68,7 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 	@POST
 	@Consumes("application/json")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public ObjParuse addDataDependeciesForDocumentDriver(@PathParam("id") Integer id, ObjParuse parameterUseObject) {
 		logger.debug("IN");
 		IObjParuseDAO parameterUseDAO;
@@ -79,7 +79,10 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 			parameterUseObject.setId(parameterUseDAO.insertObjParuse(parameterUseObject));
 		} catch (HibernateException e) {
 			logger.error("Data Dependencies can not be created", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage() + " in Data Dependency", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage() + " in Data Dependency", getLocale(), e);
+		} catch (IllegalArgumentException ill) {
+			logger.error("Data Dependencies error", ill);
+			throw new SpagoBIRestServiceException(getLocale(), ill);
 		}
 		logger.debug("OUT");
 		return parameterUseObject;
@@ -87,7 +90,7 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 
 	@POST
 	@Path("delete")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void deleteDataDependeciesForDocumentDriverByPost(@PathParam("id") Integer id, ObjParuse parameterUseObject) {
 		logger.debug("IN");
 		IObjParuseDAO parameterUseDAO;
@@ -96,7 +99,7 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 			parameterUseDAO.eraseObjParuse(parameterUseObject);
 		} catch (HibernateException e) {
 			logger.error("Data Dependencies can not be deleted", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
 		}
 		logger.debug("OUT");
 	}
@@ -104,7 +107,7 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 	@PUT
 	@Consumes("application/json")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public ObjParuse setDataDependeciesForDocumentDriver(@PathParam("id") Integer id, ObjParuse parameterUseObject) {
 		logger.debug("IN");
 		IObjParuseDAO parameterUseDAO;
@@ -115,7 +118,10 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 			parameterUseDAO.modifyObjParuse(parameterUseObject);
 		} catch (HibernateException e) {
 			logger.error("Data Dependencies can not be modified", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
+		} catch (IllegalArgumentException ill) {
+			logger.error("Data Dependencies error", ill);
+			throw new SpagoBIRestServiceException(getLocale(), ill);
 		}
 		logger.debug("OUT");
 		return parameterUseObject;
@@ -123,7 +129,7 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 
 	@DELETE
 	@Consumes("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void deleteDataDependeciesForDocumentDriver(@PathParam("id") Integer id, ObjParuse parametarUseObject) {
 		logger.debug("IN");
 		IObjParuseDAO parameterUseDAO;
@@ -132,7 +138,7 @@ public class DataDependenciesResource extends AbstractSpagoBIResource {
 			parameterUseDAO.eraseObjParuse(parametarUseObject);
 		} catch (HibernateException e) {
 			logger.error("Data Dependencies can not be deleted", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
 		}
 		logger.debug("OUT");
 	}

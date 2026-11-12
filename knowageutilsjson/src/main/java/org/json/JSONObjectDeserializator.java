@@ -28,20 +28,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * @author FMilosavljevic
- *
+ * @deprecated We have a JSONObject, we must use it.
  */
+@Deprecated
 public class JSONObjectDeserializator {
-	static protected Logger logger = Logger.getLogger(JSONObjectDeserializator.class);
+	protected static Logger logger = Logger.getLogger(JSONObjectDeserializator.class);
 
 	public static HashMap<String, Object> getHashMapFromJSONObject(JSONObject object) throws IOException {
 
-		HashMap<String, Object> map = new HashMap<String, Object>();
+		HashMap<String, Object> map = new HashMap<>();
 		ObjectMapper mapper = JacksonMapper.getMapper();
 
 		try {
 			if (object != null)
-			map = mapper.readValue(object.toString(), new TypeReference<Map<String, Object>>() {
-			});
+				map = (HashMap<String, Object>) mapper.readValue(object.toString(),
+						new TypeReference<Map<String, Object>>() {
+						});
 		} catch (IOException e) {
 			throw new IOException(e.getMessage(), e);
 		}
@@ -50,12 +52,12 @@ public class JSONObjectDeserializator {
 
 	public static HashMap<String, Object> getHashMapFromString(String object) throws IOException {
 
-		HashMap<String, Object> map = new HashMap<String, Object>();
+		HashMap<String, Object> map = new HashMap<>();
 		ObjectMapper mapper = JacksonMapper.getMapper();
 
 		try {
 			if (object != null)
-				map = mapper.readValue(object, new TypeReference<Map<String, Object>>() {
+				map = (HashMap<String, Object>) mapper.readValue(object, new TypeReference<Map<String, Object>>() {
 				});
 		} catch (IOException e) {
 			throw new IOException(e.getMessage(), e);

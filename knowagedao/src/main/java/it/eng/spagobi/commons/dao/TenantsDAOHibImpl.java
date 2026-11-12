@@ -31,21 +31,24 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
-import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.log4j.Logger;
 import org.hibernate.Criteria;
+import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
 import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.criterion.Criterion;
-import org.hibernate.criterion.Expression;
-import org.safehaus.uuid.UUIDGenerator;
+import org.hibernate.criterion.Restrictions;
+import org.json.JSONObject;
 
 import it.eng.spago.error.EMFErrorSeverity;
 import it.eng.spago.error.EMFUserError;
+import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.bo.Domain;
 import it.eng.spagobi.commons.bo.Role;
 import it.eng.spagobi.commons.bo.UserProfile;
@@ -58,6 +61,8 @@ import it.eng.spagobi.commons.metadata.SbiOrganizationDatasource;
 import it.eng.spagobi.commons.metadata.SbiOrganizationDatasourceId;
 import it.eng.spagobi.commons.metadata.SbiOrganizationProductType;
 import it.eng.spagobi.commons.metadata.SbiOrganizationProductTypeId;
+import it.eng.spagobi.commons.metadata.SbiOrganizationTheme;
+import it.eng.spagobi.commons.metadata.SbiOrganizationThemeId;
 import it.eng.spagobi.commons.metadata.SbiProductType;
 import it.eng.spagobi.commons.metadata.SbiTenant;
 import it.eng.spagobi.commons.utilities.HibernateSessionManager;
@@ -66,11 +71,14 @@ import it.eng.spagobi.profiling.bean.SbiExtUserRolesId;
 import it.eng.spagobi.profiling.bean.SbiUser;
 import it.eng.spagobi.profiling.dao.ISbiUserDAO;
 import it.eng.spagobi.security.Password;
+import it.eng.spagobi.tenant.Tenant;
+import it.eng.spagobi.tenant.TenantManager;
 import it.eng.spagobi.tools.datasource.metadata.SbiDataSource;
 import it.eng.spagobi.tools.scheduler.bo.CronExpression;
 import it.eng.spagobi.tools.scheduler.bo.Job;
 import it.eng.spagobi.tools.scheduler.bo.Trigger;
 import it.eng.spagobi.tools.scheduler.dao.ISchedulerDAO;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
@@ -80,7 +88,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 @SuppressWarnings("all")
 public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsDAO {
 
-	static private Logger logger = Logger.getLogger(TenantsDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(TenantsDAOHibImpl.class);
 
 	public static final String ADMIN_USER_ID_SUFFIX = "_admin";
 	public static final String ADMIN_USER_NAME_SUFFIX = " ADMIN";
@@ -94,22 +102,19 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		try {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
-			Criterion labelCriterrion = Expression.eq("name", name);
+			Criterion labelCriterrion = Restrictions.eq("name", name);
 			Criteria criteria = tmpSession.createCriteria(SbiTenant.class);
 			criteria.add(labelCriterrion);
 			tenant = (SbiTenant) criteria.uniqueResult();
-
+			if (tenant != null)
+				Hibernate.initialize(tenant.getSbiOrganizationThemes());
 			tx.commit();
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logger.error("Error while loading the tenant with name " + name, he);
-			if (tx != null)
-				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (tmpSession != null) {
-				if (tmpSession.isOpen())
-					tmpSession.close();
-			}
+			closeSessionIfOpen(tmpSession);
 		}
 		logger.debug("OUT");
 		return tenant;
@@ -124,22 +129,18 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		try {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
-			Criterion labelCriterrion = Expression.eq("id", id);
+			Criterion labelCriterrion = Restrictions.eq("id", id);
 			Criteria criteria = tmpSession.createCriteria(SbiTenant.class);
 			criteria.add(labelCriterrion);
 			tenant = (SbiTenant) criteria.uniqueResult();
 
 			tx.commit();
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logger.error("Error while loading the tenant with id " + id, he);
-			if (tx != null)
-				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (tmpSession != null) {
-				if (tmpSession.isOpen())
-					tmpSession.close();
-			}
+			closeSessionIfOpen(tmpSession);
 		}
 		logger.debug("OUT");
 		return tenant;
@@ -158,16 +159,12 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			ArrayList<SbiTenant> result = (ArrayList<SbiTenant>) query.list();
 			return result;
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
 			throw new SpagoBIRuntimeException("Error getting tenants", he);
 		} finally {
 			logger.debug("OUT");
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
@@ -180,21 +177,18 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			Query hibQuery = aSession.createQuery("from SbiOrganizationDatasource ds where ds.sbiOrganizations.name = :tenantName");
+			Query hibQuery = aSession
+					.createQuery("from SbiOrganizationDatasource ds where ds.sbiOrganizations.name = :tenantName");
 			hibQuery.setString("tenantName", tenant);
 			ArrayList<SbiOrganizationDatasource> result = (ArrayList<SbiOrganizationDatasource>) hibQuery.list();
 			return result;
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
 			throw new SpagoBIRuntimeException("Error getting Tenant Data Sources", he);
 		} finally {
 			logger.debug("OUT");
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
@@ -206,21 +200,18 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			Query hibQuery = aSession.createQuery("from SbiOrganizationProductType p where p.sbiOrganizations.name = :tenantName");
+			Query hibQuery = aSession
+					.createQuery("from SbiOrganizationProductType p where p.sbiOrganizations.name = :tenantName");
 			hibQuery.setString("tenantName", tenant);
 			ArrayList<SbiOrganizationProductType> result = (ArrayList<SbiOrganizationProductType>) hibQuery.list();
 			return result;
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
 			throw new SpagoBIRuntimeException("Error getting Tenant Product Types", he);
 		} finally {
 			logger.debug("OUT");
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
@@ -232,23 +223,49 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			Query hibQuery = aSession
-					.createQuery("select p.sbiProductType.productTypeId from SbiOrganizationProductType p where p.sbiOrganizations.name = :tenantName");
+			Query hibQuery = aSession.createQuery(
+					"select p.sbiProductType.productTypeId from SbiOrganizationProductType p where p.sbiOrganizations.name = :tenantName");
 			hibQuery.setString("tenantName", tenant);
 			ArrayList<Integer> result = (ArrayList<Integer>) hibQuery.list();
 			return result;
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
 			throw new SpagoBIRuntimeException("Error getting Tenant Product Types", he);
 		} finally {
 			logger.debug("OUT");
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
+	}
+
+	@Override
+	public Set loadThemesByTenantName(String name) throws EMFUserError {
+		logger.debug("IN");
+		SbiTenant tenant = null;
+		Session tmpSession = null;
+		Transaction tx = null;
+		Set themes = null;
+		try {
+			tmpSession = getSession();
+			tx = tmpSession.beginTransaction();
+			Criterion labelCriterrion = Restrictions.eq("name", name);
+			Criteria criteria = tmpSession.createCriteria(SbiTenant.class);
+			criteria.add(labelCriterrion);
+			tenant = (SbiTenant) criteria.uniqueResult();
+
+			tx.commit();
+
+			if (tenant != null)
+				themes = tenant.getSbiOrganizationThemes();
+		} catch (HibernateException he) {
+			rollbackIfActive(tx);
+			logger.error("Error while loading the tenant with name " + name, he);
+			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
+		} finally {
+			closeSessionIfOpen(tmpSession);
+		}
+		logger.debug("OUT");
+		return themes;
 	}
 
 	@Override
@@ -266,7 +283,7 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			Integer idTenant = (Integer) aSession.save(aTenant);
 			aSession.flush();
 
-			aTenant.setId(idTenant);
+			aTenant.changeId(idTenant);
 
 			SbiCommonInfo sbiCommoInfo = new SbiCommonInfo();
 			sbiCommoInfo.setOrganization(aTenant.getName());
@@ -294,10 +311,24 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			Set<SbiOrganizationProductType> productType = aTenant.getSbiOrganizationProductType();
 			for (SbiOrganizationProductType sbiOrganizationProductType : productType) {
 				SbiProductType sbiProductType = sbiOrganizationProductType.getSbiProductType();
-				sbiOrganizationProductType.setId(new SbiOrganizationProductTypeId(sbiProductType.getProductTypeId(), idTenant));
+				sbiOrganizationProductType
+						.setId(new SbiOrganizationProductTypeId(sbiProductType.getProductTypeId(), idTenant));
 				sbiOrganizationProductType.setCommonInfo(sbiCommoInfo);
 				updateSbiCommonInfo4Insert(sbiOrganizationProductType);
 				aSession.save(sbiOrganizationProductType);
+				aSession.flush();
+			}
+
+			Set<SbiOrganizationTheme> themes = aTenant.getSbiOrganizationThemes();
+			for (SbiOrganizationTheme theme : themes) {
+				SbiOrganizationTheme sbiOrganizationTheme = new SbiOrganizationTheme();
+				sbiOrganizationTheme.setId(theme.getId());
+				sbiOrganizationTheme.setThemeName(theme.getThemeName());
+				sbiOrganizationTheme.setConfig(theme.getConfig());
+				sbiOrganizationTheme.setActive(theme.isActive());
+				sbiOrganizationTheme.setCommonInfo(sbiCommoInfo);
+				updateSbiCommonInfo4Insert(sbiOrganizationTheme);
+				aSession.save(sbiOrganizationTheme);
 				aSession.flush();
 			}
 			tx.commit();
@@ -305,19 +336,13 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			// initAlarmForTenant(aTenant);
 
 		} catch (HibernateException he) {
-			logger.error("Error while inserting the tenant with id " + ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
+			logger.error("Error while inserting the tenant with id "
+					+ ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), he);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-				logger.debug("insertTenant OUT");
-			}
+			closeSessionIfOpen(aSession);
+			logger.debug("insertTenant OUT");
 		}
 	}
 
@@ -351,7 +376,7 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 				startDate.set(Calendar.SECOND, 0);
 				startDate.set(Calendar.MILLISECOND, 0);
 
-				String nameTrig = "schedule_uuid_" + UUIDGenerator.getInstance().generateTimeBasedUUID().toString();
+				String nameTrig = "schedule_uuid_" + UUID.randomUUID().toString();
 
 				CronExpression cronExpression = new CronExpression("minute{numRepetition=5}");
 
@@ -389,8 +414,10 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			ISbiUserDAO userDAO = DAOFactory.getSbiUserDAO();
 			SbiUser existingUser = userDAO.loadSbiUserByUserId(userId);
 			if (existingUser != null) {
-				logger.error("Cannot initialize admin user for tenant " + aTenant.getName() + ": user [" + userId + "] already existing");
-				throw new SpagoBIRuntimeException("Cannot initialize admin user for tenant " + aTenant.getName() + ": user [" + userId + "] already existing");
+				logger.error("Cannot initialize admin user for tenant " + aTenant.getName() + ": user [" + userId
+						+ "] already existing");
+				throw new SpagoBIRuntimeException("Cannot initialize admin user for tenant " + aTenant.getName()
+						+ ": user [" + userId + "] already existing");
 			}
 
 			Role adminRole = createAdminRoleForTenant(aTenant.getName());
@@ -398,23 +425,23 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			SbiUser tenantAdmin = new SbiUser();
 			tenantAdmin.setUserId(userId);
 			tenantAdmin.setFullName(aTenant.getName() + ADMIN_USER_NAME_SUFFIX);
-			String pwd = Password.encriptPassword(userId);
+			String pwd = Password.hashPassword(userId);
 			tenantAdmin.setPassword(pwd);
 			tenantAdmin.setIsSuperadmin(false);
 			tenantAdmin.getCommonInfo().setOrganization(aTenant.getName());
 			Integer newId = userDAO.saveSbiUser(tenantAdmin);
-			setRole(adminRole, newId);
+			setRole(adminRole, tenantAdmin);
 			logger.debug("User [" + userId + "] sucesfully stored into database with id [" + newId + "]");
 			toReturn = userDAO.loadSbiUserById(newId);
 		} catch (Exception e) {
-			logger.error("Error while trying to initialize admin for tenant " + aTenant.getName() + ": " + e.getMessage(), e);
-			if (tx != null)
-				tx.rollback();
-			throw new SpagoBIRuntimeException("Error while trying to initialize admin for tenant " + aTenant.getName(), e);
+			rollbackIfActive(tx);
+			logger.error(
+					"Error while trying to initialize admin for tenant " + aTenant.getName() + ": " + e.getMessage(),
+					e);
+			throw new SpagoBIRuntimeException("Error while trying to initialize admin for tenant " + aTenant.getName(),
+					e);
 		} finally {
-			if (aSession != null && aSession.isOpen()) {
-				aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 			logger.debug("OUT");
 		}
 
@@ -455,7 +482,8 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			return toReturn;
 		} catch (Exception e) {
 			logger.error("An unexpected error occurred while creating admin role for tenant " + tenant, e);
-			throw new SpagoBIRuntimeException("An unexpected error occurred while creating admin role for tenant " + tenant, e);
+			throw new SpagoBIRuntimeException(
+					"An unexpected error occurred while creating admin role for tenant " + tenant, e);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -465,55 +493,58 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		aRole.setAbleToDeleteKpiComm(true);
 		aRole.setAbleToEditAllKpiComm(true);
 		aRole.setAbleToEditMyKpiComm(true);
-		aRole.setIsAbleToBuildQbeQuery(true);
-		aRole.setIsAbleToCreateDocuments(true);
-		aRole.setIsAbleToCreateSocialAnalysis(true);
-		aRole.setIsAbleToDoMassiveExport(true);
-		aRole.setIsAbleToEnableDatasetPersistence(true);
-		aRole.setIsAbleToEnableFederatedDataset(true);
-		aRole.setIsAbleToEnableRate(true);
-		aRole.setIsAbleToEnablePrint(true);
-		aRole.setIsAbleToEnableCopyAndEmbed(true);
-		aRole.setIsAbleToHierarchiesManagement(true);
-		aRole.setIsAbleToManageUsers(true);
-		aRole.setIsAbleToSaveIntoPersonalFolder(true);
-		aRole.setIsAbleToSaveMetadata(true);
-		aRole.setIsAbleToSaveRememberMe(true);
-		aRole.setIsAbleToEditPythonScripts(true);
-		aRole.setIsAbleToCreateCustomChart(true);
-		aRole.setIsAbleToSaveSubobjects(true);
-		aRole.setIsAbleToSeeDocumentBrowser(true);
-		aRole.setIsAbleToSeeFavourites(true);
-		aRole.setIsAbleToSeeMetadata(true);
-		aRole.setIsAbleToSeeMyData(true);
-		aRole.setIsAbleToSeeMyWorkspace(true);
-		aRole.setIsAbleToSeeNotes(true);
-		aRole.setIsAbleToSeeSnapshots(true);
-		aRole.setIsAbleToRunSnapshots(true);
-		aRole.setIsAbleToSeeSubobjects(true);
-		aRole.setIsAbleToSeeSubscriptions(true);
-		aRole.setIsAbleToSeeToDoList(true);
-		aRole.setIsAbleToSeeViewpoints(true);
-		aRole.setIsAbleToSendMail(true);
-		aRole.setIsAbleToViewSocialAnalysis(true);
+		aRole.setAbleToBuildQbeQuery(true);
+		aRole.setAbleToCreateDocuments(true);
+		aRole.setAbleToCreateSocialAnalysis(true);
+		aRole.setAbleToDoMassiveExport(true);
+		aRole.setAbleToEnableDatasetPersistence(true);
+		aRole.setAbleToEnableFederatedDataset(true);
+		aRole.setAbleToEnableRate(true);
+		aRole.setAbleToEnablePrint(true);
+		aRole.setAbleToEnableCopyAndEmbed(true);
+		aRole.setAbleToHierarchiesManagement(true);
+		aRole.setAbleToManageUsers(true);
+		aRole.setAbleToSaveIntoPersonalFolder(true);
+		aRole.setAbleToSaveMetadata(true);
+		aRole.setAbleToSaveRememberMe(true);
+		aRole.setAbleToEditPythonScripts(true);
+		aRole.setAbleToCreateCustomChart(true);
+		aRole.setAbleToSaveSubobjects(true);
+		aRole.setAbleToSeeDocumentBrowser(true);
+		aRole.setAbleToSeeFavourites(true);
+		aRole.setAbleToSeeMetadata(true);
+		aRole.setAbleToSeeMyData(true);
+		aRole.setAbleToSeeMyWorkspace(true);
+		aRole.setAbleToSeeNotes(true);
+		aRole.setAbleToSeeSnapshots(true);
+		aRole.setAbleToRunSnapshots(true);
+		aRole.setAbleToSeeSubobjects(true);
+		aRole.setAbleToSeeSubscriptions(true);
+		aRole.setAbleToSeeToDoList(true);
+		aRole.setAbleToSeeViewpoints(true);
+		aRole.setAbleToSendMail(true);
+		aRole.setAbleToViewSocialAnalysis(true);
 	}
 
-	private void setRole(Role role, int userIdInt) {
+	private void setRole(Role role, SbiUser tenantAdmin) {
 		logger.debug("IN");
 		SbiExtUserRoles sbiExtUserRole = new SbiExtUserRoles();
-		SbiExtUserRolesId id = new SbiExtUserRolesId();
+
 		try {
 			ISbiUserDAO userDAO = DAOFactory.getSbiUserDAO();
 			Integer extRoleId = role.getId();
-			id.setExtRoleId(extRoleId); // role Id
-			id.setId(userIdInt); // user Id
+			SbiExtUserRolesId id = new SbiExtUserRolesId(tenantAdmin.getId(), extRoleId);
+			sbiExtUserRole.setSbiUser(tenantAdmin);
 			sbiExtUserRole.setId(id);
+			sbiExtUserRole.getCommonInfo().setOrganization(role.getOrganization());
 			userDAO.updateSbiUserRoles(sbiExtUserRole);
 			// RoleDAOHibImpl roleDAO = new RoleDAOHibImpl();
 			// userDAO.updateSbiUserRoles(sbiExtUserRole);
 		} catch (Exception e) {
-			logger.error("An unexpected error occurred while associating role [" + role.getName() + "] to user with id " + userIdInt, e);
-			throw new SpagoBIRuntimeException("An unexpected error occurred while associating role [" + role.getName() + "] to user with id " + userIdInt, e);
+			logger.error("An unexpected error occurred while associating role [" + role.getName() + "] to user with id "
+					+ tenantAdmin, e);
+			throw new SpagoBIRuntimeException("An unexpected error occurred while associating role [" + role.getName()
+					+ "] to user with id " + tenantAdmin, e);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -522,10 +553,9 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 	@Override
 	public void modifyTenant(SbiTenant aTenant) throws EMFUserError, Exception {
 		logger.debug("modifyTenant IN");
-		Session aSession = null;
+		final Session aSession = getSession();
 		Transaction tx = null;
 		try {
-			aSession = getSession();
 			tx = aSession.beginTransaction();
 
 			// load tenant by id
@@ -547,8 +577,8 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			UserProfile profile = (UserProfile) getUserProfile();
 
 			Set<SbiOrganizationDatasource> ds = aTenant.getSbiOrganizationDatasources();
-			ArrayList<Integer> datasourceToBeAss = new ArrayList<Integer>();
-			ArrayList<Integer> datasourceToBeInsert = new ArrayList<Integer>();
+			ArrayList<Integer> datasourceToBeAss = new ArrayList<>();
+			ArrayList<Integer> datasourceToBeInsert = new ArrayList<>();
 			// get a list of datasource ids
 			Iterator itds = ds.iterator();
 			while (itds.hasNext()) {
@@ -560,10 +590,11 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 					"from SbiOrganizationDatasource ds where ds.sbiOrganizations.id = :idTenant and (ds.sbiDataSource.commonInfo.userIn = :userId or length(ds.sbiDataSource.jndi) > 0)");
 			hibQuery.setInteger("idTenant", aTenant.getId());
 			hibQuery.setString("userId", profile.getUserId().toString());
-			ArrayList<SbiOrganizationDatasource> existingDsAssociated = (ArrayList<SbiOrganizationDatasource>) hibQuery.list();
+			ArrayList<SbiOrganizationDatasource> existingDsAssociated = (ArrayList<SbiOrganizationDatasource>) hibQuery
+					.list();
 
 			boolean deletedSomedsOrgAss = false;
-			List<Integer> idsDeleted = new ArrayList<Integer>();
+			List<Integer> idsDeleted = new ArrayList<>();
 			if (existingDsAssociated != null) {
 				Iterator it = existingDsAssociated.iterator();
 				while (it.hasNext()) {
@@ -575,23 +606,25 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 						datasourceToBeInsert.remove(new Integer(assDS.getSbiDataSource().getDsId()));
 					} else {
 						// not existing --> must be deleted
-						Query docsQ = aSession.createQuery("from SbiObjects o where o.dataSource.dsId = :idDS and o.commonInfo.organization = :tenant");
+						Query docsQ = aSession.createQuery(
+								"from SbiObjects o where o.dataSource.dsId = :idDS and o.commonInfo.organization = :tenant");
 						docsQ.setInteger("idDS", assDS.getSbiDataSource().getDsId());
 						docsQ.setString("tenant", aTenant.getName());
 						ArrayList<Object> docs = (ArrayList<Object>) docsQ.list();
 						if (docs != null && !docs.isEmpty()) {
-							tx.rollback();
+							rollbackIfActive(tx);
 							throw new Exception("datasource:" + assDS.getSbiDataSource().getLabel());
 
 						} else {
 
 							// check no model associated
-							Query modelQ = aSession.createQuery("from SbiMetaModel m where m.dataSource.dsId = :idDS and m.commonInfo.organization = :tenant");
+							Query modelQ = aSession.createQuery(
+									"from SbiMetaModel m where m.dataSource.dsId = :idDS and m.commonInfo.organization = :tenant");
 							modelQ.setInteger("idDS", assDS.getSbiDataSource().getDsId());
 							modelQ.setString("tenant", aTenant.getName());
 							ArrayList<Object> models = (ArrayList<Object>) modelQ.list();
 							if (models != null && !models.isEmpty()) {
-								tx.rollback();
+								rollbackIfActive(tx);
 								throw new Exception("datasource:" + assDS.getSbiDataSource().getLabel());
 
 							} else {
@@ -626,19 +659,21 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			// first delete product types relationship with this tenant then insert the new ones
 
 			Set<SbiOrganizationProductType> productTypes = aTenant.getSbiOrganizationProductType();
-			ArrayList<Integer> productTypesToBeAss = new ArrayList<Integer>();
-			ArrayList<Integer> productTypesToBeInsert = new ArrayList<Integer>();
+			ArrayList<Integer> productTypesToBeAss = new ArrayList<>();
+			ArrayList<Integer> productTypesToBeInsert = new ArrayList<>();
 			// get a list of product types ids
-			Iterator itproduct = productTypes.iterator();
+			Iterator<SbiOrganizationProductType> itproduct = productTypes.iterator();
 			while (itproduct.hasNext()) {
-				SbiOrganizationProductType aOrganizationProductType = (SbiOrganizationProductType) itproduct.next();
+				SbiOrganizationProductType aOrganizationProductType = itproduct.next();
 				productTypesToBeAss.add(aOrganizationProductType.getSbiProductType().getProductTypeId());
 				productTypesToBeInsert.add(aOrganizationProductType.getSbiProductType().getProductTypeId());
 			}
 
-			hibQuery = aSession.createQuery("from SbiOrganizationProductType p where p.sbiOrganizations.id = :idTenant");
+			hibQuery = aSession
+					.createQuery("from SbiOrganizationProductType p where p.sbiOrganizations.id = :idTenant");
 			hibQuery.setInteger("idTenant", aTenant.getId());
-			ArrayList<SbiOrganizationProductType> existingProductTypeAssociated = (ArrayList<SbiOrganizationProductType>) hibQuery.list();
+			ArrayList<SbiOrganizationProductType> existingProductTypeAssociated = (ArrayList<SbiOrganizationProductType>) hibQuery
+					.list();
 			if (existingProductTypeAssociated != null) {
 				Iterator it = existingProductTypeAssociated.iterator();
 				while (it.hasNext()) {
@@ -669,20 +704,99 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("Error while inserting the tenant with id " + ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
+			logger.error("Error while inserting the tenant with id "
+					+ ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), he);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-				logger.debug("modifyTenant OUT");
-			}
+			closeSessionIfOpen(aSession);
+			logger.debug("modifyTenant OUT");
 		}
+	}
+
+	/**
+	 * @param aTenant
+	 * @param aSession
+	 * @param sbiCommoInfo
+	 */
+	protected String handleThemes(SbiTenant aTenant) {
+
+		Transaction tx = null;
+		final Session aSession = getSession();
+		String newUuid = null;
+		try {
+			tx = aSession.beginTransaction();
+			SbiCommonInfo sbiCommoInfo = new SbiCommonInfo();
+			sbiCommoInfo.setOrganization(aTenant.getName());
+			Query hibQuery = aSession.createQuery("from SbiOrganizationTheme p where p.id.organizationId = :idTenant");
+			hibQuery.setInteger("idTenant", aTenant.getId());
+
+			ArrayList<SbiOrganizationTheme> existingSbiOrganizationThemes = (ArrayList<SbiOrganizationTheme>) hibQuery
+					.list();
+
+			existingSbiOrganizationThemes.stream().filter(x -> x.getId().getUuid() != null).forEach(x -> {
+
+				Optional s = aTenant.getSbiOrganizationThemes().stream()
+						.filter(y -> x.getId().getUuid().equals(y.getId().getUuid())).findFirst();
+
+				Query q = aSession.createQuery(
+						"from SbiOrganizationTheme p where p.id.organizationId = :idTenant and p.id.uuid = :uuid");
+				q.setInteger("idTenant", x.getId().getOrganizationId());
+				q.setString("uuid", x.getId().getUuid());
+				SbiOrganizationTheme sbiOrganizationTheme = (SbiOrganizationTheme) q.uniqueResult();
+
+				if (s.isPresent()) {
+					SbiOrganizationTheme newSbiOrganizationTheme = new SbiOrganizationTheme();
+					newSbiOrganizationTheme.setId(((SbiOrganizationTheme) s.get()).getId());
+					newSbiOrganizationTheme.setThemeName(((SbiOrganizationTheme) s.get()).getThemeName());
+
+					newSbiOrganizationTheme.setConfig(((SbiOrganizationTheme) s.get()).getConfig());
+
+					newSbiOrganizationTheme.setActive(((SbiOrganizationTheme) s.get()).isActive());
+
+					aSession.delete(sbiOrganizationTheme);
+					aSession.flush();
+
+					newSbiOrganizationTheme.setCommonInfo(sbiCommoInfo);
+					updateSbiCommonInfo4Insert(newSbiOrganizationTheme);
+
+					aSession.save(newSbiOrganizationTheme);
+
+				} else {
+					aSession.delete(sbiOrganizationTheme);
+
+				}
+				aSession.flush();
+
+			});
+
+			newUuid = UUID.randomUUID().toString();
+
+			String uuidForLambda = newUuid;
+			// newThemes
+			aTenant.getSbiOrganizationThemes().stream().filter(y -> y.getId().getUuid() == null).forEach(x -> {
+
+				SbiOrganizationTheme newSbiOrganizationTheme = x;
+				SbiOrganizationThemeId sbiOrganizationThemeId = new SbiOrganizationThemeId(uuidForLambda, aTenant.getId());
+				newSbiOrganizationTheme.setId(sbiOrganizationThemeId);
+				newSbiOrganizationTheme.setCommonInfo(sbiCommoInfo);
+				updateSbiCommonInfo4Insert(newSbiOrganizationTheme);
+
+				aSession.save(newSbiOrganizationTheme);
+				aSession.flush();
+
+			});
+			tx.commit();
+		} catch (HibernateException he) {
+			rollbackIfActive(tx);
+			String message = "Error while updating themes for the tenant " + aTenant.getName();
+			logger.error(message, he);
+			throw new SpagoBIRuntimeException(message);
+		} finally {
+			closeSessionIfOpen(aSession);
+			logger.debug("modifyTenant OUT");
+		}
+		return newUuid;
 	}
 
 	/**
@@ -691,15 +805,16 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 	 * @param aTenant
 	 * @param aSession
 	 */
-	private void checkAuthorizationsRoles(SbiTenant aTenant, ArrayList<SbiOrganizationProductType> existingProductTypeAssociated, Session aSession) {
+	private void checkAuthorizationsRoles(SbiTenant aTenant,
+			ArrayList<SbiOrganizationProductType> existingProductTypeAssociated, Session aSession) {
 		// 1) Get the product types id currently configured for the tenant
 
 		Set<SbiOrganizationProductType> productTypes = aTenant.getSbiOrganizationProductType();
-		ArrayList<Integer> productTypesIds = new ArrayList<Integer>();
+		ArrayList<Integer> productTypesIds = new ArrayList<>();
 		// get a list of product types ids
-		Iterator itproduct = productTypes.iterator();
+		Iterator<SbiOrganizationProductType> itproduct = productTypes.iterator();
 		while (itproduct.hasNext()) {
-			SbiOrganizationProductType aOrganizationProductType = (SbiOrganizationProductType) itproduct.next();
+			SbiOrganizationProductType aOrganizationProductType = itproduct.next();
 			productTypesIds.add(aOrganizationProductType.getSbiProductType().getProductTypeId());
 		}
 
@@ -716,11 +831,11 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		Query hqlQueryAutRole = aSession.createQuery(hql);
 		hqlQueryAutRole.setString("TENANT", aTenant.getName());
 		hqlQueryAutRole.setParameterList("AUTHORIZATIONS", authorizations);
-		List<SbiAuthorizationsRoles> associations = new ArrayList<SbiAuthorizationsRoles>();
+		List<SbiAuthorizationsRoles> associations = new ArrayList<>();
 		associations = hqlQueryAutRole.list();
 
 		// 4) Get current existing association between roles and authorizations (before changing products)
-		ArrayList<Integer> oldProductTypesIds = new ArrayList<Integer>();
+		ArrayList<Integer> oldProductTypesIds = new ArrayList<>();
 		// get possible authorizations of current (old) products types
 		for (SbiOrganizationProductType existingProductType : existingProductTypeAssociated) {
 			oldProductTypesIds.add(existingProductType.getSbiProductType().getProductTypeId());
@@ -733,7 +848,7 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			oldHqlQueryAut.setParameterList("PRODUCT_TYPES", oldProductTypesIds);
 			oldAuthorizations = oldHqlQueryAut.list();
 		} else {
-			oldAuthorizations = new ArrayList<Integer>(0);
+			oldAuthorizations = new ArrayList<>(0);
 		}
 
 		// search current associations roles-authorizations of current (old) product types
@@ -745,11 +860,11 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			oldHqlQueryAutRole.setParameterList("AUTHORIZATIONS", oldAuthorizations);
 			oldAssociations = oldHqlQueryAutRole.list();
 		} else {
-			oldAssociations = new ArrayList<SbiAuthorizationsRoles>(0);
+			oldAssociations = new ArrayList<>(0);
 		}
 
 		// save the old authorizations names and associated roles to be applied again with new products (if not already set)
-		Map<String, Set<SbiExtRoles>> oldAuthMap = new HashMap<String, Set<SbiExtRoles>>();
+		Map<String, Set<SbiExtRoles>> oldAuthMap = new HashMap<>();
 		for (SbiAuthorizationsRoles oldAssociation : oldAssociations) {
 			String anAuthName = oldAssociation.getSbiAuthorizations().getName();
 			if (oldAuthMap.containsKey(anAuthName)) {
@@ -762,7 +877,7 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			} else {
 				// new authorization found
 				SbiExtRoles role = oldAssociation.getSbiExtRoles();
-				Set<SbiExtRoles> roles = new HashSet<SbiExtRoles>();
+				Set<SbiExtRoles> roles = new HashSet<>();
 				roles.add(role);
 				oldAuthMap.put(anAuthName, roles);
 			}
@@ -785,15 +900,12 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 	 * Restore authorizations valid for specific roles after changing the product types associated with specific tenant
 	 *
 	 * @param aSession
-	 * @param oldAuthMap
-	 *            a map that contains authorizations names as keys and roles as values
-	 * @param aTenant
-	 *            the specific tenant
-	 * @param productTypesIds
-	 *            the new products types associated with the tenant
+	 * @param oldAuthMap      a map that contains authorizations names as keys and roles as values
+	 * @param aTenant         the specific tenant
+	 * @param productTypesIds the new products types associated with the tenant
 	 */
-	private void restorePreviousAuthorizationsRoles(Session aSession, Map<String, Set<SbiExtRoles>> oldAuthMap, SbiTenant aTenant,
-			ArrayList<Integer> productTypesIds) {
+	private void restorePreviousAuthorizationsRoles(Session aSession, Map<String, Set<SbiExtRoles>> oldAuthMap,
+			SbiTenant aTenant, ArrayList<Integer> productTypesIds) {
 		// iterate the map for each authorization and enable it on the same roles if this is possible also with the new product types
 		for (Map.Entry<String, Set<SbiExtRoles>> entry : oldAuthMap.entrySet()) {
 			String oldAuthName = entry.getKey();
@@ -817,13 +929,14 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 						checkAutHqlQuery.setInteger("AUTHORIZATION", autToRestore.getId());
 						checkAutHqlQuery.setInteger("ROLE", role.getExtRoleId());
 
-						List<SbiAuthorizationsRoles> checkAssociations = new ArrayList<SbiAuthorizationsRoles>();
+						List<SbiAuthorizationsRoles> checkAssociations = new ArrayList<>();
 						checkAssociations = checkAutHqlQuery.list();
 
 						if (checkAssociations.isEmpty()) {
 							// the association is not already present on the db so we can insert it
 							SbiAuthorizationsRoles sbiAuthorizationsRoles = new SbiAuthorizationsRoles();
-							SbiAuthorizationsRolesId sbiAuthorizationsRolesId = new SbiAuthorizationsRolesId(autToRestore.getId(), role.getExtRoleId());
+							SbiAuthorizationsRolesId sbiAuthorizationsRolesId = new SbiAuthorizationsRolesId(
+									autToRestore.getId(), role.getExtRoleId());
 
 							sbiAuthorizationsRoles.setId(sbiAuthorizationsRolesId);
 							sbiAuthorizationsRoles.setSbiAuthorizations(autToRestore);
@@ -873,12 +986,12 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 					}
 				}
 			}
-			StringEscapeUtils seu = new StringEscapeUtils();
+			KnowageStringUtils seu = new KnowageStringUtils();
 
-			str = "DELETE FROM QRTZ_CRON_TRIGGERS WHERE trigger_name IN (SELECT DISTINCT t.trigger_name " + "FROM QRTZ_TRIGGERS t WHERE t.JOB_GROUP LIKE '"
-					+ seu.escapeSql(aTenant.getName()) + "/%') "
-					+ "AND trigger_group IN (SELECT DISTINCT t.trigger_group FROM QRTZ_TRIGGERS t WHERE t.JOB_GROUP " + "LIKE '"
-					+ seu.escapeSql(aTenant.getName()) + "/%')";
+			str = "DELETE FROM QRTZ_CRON_TRIGGERS WHERE trigger_name IN (SELECT DISTINCT t.trigger_name "
+					+ "FROM QRTZ_TRIGGERS t WHERE t.JOB_GROUP LIKE '" + seu.escapeSql(aTenant.getName()) + "/%') "
+					+ "AND trigger_group IN (SELECT DISTINCT t.trigger_group FROM QRTZ_TRIGGERS t WHERE t.JOB_GROUP "
+					+ "LIKE '" + seu.escapeSql(aTenant.getName()) + "/%')";
 			PreparedStatement statement = jdbcConnection.prepareStatement(str);
 			statement.execute();
 			statement.close();
@@ -896,16 +1009,18 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			jdbcConnection.commit();
 
 		} catch (Exception e) {
-			logger.error("Error while deleting the tenant with id " + ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), e);
+			logger.error("Error while deleting the tenant with id "
+					+ ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), e);
 
 			// Added
-			e.printStackTrace();
+			// e.printStackTrace();
 
 			if (jdbcConnection != null) {
 				try {
 					jdbcConnection.rollback();
 				} catch (SQLException ex) {
-					logger.error("Error while deleting the tenant with id " + ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), ex);
+					logger.error("Error while deleting the tenant with id "
+							+ ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), ex);
 				}
 			}
 
@@ -923,13 +1038,11 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 					jdbcConnection.close();
 				}
 			} catch (SQLException ex) {
-				logger.error("Error while deleting the tenant with id " + ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), ex);
+				logger.error("Error while deleting the tenant with id "
+						+ ((aTenant == null) ? "" : String.valueOf(aTenant.getId())), ex);
 			}
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-				logger.debug("deleteTenant OUT");
-			}
+			closeSessionIfOpen(aSession);
+			logger.debug("deleteTenant OUT");
 		}
 	}
 
@@ -937,8 +1050,7 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 	 * When modifying a tenant if a datasource remains with no tenant delete it
 	 *
 	 * @param aSession
-	 * @param ids:
-	 *            id of <tenant,dataource> modified
+	 * @param ids:     id of <tenant,dataource> modified
 	 * @throws EMFUserError
 	 */
 
@@ -947,7 +1059,8 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 		UserProfile profile = (UserProfile) this.getUserProfile();
 		Assert.assertNotNull(profile, "User profile object is null; it must be provided");
 
-		Query hibQuery = aSession.createQuery("from SbiDataSource ds where ds.commonInfo.userIn = :userId or (ds.jndi != '' and ds.jndi is not null)");
+		Query hibQuery = aSession.createQuery(
+				"from SbiDataSource ds where ds.commonInfo.userIn = :userId or (ds.jndi != '' and ds.jndi is not null)");
 		hibQuery.setString("userId", profile.getUserId().toString());
 		ArrayList<SbiDataSource> datasourceList = (ArrayList<SbiDataSource>) hibQuery.list();
 		for (Iterator iterator = datasourceList.iterator(); iterator.hasNext();) {
@@ -955,9 +1068,11 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			Integer dsId = sbiDataSource.getDsId();
 			// check only datasource whose link to tenant has been modified
 			if (ids.contains(dsId)) {
-				Query hibQuery2 = aSession.createQuery("from SbiOrganizationDatasource ds where ds.id.datasourceId = :dsId");
+				Query hibQuery2 = aSession
+						.createQuery("from SbiOrganizationDatasource ds where ds.id.datasourceId = :dsId");
 				hibQuery2.setInteger("dsId", dsId);
-				ArrayList<SbiOrganizationDatasource> dsOrganizations = (ArrayList<SbiOrganizationDatasource>) hibQuery2.list();
+				ArrayList<SbiOrganizationDatasource> dsOrganizations = (ArrayList<SbiOrganizationDatasource>) hibQuery2
+						.list();
 				if (dsOrganizations.isEmpty()) {
 					logger.debug("delete datasource " + sbiDataSource.getLabel());
 					aSession.delete(sbiDataSource);
@@ -966,6 +1081,71 @@ public class TenantsDAOHibImpl extends AbstractHibernateDAO implements ITenantsD
 			}
 		}
 		logger.debug("OUT");
+	}
+
+	@Override
+	public String updateThemes(IEngUserProfile profile, String uuid, String themeName, JSONObject newThemeConfig,
+			boolean isActive) throws EMFUserError {
+		ITenantsDAO tenantDao = DAOFactory.getTenantsDAO();
+		tenantDao.setUserProfile(profile);
+		Tenant tenantManager = TenantManager.getTenant();
+		String tenantName = tenantManager.getName();
+		SbiTenant tenant = tenantDao.loadTenantByName(tenantName);
+
+		String newThemeConfigStr = newThemeConfig.toString();
+
+		if (uuid == null) {
+			if (isActive) {
+				tenant.getSbiOrganizationThemes().stream().forEach(x -> x.setActive(false));
+			}
+
+			SbiOrganizationThemeId id = new SbiOrganizationThemeId(tenant.getId());
+
+			SbiOrganizationTheme newTheme = new SbiOrganizationTheme(themeName, newThemeConfigStr, isActive);
+			newTheme.setId(id);
+			updateSbiCommonInfo4Update(newTheme);
+			tenant.getSbiOrganizationThemes().add(newTheme);
+
+		} else {
+			if (isActive) {
+				tenant.getSbiOrganizationThemes().stream().forEach(x -> x.setActive(false));
+			}
+
+			String tmpNewThemeConfigStr = newThemeConfigStr;
+			tenant.getSbiOrganizationThemes().stream().filter(x -> x.getId().getUuid().equals(uuid)).forEach(x -> {
+				SbiOrganizationTheme sbiOrganizationTheme = x;
+				sbiOrganizationTheme.setConfig(tmpNewThemeConfigStr);
+				sbiOrganizationTheme.setActive(isActive);
+				sbiOrganizationTheme.setThemeName(themeName);
+				updateSbiCommonInfo4Update(sbiOrganizationTheme);
+			});
+		}
+
+		String newId = handleThemes(tenant);
+
+		return newId;
+	}
+
+	@Override
+	public void deleteTheme(IEngUserProfile profile, String themeId) throws EMFUserError {
+		ITenantsDAO tenantDao = DAOFactory.getTenantsDAO();
+		tenantDao.setUserProfile(profile);
+		Tenant tenantManager = TenantManager.getTenant();
+		String tenantName = tenantManager.getName();
+		SbiTenant tenant = tenantDao.loadTenantByName(tenantName);
+		Set<SbiOrganizationTheme> newSbiOrganizationThemes = new HashSet<>();
+
+		tenant.getSbiOrganizationThemes().stream().forEach(x -> {
+
+			SbiOrganizationTheme sbiOrganizationTheme = x;
+
+			if (!sbiOrganizationTheme.getId().getUuid().equals(themeId))
+				newSbiOrganizationThemes.add(sbiOrganizationTheme);
+		});
+
+		tenant.setSbiOrganizationThemes(newSbiOrganizationThemes);
+		handleThemes(tenant);
+
 	}
 
 }

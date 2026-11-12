@@ -1,7 +1,7 @@
 /*
  * Knowage, Open Source Business Intelligence suite
  * Copyright (C) 2016 Engineering Ingegneria Informatica S.p.A.
- * 
+ *
  * Knowage is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -11,14 +11,13 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package it.eng.spagobi.api.v2;
 
 import java.net.URI;
-import java.net.URLEncoder;
 import java.util.List;
 
 import javax.validation.Valid;
@@ -33,10 +32,15 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.owasp.esapi.Encoder;
+
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.behaviouralmodel.check.bo.Check;
 import it.eng.spagobi.behaviouralmodel.check.dao.ICheckDAO;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
@@ -46,12 +50,14 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 @Path("/2.0/customChecks")
 @ManageAuthorization
 public class ModalitiesDetailResource extends AbstractSpagoBIResource {
-	private final String charset = "; charset=UTF-8";
+
+	private static final Logger LOGGER = LogManager.getLogger(ModalitiesDetailResource.class);
+	private static final String CHARSET = "; charset=UTF-8";
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.CONTSTRAINT_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONTSTRAINT_MANAGEMENT })
 	@Path("/")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getCustom() {
 		ICheckDAO checksDao = null;
 		List<Check> fullList = null;
@@ -63,16 +69,16 @@ public class ModalitiesDetailResource extends AbstractSpagoBIResource {
 			fullList = checksDao.loadCustomChecks();
 			return Response.ok(fullList).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 
 	}
 
 	@GET
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONTSTRAINT_MANAGEMENT })
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONTSTRAINT_MANAGEMENT })
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getSingleCheck(@PathParam("id") Integer id) {
 		ICheckDAO checksDao = null;
 
@@ -84,22 +90,23 @@ public class ModalitiesDetailResource extends AbstractSpagoBIResource {
 			return Response.ok(check).build();
 
 		} catch (Exception e) {
-			logger.error("Check with selected id: " + id + " doesn't exists", e);
-			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists", buildLocaleFromSession(), e);
+			LOGGER.error("Check with selected id: " + id + " doesn't exists", e);
+			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists",
+					getLocale(), e);
 		}
 
 	}
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONTSTRAINT_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONTSTRAINT_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response insertCheck(@Valid Check body) {
 
 		ICheckDAO checksDao = null;
 		Check check = body;
 		if (check.getCheckId() != null) {
-			logger.error("Error paramters. New check should not have ID value");
+			LOGGER.error("Error paramters. New check should not have ID value");
 			throw new SpagoBIRuntimeException("Error paramters. New check should not have ID value");
 		}
 
@@ -107,24 +114,25 @@ public class ModalitiesDetailResource extends AbstractSpagoBIResource {
 			checksDao = DAOFactory.getChecksDAO();
 			checksDao.setUserProfile(getUserProfile());
 			Integer id = checksDao.insertCheck(check);
-			String encodedCheck = URLEncoder.encode("" + id, "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedCheck = encoder.encodeForURL("" + id);
 			return Response.created(new URI("2.0/customChecks/" + encodedCheck)).entity(encodedCheck).build();
 		} catch (Exception e) {
-			logger.error("Error while inserting resource", e);
-			throw new SpagoBIRestServiceException("Error while inserting resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error while inserting resource", e);
+			throw new SpagoBIRestServiceException("Error while inserting resource", getLocale(), e);
 		}
 	}
 
 	@PUT
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONTSTRAINT_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONTSTRAINT_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateCheck(@PathParam("id") Integer id, @Valid Check body) {
 
 		ICheckDAO checksDao = null;
 		Check check = body;
 		if (check.getCheckId() == null) {
-			logger.error("The check with ID " + id + " doesn't exist");
+			LOGGER.error("The check with ID " + id + " doesn't exist");
 			throw new SpagoBIRuntimeException("The check with ID " + id + " doesn't exist");
 		}
 
@@ -132,17 +140,19 @@ public class ModalitiesDetailResource extends AbstractSpagoBIResource {
 			checksDao = DAOFactory.getChecksDAO();
 			checksDao.setUserProfile(getUserProfile());
 			checksDao.modifyCheck(check);
-			String encodedCheck = URLEncoder.encode("" + check.getCheckId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedCheck = encoder.encodeForURL("" + check.getCheckId());
 			return Response.created(new URI("2.0/customChecks/" + encodedCheck)).entity(encodedCheck).build();
 		} catch (Exception e) {
-			logger.error("Error while modifying resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error while modifying resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error while modifying resource with id: " + id, e);
+			throw new SpagoBIRestServiceException("Error while modifying resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 
 	@DELETE
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONTSTRAINT_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONTSTRAINT_MANAGEMENT })
 	public Response deleteCheck(@PathParam("id") Integer id) {
 
 		ICheckDAO checksDao = null;
@@ -153,11 +163,13 @@ public class ModalitiesDetailResource extends AbstractSpagoBIResource {
 			checksDao = DAOFactory.getChecksDAO();
 			checksDao.setUserProfile(getUserProfile());
 			checksDao.eraseCheck(check);
-			String encodedCheck = URLEncoder.encode("" + check.getCheckId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedCheck = encoder.encodeForURL("" + check.getCheckId());
 			return Response.ok().entity(encodedCheck).build();
 		} catch (Exception e) {
-			logger.error("Error with deleting resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error with deleting resource with id: " + id, e);
+			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 }

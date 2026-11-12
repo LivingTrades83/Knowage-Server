@@ -1,0 +1,112 @@
+package it.eng.spagobi.security.utils;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Stream;
+
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+public class AntiCsrfFilter implements Filter {
+
+	private static final String DEFAULT_TOKEN_NAME = "X-CSRF-TOKEN";
+	private static final String TOKEN_NAME_PROP = "csrfTokenName";
+
+	private String csrfTokenName;
+
+	@Override
+	public void init(FilterConfig filterConfig) throws ServletException {
+		// recupero il token name dalle cponfigurazioni, properties, env oppure uso default
+		// @formatter:off
+		csrfTokenName = Stream.of(System.getProperty(TOKEN_NAME_PROP), System.getenv(TOKEN_NAME_PROP))
+				.filter(Objects::nonNull)
+				.findFirst()
+				.orElse(DEFAULT_TOKEN_NAME);
+		// @formatter:on
+	}
+
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+		// controllo per escludere le login dal check csrf
+
+		HttpServletRequest req = ((HttpServletRequest) request);
+
+		String path = req.getPathInfo();
+		boolean samlCallback = "POST".equals(req.getMethod())
+				&& ("/saml/acs".equals(path) || "/saml/slo".equals(path) || "/saml/exchange".equals(path));
+		// Browser image requests cannot send a CSRF header.
+		boolean loginBrandingImage = "GET".equals(req.getMethod())
+				&& path != null && path.startsWith("/loginconfig/images/");
+		if (req.getSession(false) != null && !samlCallback && !loginBrandingImage && !this.excludeCheck(path)) {
+
+			String cookieVal = "";
+			String paramVal;
+			// getCookie
+
+			req.getSession(false);
+			Cookie[] cookies = req.getCookies();
+			boolean cFound = false;
+			if (cookies != null) {
+				for (Cookie cookie : cookies) {
+					if (cookie.getName().equals(csrfTokenName)) {
+						cFound = true;
+						cookieVal = cookie.getValue();
+					}
+				}
+			}
+			paramVal = req.getHeader(csrfTokenName);
+
+			if ((!(cFound && paramVal != null)) || (!cookieVal.equals(paramVal))) {
+				HttpServletResponse resp = (HttpServletResponse) response;
+				// sparo direttamente 403
+				resp.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid or missing CSRF token");
+				return;
+			}
+		}
+		chain.doFilter(request, response);
+	}
+
+	private boolean excludeCheck(String path) {
+		if (path == null) {
+			return false;
+		}
+
+		List<String> urlToExclude = new ArrayList<>();
+		urlToExclude.add("/1.0/images/getImage");
+		urlToExclude.add("/publish");
+		urlToExclude.add("/2.0/datasets/preview");
+		urlToExclude.add("/credential");
+		urlToExclude.add("/start/generatePPTV2");
+		urlToExclude.add("/start/generatePPT");
+		urlToExclude.add("/start/generateDOC");
+		urlToExclude.add("/oauth2configservice");
+		urlToExclude.add("/oauth2clientservice");
+		urlToExclude.add("/1.0/model/export/excel");
+		urlToExclude.add("/jwt/verify");
+		urlToExclude.add("/2.0/officeContent");
+		urlToExclude.add("/login/oauth2");
+
+		return urlToExclude.contains(path) ||
+				path.startsWith("/1.0/ai/") ||
+				path.startsWith("/dossier/activity/") ||
+				path.startsWith("/2.0/menu/htmls/");
+	}
+
+
+
+	@Override
+	public void destroy() {
+
+	}
+
+}

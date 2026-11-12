@@ -17,15 +17,6 @@
  */
 package it.eng.spagobi.metadata.dao;
 
-import it.eng.spago.error.EMFErrorSeverity;
-import it.eng.spago.error.EMFUserError;
-import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.metadata.metadata.SbiMetaBc;
-import it.eng.spagobi.metadata.metadata.SbiMetaTable;
-import it.eng.spagobi.metadata.metadata.SbiMetaTableBc;
-import it.eng.spagobi.metadata.metadata.SbiMetaTableBcId;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,13 +27,22 @@ import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 
+import it.eng.spago.error.EMFErrorSeverity;
+import it.eng.spago.error.EMFUserError;
+import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.metadata.metadata.SbiMetaBc;
+import it.eng.spagobi.metadata.metadata.SbiMetaTable;
+import it.eng.spagobi.metadata.metadata.SbiMetaTableBc;
+import it.eng.spagobi.metadata.metadata.SbiMetaTableBcId;
+
 /**
  * @author Antonella Giachino (antonella.giachino@eng.it)
  *
  */
 public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTableBcDAO {
 
-	static private Logger logger = Logger.getLogger(SbiTableBcDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(SbiTableBcDAOHibImpl.class);
 
 	@Override
 	public List<SbiMetaTable> loadTablesByBcId(Integer bcId) throws EMFUserError {
@@ -64,7 +64,8 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 			Iterator it = hibList.iterator();
 			while (it.hasNext()) {
 				SbiMetaTableBc tmpRel = (SbiMetaTableBc) it.next();
-				SbiMetaTable tmpTable = DAOFactory.getSbiMetaTableDAO().loadTableByID(new Integer(tmpRel.getId().getTableId()));
+				SbiMetaTable tmpTable = DAOFactory.getSbiMetaTableDAO()
+						.loadTableByID(new Integer(tmpRel.getId().getTableId()));
 
 				if (tmpTable != null)
 					toReturn.add(tmpTable);
@@ -73,16 +74,12 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return toReturn;
@@ -118,16 +115,12 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return toReturn;
@@ -155,16 +148,12 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return toReturn;
@@ -186,17 +175,12 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 	}
@@ -213,9 +197,7 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 			tx = aSession.beginTransaction();
 			SbiMetaTableBc hib = new SbiMetaTableBc();
 
-			SbiMetaTableBcId hibId = new SbiMetaTableBcId();
-			hibId.setTableId(aMetaTableBc.getId().getTableId());
-			hibId.setBcId(aMetaTableBc.getId().getBcId());
+			SbiMetaTableBcId hibId = new SbiMetaTableBcId(aMetaTableBc.getId().getTableId(),aMetaTableBc.getId().getBcId());
 			aMetaTableBc.setId(hibId);
 
 			updateSbiCommonInfo4Insert(aMetaTableBc);
@@ -224,16 +206,12 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 	}
@@ -246,9 +224,7 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			SbiMetaTableBcId hibId = new SbiMetaTableBcId();
-			hibId.setTableId(aMetaTableBc.getId().getTableId());
-			hibId.setBcId(aMetaTableBc.getId().getBcId());
+			SbiMetaTableBcId hibId = new SbiMetaTableBcId(aMetaTableBc.getId().getTableId(),aMetaTableBc.getId().getBcId());
 
 			SbiMetaTableBc hib = (SbiMetaTableBc) aSession.load(SbiMetaTableBc.class, hibId);
 
@@ -257,16 +233,12 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}
@@ -298,9 +270,7 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 		logger.debug("IN");
 
 		try {
-			SbiMetaTableBcId hibId = new SbiMetaTableBcId();
-			hibId.setTableId(aMetaTableBc.getId().getTableId());
-			hibId.setBcId(aMetaTableBc.getId().getBcId());
+			SbiMetaTableBcId hibId = new SbiMetaTableBcId(aMetaTableBc.getId().getTableId(),aMetaTableBc.getId().getBcId());
 
 			updateSbiCommonInfo4Update(hibId);
 		} catch (HibernateException he) {
@@ -322,9 +292,8 @@ public class SbiTableBcDAOHibImpl extends AbstractHibernateDAO implements ISbiTa
 
 			SbiMetaTableBc hib = new SbiMetaTableBc();
 
-			SbiMetaTableBcId hibId = new SbiMetaTableBcId();
-			hibId.setTableId(aMetaTableBc.getId().getTableId());
-			hibId.setBcId(aMetaTableBc.getId().getBcId());
+			SbiMetaTableBcId hibId = new SbiMetaTableBcId(aMetaTableBc.getId().getTableId(),aMetaTableBc.getId().getBcId());
+
 			aMetaTableBc.setId(hibId);
 
 			updateSbiCommonInfo4Insert(aMetaTableBc);

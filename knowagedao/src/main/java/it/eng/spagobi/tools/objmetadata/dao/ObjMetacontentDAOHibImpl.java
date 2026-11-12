@@ -17,6 +17,20 @@
  */
 package it.eng.spagobi.tools.objmetadata.dao;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+
+import org.apache.log4j.Logger;
+import org.hibernate.Criteria;
+import org.hibernate.HibernateException;
+import org.hibernate.Query;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import org.hibernate.criterion.Criterion;
+import org.hibernate.criterion.Restrictions;
+
 import it.eng.spago.error.EMFErrorSeverity;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.analiticalmodel.document.metadata.SbiObjects;
@@ -26,36 +40,21 @@ import it.eng.spagobi.commons.metadata.SbiBinContents;
 import it.eng.spagobi.tools.objmetadata.bo.ObjMetacontent;
 import it.eng.spagobi.tools.objmetadata.metadata.SbiObjMetacontents;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
-import org.apache.log4j.Logger;
-import org.hibernate.Criteria;
-import org.hibernate.HibernateException;
-import org.hibernate.Query;
-import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.criterion.Criterion;
-import org.hibernate.criterion.Expression;
-
 /**
  * Defines the Hibernate implementations for all DAO methods, for a metadata content
  */
 public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IObjMetacontentDAO {
 
-	static private Logger logger = Logger.getLogger(ObjMetacontentDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(ObjMetacontentDAOHibImpl.class);
 
 	/**
 	 * Load object's metadata content by id.
 	 *
-	 * @param id
-	 *            the identifier
+	 * @param id the identifier
 	 *
 	 * @return the metadata content
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.tools.objmetadata.dao.IObjMetacontentDAO#loadObjMetaContentByID(java.lang.Integer)
 	 */
@@ -75,14 +74,10 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 			tx.rollback();
 		} catch (HibernateException he) {
 			logger.error("Error while loading the metadata content with id = " + id, he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return toReturn;
@@ -91,21 +86,19 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	/**
 	 * Load object's metadata by objMetaId.
 	 *
-	 * @param objMetaId
-	 *            the objMetaId
+	 * @param objMetaId the objMetaId
 	 *
 	 * @return A list containing all metacontent of specific metadata
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.tools.objmetadata.dao.IObjMetacontentDAO#loadObjMetacontentByObjMetaId(java.lang.Integer)
 	 */
 	@Override
-	public List loadObjMetacontentByObjMetaId(Integer objMetaId) throws EMFUserError {
+	public List<ObjMetacontent> loadObjMetacontentByObjMetaId(Integer objMetaId) throws EMFUserError {
 
 		logger.debug("IN");
-		List realResult = new ArrayList();
+		List<ObjMetacontent> realResult = new ArrayList<>();
 		Session session = null;
 		Transaction tx = null;
 		try {
@@ -115,24 +108,20 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 			String hql = " from SbiObjMetacontents c where c.objmetaId = ?";
 			Query aQuery = session.createQuery(hql);
 			aQuery.setInteger(0, objMetaId.intValue());
-			List hibList = aQuery.list();
+			List<SbiObjMetacontents> hibList = aQuery.list();
 			if (hibList != null && !hibList.isEmpty()) {
-				Iterator it = hibList.iterator();
+				Iterator<SbiObjMetacontents> it = hibList.iterator();
 				while (it.hasNext()) {
-					realResult.add(toObjMetacontent((SbiObjMetacontents) it.next()));
+					realResult.add(toObjMetacontent(it.next()));
 				}
 			}
 			tx.rollback();
 		} catch (HibernateException he) {
 			logger.error("Error while loading the metadata content list with metadata id = " + objMetaId, he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 		logger.debug("OUT");
 		return realResult;
@@ -143,22 +132,19 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	 * Loads all metacontent for one object or for one subobject, if biObjId is not null load all metacontents for object, if subObjId is not null load all
 	 * metacontents for subobject
 	 *
-	 * @param biObjId
-	 *            The biObjId for the object to load
-	 * @param subObjId
-	 *            The subObjId for the subObject to load
+	 * @param biObjId  The biObjId for the object to load
+	 * @param subObjId The subObjId for the subObject to load
 	 *
 	 * @return A list containing all metadata objects
 	 *
-	 * @throws EMFUserError
-	 *             If an Exception occurred
+	 * @throws EMFUserError If an Exception occurred
 	 */
 
 	@Override
 	public List loadObjOrSubObjMetacontents(Integer biObjId, Integer subObjId) throws EMFUserError {
 
 		logger.debug("IN");
-		List realResult = new ArrayList();
+		List<ObjMetacontent> realResult = new ArrayList<>();
 		Session session = null;
 		Transaction tx = null;
 		Integer id = null;
@@ -179,24 +165,23 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 
 			Query aQuery = session.createQuery(hql);
 			aQuery.setInteger(0, id.intValue());
-			List hibList = aQuery.list();
+			List<SbiObjMetacontents> hibList = aQuery.list();
 			if (hibList != null && !hibList.isEmpty()) {
-				Iterator it = hibList.iterator();
+				Iterator<SbiObjMetacontents> it = hibList.iterator();
 				while (it.hasNext()) {
-					realResult.add(toObjMetacontent((SbiObjMetacontents) it.next()));
+					realResult.add(toObjMetacontent(it.next()));
 				}
 			}
 			tx.rollback();
 		} catch (HibernateException he) {
-			logger.error("Error while loading the metadata content referring to object or subobject (check log before) with id = " + id, he);
-			if (tx != null)
-				tx.rollback();
+			logger.error(
+					"Error while loading the metadata content referring to object or subobject (check log before) with id = "
+							+ id,
+					he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 		logger.debug("OUT");
 		return realResult;
@@ -206,17 +191,13 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	/**
 	 * Load object's metadata by objMetaId, biObjId and subobjId.
 	 *
-	 * @param objMetaId
-	 *            the objMetaId
-	 * @param biObjId
-	 *            the biObjId
-	 * @param subObjId
-	 *            the subObjId
+	 * @param objMetaId the objMetaId
+	 * @param biObjId   the biObjId
+	 * @param subObjId  the subObjId
 	 *
 	 * @return A list containing all metadata contents objects of a specific subObjId
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.tools.objmetadata.dao.IObjMetacontentDAO#loadObjMetacontentByObjId(java.lang.Integer, java.lang.Integer)
 	 */
@@ -248,16 +229,12 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 			}
 			tx.rollback();
 		} catch (HibernateException he) {
-			logger.error("Error while loading the metadata content with metadata id = " + objMetaId + ", biobject id = " + biObjId + ", subobject id = "
-					+ subObjId, he);
-			if (tx != null)
-				tx.rollback();
+			logger.error("Error while loading the metadata content with metadata id = " + objMetaId + ", biobject id = "
+					+ biObjId + ", subobject id = " + subObjId, he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 		logger.debug("OUT");
 		return realResult;
@@ -269,42 +246,37 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	 *
 	 * @return the list
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.tools.objmetadata.dao.IObjMetacontentDAO#loadAllObjMetacontent()
 	 */
 	@Override
-	public List loadAllObjMetacontent() throws EMFUserError {
+	public List<ObjMetacontent> loadAllObjMetacontent() throws EMFUserError {
 
 		logger.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
-		List realResult = new ArrayList();
+		List<ObjMetacontent> realResult = new ArrayList<>();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
 			Query hibQuery = aSession.createQuery(" from SbiObjMetacontents");
 
-			List hibList = hibQuery.list();
+			List<SbiObjMetacontents> hibList = hibQuery.list();
 			if (hibList != null && !hibList.isEmpty()) {
-				Iterator it = hibList.iterator();
+				Iterator<SbiObjMetacontents> it = hibList.iterator();
 				while (it.hasNext()) {
-					realResult.add(toObjMetacontent((SbiObjMetacontents) it.next()));
+					realResult.add(toObjMetacontent(it.next()));
 				}
 			}
 			tx.rollback();
 		} catch (HibernateException he) {
 			logger.error("Error while loading all meta contents ", he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return realResult;
@@ -313,11 +285,9 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	/**
 	 * Modify metadata content.
 	 *
-	 * @param aObjMetacontent
-	 *            the meta content
+	 * @param aObjMetacontent the meta content
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.tools.objmetadata.dao.IObjMetadataDAO#modifyObjMetacontent(it.eng.spagobi.tools.objmetadata.bo.ObjMetacontent)
 	 */
@@ -333,11 +303,12 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			SbiObjMetacontents hibContents = (SbiObjMetacontents) aSession.load(SbiObjMetacontents.class, new Integer(aObjMetacontent.getObjMetacontentId()));
+			SbiObjMetacontents hibContents = (SbiObjMetacontents) aSession.load(SbiObjMetacontents.class,
+					aObjMetacontent.getObjMetacontentId());
 
 			// update biobject reference
-			if (hibContents.getSbiObjects().getBiobjId() != aObjMetacontent.getBiobjId()) {
-				aCriterion = Expression.eq("biobjId", aObjMetacontent.getBiobjId());
+			if (!Objects.equals(hibContents.getSbiObjects().getBiobjId(), aObjMetacontent.getBiobjId())) {
+				aCriterion = Restrictions.eq("biobjId", aObjMetacontent.getBiobjId());
 				criteria = aSession.createCriteria(SbiObjects.class);
 				criteria.add(aCriterion);
 				SbiObjects biobj = (SbiObjects) criteria.uniqueResult();
@@ -349,8 +320,9 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 				hibContents.setSbiSubObjects(null);
 			} else {
 				SbiSubObjects previousSubobject = hibContents.getSbiSubObjects();
-				if (previousSubobject == null || previousSubobject.getSubObjId() != aObjMetacontent.getSubobjId()) {
-					aCriterion = Expression.eq("subObjId", aObjMetacontent.getSubobjId());
+				if (previousSubobject == null
+						|| !Objects.equals(previousSubobject.getSubObjId(), aObjMetacontent.getSubobjId())) {
+					aCriterion = Restrictions.eq("subObjId", aObjMetacontent.getSubobjId());
 					criteria = aSession.createCriteria(SbiSubObjects.class);
 					criteria.add(aCriterion);
 					SbiSubObjects subobj = (SbiSubObjects) criteria.uniqueResult();
@@ -382,16 +354,13 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 			tx.commit();
 		} catch (HibernateException he) {
 			logger.error(
-					"Error while modifing the meta content with id " + ((aObjMetacontent == null) ? "" : String.valueOf(aObjMetacontent.getObjMetacontentId())),
+					"Error while modifing the meta content with id "
+							+ ((aObjMetacontent == null) ? "" : String.valueOf(aObjMetacontent.getObjMetacontentId())),
 					he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 
@@ -400,11 +369,9 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	/**
 	 * Insert object's metadata content.
 	 *
-	 * @param aObjMetacontent
-	 *            the metadata content
+	 * @param aObjMetacontent the metadata content
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.tools.objmetadata.dao.IObjMetadataDAO#insertObjMetacontent(it.eng.spagobi.tools.objmetadata.bo.ObjMetacontent)
 	 */
@@ -423,7 +390,7 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 			SbiObjMetacontents hibContents = new SbiObjMetacontents();
 
 			// get biobject reference
-			aCriterion = Expression.eq("biobjId", aObjMetacontent.getBiobjId());
+			aCriterion = Restrictions.eq("biobjId", aObjMetacontent.getBiobjId());
 			criteria = aSession.createCriteria(SbiObjects.class);
 			criteria.add(aCriterion);
 			SbiObjects biobj = (SbiObjects) criteria.uniqueResult();
@@ -433,7 +400,7 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 			if (aObjMetacontent.getSubobjId() == null) {
 				hibContents.setSbiSubObjects(null);
 			} else {
-				aCriterion = Expression.eq("subObjId", aObjMetacontent.getSubobjId());
+				aCriterion = Restrictions.eq("subObjId", aObjMetacontent.getSubobjId());
 				criteria = aSession.createCriteria(SbiSubObjects.class);
 				criteria.add(aCriterion);
 				SbiSubObjects subobj = (SbiSubObjects) criteria.uniqueResult();
@@ -460,19 +427,16 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 		} catch (HibernateException he) {
 			logger.error(
 					"Error while inserting the metadata content with id "
-							+ ((aObjMetacontent == null) ? "" : String.valueOf(aObjMetacontent.getObjMetacontentId())), he);
+							+ ((aObjMetacontent == null) ? "" : String.valueOf(aObjMetacontent.getObjMetacontentId())),
+					he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-				logger.debug("OUT");
-			}
+			closeSessionIfOpen(aSession);
+			logger.debug("OUT");
 		}
 
 	}
@@ -480,11 +444,9 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	/**
 	 * Erase object's metadata content
 	 *
-	 * @param ObjMetacontent
-	 *            the metadata content
+	 * @param ObjMetacontent the metadata content
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.tools.objmetadata.dao.IObjMetadataDAO#eraseObjMetadata(it.eng.spagobi.tools.objmetadata.bo.ObjMetacontent)
 	 */
@@ -496,26 +458,24 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			SbiObjMetacontents hibContents = (SbiObjMetacontents) aSession.load(SbiObjMetacontents.class, new Integer(aObjMetacontent.getObjMetacontentId()));
+			SbiObjMetacontents hibContents = (SbiObjMetacontents) aSession.load(SbiObjMetacontents.class,
+					aObjMetacontent.getObjMetacontentId());
 
 			aSession.delete(hibContents);
 			tx.commit();
 		} catch (HibernateException he) {
 			logger.error(
-					"Error while erasing the data source with id " + ((aObjMetacontent == null) ? "" : String.valueOf(aObjMetacontent.getObjMetacontentId())),
+					"Error while erasing the data source with id "
+							+ ((aObjMetacontent == null) ? "" : String.valueOf(aObjMetacontent.getObjMetacontentId())),
 					he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-				logger.debug("OUT");
-			}
+			closeSessionIfOpen(aSession);
+			logger.debug("OUT");
 		}
 
 	}
@@ -523,8 +483,7 @@ public class ObjMetacontentDAOHibImpl extends AbstractHibernateDAO implements IO
 	/**
 	 * From the hibernate SbiObjMetacontent at input, gives the corrispondent <code>ObjMetacontent</code> object.
 	 *
-	 * @param hibObjMetadata
-	 *            The hybernate metadata content
+	 * @param hibObjMetadata The hybernate metadata content
 	 *
 	 * @return The corrispondent <code>ObjMetacontent</code> object
 	 */

@@ -36,28 +36,36 @@ import it.eng.spagobi.utilities.database.DataBaseException;
 
 abstract class AbstractJdbcEvaluationStrategy extends AbstractEvaluationStrategy {
 
-	private static final Logger logger = Logger.getLogger(AbstractJdbcEvaluationStrategy.class);
+	private static final Logger LOGGER = Logger.getLogger(AbstractJdbcEvaluationStrategy.class);
 
-	public AbstractJdbcEvaluationStrategy(IDataSet dataSet) {
+	protected AbstractJdbcEvaluationStrategy(IDataSet dataSet) {
 		super(dataSet);
 	}
 
 	@Override
 	protected IDataStore execute(List<AbstractSelectionField> projections, Filter filter, List<AbstractSelectionField> groups, List<Sorting> sortings,
-			List<List<AbstractSelectionField>> summaryRowProjections, int offset, int fetchSize, int maxRowCount, Set<String> indexes) {
-		logger.debug("IN");
+			List<List<AbstractSelectionField>> summaryRowProjections, int offset, int fetchSize, int maxRowCount, Set<String> indexes, boolean useGroupBy) {
+		LOGGER.debug("IN");
 
 		IDataStore pagedDataStore;
 
 		try {
-			SelectQuery selectQuery = new SelectQuery(dataSet).selectDistinct().select(projections).from(getTableName()).where(filter).groupBy(groups)
-					.orderBy(sortings);
+            SelectQuery selectQuery;
+            if (useGroupBy) {
+                List<AbstractSelectionField> effectiveGroups = (groups != null && !groups.isEmpty()) ? groups : projections;
+                selectQuery = new SelectQuery(dataSet).select(projections).from(getTableName()).where(filter).groupBy(effectiveGroups)
+                        .orderBy(sortings);
+            } else {
+                selectQuery = new SelectQuery(dataSet).selectDistinct().select(projections).from(getTableName()).where(filter).groupBy(groups)
+                        .orderBy(sortings);
+            }
+
 			pagedDataStore = getDataSource().executeStatement(selectQuery, offset, fetchSize, maxRowCount, true);
 			pagedDataStore.setCacheDate(getDate());
 		} catch (DataBaseException e) {
 			throw new RuntimeException(e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 		return pagedDataStore;
 	}
@@ -67,7 +75,7 @@ abstract class AbstractJdbcEvaluationStrategy extends AbstractEvaluationStrategy
 		try {
 			String summaryRowQuery = new SelectQuery(dataSet).selectDistinct().select(summaryRowProjections).from(getTableName()).where(filter)
 					.toSql(getDataSource());
-			logger.info("Summary row query [ " + summaryRowQuery + " ]");
+			LOGGER.info("Summary row query [ " + summaryRowQuery + " ]");
 			// summary row query result is 1, no need to calculate total results number, so calculateTotalResultsNumber is set to false
 			return getDataSource().executeStatement(summaryRowQuery, -1, -1, maxRowCount, false);
 		} catch (DataBaseException e) {
@@ -82,7 +90,7 @@ abstract class AbstractJdbcEvaluationStrategy extends AbstractEvaluationStrategy
 			totalFunctionsProjections.toArray(totalFunctionsProjectionsString);
 			String totalFunctionsQuery = new SelectQuery(dataSet).select(totalFunctionsProjectionsString).from(getTableName()).where(filter)
 					.toSql(getDataSource());
-			logger.info("Total functions query [ " + totalFunctionsQuery + " ]");
+			LOGGER.info("Total functions query [ " + totalFunctionsQuery + " ]");
 			return getDataSource().executeStatement(totalFunctionsQuery, -1, -1, maxRowCount, false);
 		} catch (DataBaseException e) {
 			throw new RuntimeException(e);

@@ -35,6 +35,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.jamonapi.Monitor;
 import com.jamonapi.MonitorFactory;
 
+import it.eng.qbe.logger.QueryAuditLogger;
 import it.eng.qbe.model.accessmodality.IModelAccessModality;
 import it.eng.qbe.model.structure.IModelStructure;
 import it.eng.qbe.query.HavingField;
@@ -77,8 +78,8 @@ public class ExecuteQueryAction extends AbstractQbeEngineAction {
 	public static final String AMBIGUOUS_FIELDS_PATHS = "ambiguousFieldsPaths";
 
 	/** Logger component. */
-	public static transient Logger logger = Logger.getLogger(ExecuteQueryAction.class);
-	public static transient Logger auditlogger = Logger.getLogger("audit.query");
+	protected static final Logger logger = Logger.getLogger(ExecuteQueryAction.class);
+	protected static final Logger auditlogger = QueryAuditLogger.LOGGER;
 
 	@Override
 	public void service(SourceBean request, SourceBean response) {
@@ -89,6 +90,9 @@ public class ExecuteQueryAction extends AbstractQbeEngineAction {
 		Integer start = null;
 		Integer maxSize = null;
 		IDataStore dataStore = null;
+
+		String fieldName = null;
+		String orderType = null;
 
 		Query query = null;
 
@@ -117,11 +121,21 @@ public class ExecuteQueryAction extends AbstractQbeEngineAction {
 				limit = getAttributeAsInteger(LIMIT);
 			}
 
+			Object fieldNameO = getAttribute("fieldName");
+			if (fieldNameO != null && !fieldNameO.toString().equals("")) {
+				fieldName = getAttributeAsString("fieldName");
+			}
+
+			Object orderTypeO = getAttribute("orderType");
+			if (orderTypeO != null && !orderTypeO.toString().equals("") && !orderTypeO.toString().equals("NONE")) {
+				orderType = getAttributeAsString("orderType");
+			}
+
 			Assert.assertNotNull(getEngineInstance(),
 					"It's not possible to execute " + this.getActionName() + " service before having properly created an instance of EngineInstance class");
 
 			// retrieving query specified by id on request
-			query = getQuery();
+			query = getQuery(fieldName, orderType);
 			Assert.assertNotNull(query, "Query object with id [" + getAttributeAsString(QUERY_ID) + "] does not exist in the catalogue");
 			if (getEngineInstance().getActiveQuery() == null || !getEngineInstance().getActiveQuery().getId().equals(query.getId())) {
 				logger.debug("Query with id [" + query.getId() + "] is not the current active query. A new statment will be generated");
@@ -183,7 +197,7 @@ public class ExecuteQueryAction extends AbstractQbeEngineAction {
 		SimpleModule simpleModule = new SimpleModule("SimpleModule", new Version(1, 0, 0, null));
 		simpleModule.addDeserializer(ModelFieldPaths.class, new ModelFieldPathsJSONDeserializer(relationShips, modelStructure, query));
 		mapper.registerModule(simpleModule);
-		TypeReference<List<ModelFieldPaths>> type = new TypeReference<List<ModelFieldPaths>>() {
+		TypeReference<List<ModelFieldPaths>> type = new TypeReference<>() {
 		};
 		try {
 			return mapper.readValue(serialized, type);
@@ -225,7 +239,7 @@ public class ExecuteQueryAction extends AbstractQbeEngineAction {
 		List whereFields = query.getWhereFields();
 		Iterator whereFieldsIt = whereFields.iterator();
 		String[] question = { "?" };
-
+		
 		JSONObject requestPromptableFilters = action.getAttributeAsJSONObject("promptableFilters");
 
 		while (whereFieldsIt.hasNext()) {

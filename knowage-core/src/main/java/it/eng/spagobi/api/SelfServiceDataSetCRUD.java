@@ -17,6 +17,8 @@
  */
 package it.eng.spagobi.api;
 
+import static java.util.stream.Collectors.toList;
+
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -39,6 +41,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.LogMF;
@@ -54,6 +57,7 @@ import org.json.JSONObject;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 
+import it.eng.knowage.commons.security.PathTraversalChecker;
 import it.eng.qbe.dataset.QbeDataSet;
 import it.eng.spago.base.SourceBeanException;
 import it.eng.spago.error.EMFInternalError;
@@ -66,9 +70,11 @@ import it.eng.spagobi.commons.bo.Domain;
 import it.eng.spagobi.commons.bo.Role;
 import it.eng.spagobi.commons.bo.RoleMetaModelCategory;
 import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOConfig;
 import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.commons.dao.ICategoryDAO;
 import it.eng.spagobi.commons.dao.IConfigDAO;
 import it.eng.spagobi.commons.dao.IDomainDAO;
 import it.eng.spagobi.commons.dao.IRoleDAO;
@@ -77,20 +83,17 @@ import it.eng.spagobi.commons.serializer.SerializerFactory;
 import it.eng.spagobi.commons.utilities.AuditLogUtilities;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
 import it.eng.spagobi.commons.utilities.UserUtilities;
-import it.eng.spagobi.commons.utilities.messages.IMessageBuilder;
-import it.eng.spagobi.commons.utilities.messages.MessageBuilderFactory;
 import it.eng.spagobi.engines.config.bo.Engine;
 import it.eng.spagobi.metamodel.MetaModelWrapper;
 import it.eng.spagobi.metamodel.SiblingsFileWrapper;
 import it.eng.spagobi.services.exceptions.ExceptionUtilities;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.tools.dataset.DatasetManagementAPI;
-import it.eng.spagobi.tools.dataset.bo.CkanDataSet;
 import it.eng.spagobi.tools.dataset.bo.FileDataSet;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
+import it.eng.spagobi.tools.dataset.bo.PreparedDataSet;
 import it.eng.spagobi.tools.dataset.bo.VersionedDataSet;
 import it.eng.spagobi.tools.dataset.common.behaviour.UserProfileUtils;
-import it.eng.spagobi.tools.dataset.common.dataproxy.CkanDataProxy;
 import it.eng.spagobi.tools.dataset.common.dataproxy.FileDataProxy;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IField;
@@ -98,7 +101,6 @@ import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
 import it.eng.spagobi.tools.dataset.common.datawriter.JSONDataWriter;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
-import it.eng.spagobi.tools.dataset.constants.CkanDataSetConstants;
 import it.eng.spagobi.tools.dataset.constants.DataSetConstants;
 import it.eng.spagobi.tools.dataset.dao.DataSetFactory;
 import it.eng.spagobi.tools.dataset.dao.IDataSetDAO;
@@ -113,10 +115,6 @@ import it.eng.spagobi.tools.dataset.validation.ErrorField;
 import it.eng.spagobi.tools.dataset.validation.HierarchyLevel;
 import it.eng.spagobi.tools.dataset.validation.ValidationErrors;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
-import it.eng.spagobi.tools.notification.AbstractEvent;
-import it.eng.spagobi.tools.notification.DatasetNotificationEvent;
-import it.eng.spagobi.tools.notification.DatasetNotificationManager;
-import it.eng.spagobi.tools.notification.EventConstants;
 import it.eng.spagobi.user.UserProfileManager;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.ActionNotPermittedException;
@@ -131,23 +129,23 @@ import it.eng.spagobi.utilities.json.JSONUtils;
 @Path("/selfservicedataset")
 public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 
-	static private Logger logger = Logger.getLogger(SelfServiceDataSetCRUD.class);
-	static private String deleteNullIdDataSetError = "error.mesage.description.data.set.cannot.be.null";
-	static private String deleteInUseDSError = "error.mesage.description.data.set.deleting.inuse";
-	static private String canNotFillResponseError = "error.mesage.description.generic.can.not.responce";
-	static private String saveDuplicatedDSError = "error.mesage.description.data.set.saving.duplicated";
-	static private String parsingDSError = "error.mesage.description.data.set.parsing.error";
+	private static Logger logger = Logger.getLogger(SelfServiceDataSetCRUD.class);
+	private static String deleteNullIdDataSetError = "error.mesage.description.data.set.cannot.be.null";
+	private static String deleteInUseDSError = "error.mesage.description.data.set.deleting.inuse";
+	private static String canNotFillResponseError = "error.mesage.description.generic.can.not.responce";
+	private static String saveDuplicatedDSError = "error.mesage.description.data.set.saving.duplicated";
+	private static String parsingDSError = "error.mesage.description.data.set.parsing.error";
 
-	static private String previewRowsConfigLabel = "SPAGOBI.DATASET.PREVIEW_ROWS";
+	private static String previewRowsConfigLabel = "SPAGOBI.DATASET.PREVIEW_ROWS";
 
-	static private int ROWS_LIMIT_GUESS_TYPE_HEURISTIC = 10000;
+	private static int ROWS_LIMIT_GUESS_TYPE_HEURISTIC = 10000;
 
 	@Context
 	private HttpServletRequest request;
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public String getAllDataSet(@Context HttpServletRequest req) {
 		IDataSetDAO dataSetDao = null;
 		List<IDataSet> dataSets = new ArrayList<>();
@@ -208,14 +206,6 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 			logger.info("Engine not found. ", r);
 		}
 
-		Engine geoEngine = null;
-		try {
-			geoEngine = ExecuteAdHocUtility.getGeoreportEngine();
-		} catch (SpagoBIRuntimeException r) {
-			// the geo engine is not found
-			logger.info("Engine not found. ", r);
-		}
-
 		// sets action to modify dataset
 		JSONObject detailAction = new JSONObject();
 		detailAction.put("name", "detaildataset");
@@ -244,38 +234,18 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 					actions.put(deleteAction);
 				}
 			}
-			boolean isGeoDataset = false;
-			// all execution action are added ONLY if the relative engine
-			// (getted throught the driver) exists.
-			if (geoEngine != null && (typeDocWizard == null || typeDocWizard.equalsIgnoreCase("GEO"))) {
-				try {
-					String meta = datasetJSON.getString("meta");
-					isGeoDataset = ExecuteAdHocUtility.hasGeoHierarchy(meta);
-				} catch (Exception e) {
-					logger.error("Error during check of Geo spatial column", e);
-				}
-				if (isGeoDataset)
-					actions.put(georeportAction); // Annotated view map action
-													// to release SpagoBI 4
-			}
 
 			String dsType = datasetJSON.optString(DataSetConstants.DS_TYPE_CD);
 			if (dsType == null || !dsType.equals(DataSetFactory.FEDERATED_DS_TYPE)) {
 				if (qbeEngine != null && (typeDocWizard == null || typeDocWizard.equalsIgnoreCase("REPORT"))) {
-					if (profile.getFunctionalities().contains(SpagoBIConstants.BUILD_QBE_QUERIES_FUNCTIONALITY)) {
+					if (profile.getFunctionalities().contains(CommunityFunctionalityConstants.BUILD_QBE_QUERIES_FUNCTIONALITY)) {
 						actions.put(qbeAction);
 					}
 				}
 			}
 
 			datasetJSON.put("actions", actions);
-			if (typeDocWizard != null && typeDocWizard.equalsIgnoreCase("GEO")) {
-				// if is caming from myAnalysis - create Geo Document - must
-				// shows only ds geospatial --> isGeoDataset == true
-				if (geoEngine != null && isGeoDataset)
-					datasetsJSONReturn.put(datasetJSON);
-			} else
-				datasetsJSONReturn.put(datasetJSON);
+			datasetsJSONReturn.put(datasetJSON);
 		}
 		return datasetsJSONReturn;
 	}
@@ -283,7 +253,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	@POST
 	@Path("/delete")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public String deleteDataSet(@Context HttpServletRequest req) {
 		IEngUserProfile profile = (IEngUserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
 		HashMap<String, String> logParam = new HashMap();
@@ -296,31 +266,12 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 			dsDAO.setUserID(((UserProfile) profile).getUserId().toString());
 			IDataSet ds = dsDAO.loadDataSetById(new Integer(id));
 
-			// Create DatasetNotificationEvent but wait to notify
-			DatasetNotificationEvent datasetEvent = null;
-			try {
-				datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_DELETED_DATASET, "The dataset has been deleted", ds);
-				datasetEvent.retrieveEmailAddressesOfMapAuthors();
-			} catch (Exception e) {
-				logger.error("Error during creation of Dataset Events", e);
-			}
-
 			try {
 
 				// ATTENTION! This Delete Dataset Also if there are documents
 				// using it, this could lead to missing link in documents
 				dsDAO.deleteDataSetNoChecks(ds.getId());
 				deleteDatasetFile(ds);
-
-				// notify that dataset has been deleted
-				try {
-					DatasetNotificationManager dsNotificationManager = new DatasetNotificationManager();
-					if (datasetEvent != null) {
-						dsNotificationManager.handleEvent(datasetEvent);
-					}
-				} catch (Exception e) {
-					logger.error("Error during notification of Dataset Events", e);
-				}
 
 			} catch (Exception ex) {
 				if (ex.getMessage().startsWith("[deleteInUseDSError]")) {
@@ -355,9 +306,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 				FileDataSet fileDataset = (FileDataSet) wrappedDataset;
 				String resourcePath = fileDataset.getResourcePath();
 				String fileName = fileDataset.getFileName();
-				String filePath = resourcePath + File.separatorChar + "dataset" + File.separatorChar + "files" + File.separatorChar;
-				File datasetFile = new File(filePath + fileName);
-
+				File datasetFile = PathTraversalChecker.get(resourcePath, "dataset", "files", fileName);
 				if (datasetFile.exists()) {
 					boolean isDeleted = datasetFile.delete();
 					if (isDeleted) {
@@ -370,10 +319,34 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	}
 
 	@POST
+	@Path("/update")
+	@Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	public Response updateDataSet(@Valid @BeanParam SelfServiceDataSetDTO selfServiceDataSetDTO) {
+		try {
+			IEngUserProfile profile = UserProfileManager.getProfile();
+			IDataSetDAO dao = DAOFactory.getDataSetDAO();
+			dao.setUserProfile(profile);
+			String label = selfServiceDataSetDTO.getLabel();
+			String newName = selfServiceDataSetDTO.getName();
+			String newDescription = selfServiceDataSetDTO.getDescription();
+			IDataSet ds = dao.loadDataSetByLabel(label);
+			ds.setName(newName);
+			ds.setDescription(newDescription);
+			dao.modifyDataSet(ds);
+		} catch (Exception e) {
+			logger.error("Cannot update dataset info", e);
+			throw new SpagoBIRuntimeException("Cannot update dataset info", e);
+		}
+		return Response.ok().build();
+	}
+
+	@POST
 	@Path("/save")
 	@Consumes(MediaType.APPLICATION_FORM_URLENCODED)
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public String saveDataSet(@Valid @BeanParam SelfServiceDataSetDTO selfServiceDataSetDTO) {
 		IEngUserProfile profile = UserProfileManager.getProfile();
 		DatasetMetadataParser dsp = new DatasetMetadataParser();
@@ -385,7 +358,6 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 			String meta = selfServiceDataSetDTO.getMeta();
 			// attributes for persisting dataset
 			String persist = selfServiceDataSetDTO.getPersist();
-			String tablePrefix = selfServiceDataSetDTO.getTablePrefix();
 			String tableName = selfServiceDataSetDTO.getTableName();
 
 			IDataSet ds = dao.loadDataSetByLabel(label);
@@ -408,10 +380,11 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 
 			// retrieve persist data
 			dsNew.setPersisted(Boolean.valueOf(persist));
-			if (tablePrefix != null)
-				dsNew.setPersistTableName(tablePrefix.toUpperCase() + tableName.toUpperCase());
-			else
+			if (tableName != null) {
+				dsNew.setPersistTableName(tableName.toUpperCase());
+			} else {
 				dsNew.setPersistTableName(null);
+			}
 
 			Integer toReturnId = dsNew.getId();
 			if (dsNew.getId() == -1) {
@@ -426,9 +399,6 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 				// update ds
 				dao.modifyDataSet(dsNew);
 
-				// Notifications Management -----------------------------------
-				notificationManagement(selfServiceDataSetDTO, ds, dsNew);
-
 				updateAudit(request, profile, "DATA_SET.MODIFY", logParam, "OK");
 			}
 
@@ -442,7 +412,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 				dataset.setPersisted(true);
 				if ((tableName != null) && (tableName.length() > 0)) {
 					// use specified name
-					dataset.setPersistTableName(tablePrefix.toUpperCase() + tableName.toUpperCase());
+					dataset.setPersistTableName(tableName.toUpperCase());
 				} else {
 					// otherwise use dataset name as table name
 					String name = selfServiceDataSetDTO.getName();
@@ -494,7 +464,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	@POST
 	@Path("/share")
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public String shareDataSet(@Context HttpServletRequest req) {
 		UserProfile profile = (UserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
 		try {
@@ -515,7 +485,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 				new DatasetManagementAPI(profile).canShare(ds);
 			} catch (ActionNotPermittedException e) {
 				logger.error("User " + profile.getUserId() + " cannot share the dataset with label " + ds.getLabel());
-				throw new SpagoBIRestServiceException(e.getI18NCode(), buildLocaleFromSession(),
+				throw new SpagoBIRestServiceException(e.getI18NCode(), getLocale(),
 						"User " + profile.getUserId() + " cannot share the dataset with label " + ds.getLabel(), e, "MessageFiles.messages");
 			}
 
@@ -605,99 +575,6 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 
 		return dataSet; // could return the original dataSet or a modified
 						// version
-
-	}
-
-	private void notificationManagement(SelfServiceDataSetDTO selfServiceDataSetDTO, IDataSet currentDataset, IDataSet updatedDataset) {
-
-		try {
-			// DatasetNotificationManager dsNotificationManager = new
-			// DatasetNotificationManager();
-			IMessageBuilder msgBuilder = MessageBuilderFactory.getMessageBuilder();
-
-			DatasetNotificationManager dsNotificationManager = new DatasetNotificationManager(msgBuilder);
-			List<AbstractEvent> datasetEvents = new ArrayList<>();
-
-			// File change check
-			boolean newFileUploaded = false;
-			if (selfServiceDataSetDTO.getFileUploaded() != null) {
-				newFileUploaded = Boolean.valueOf(selfServiceDataSetDTO.getFileUploaded());
-			}
-			if (newFileUploaded) {
-				DatasetNotificationEvent datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_FILE_CHANGED,
-						"The dataset has changed his file", updatedDataset);
-				datasetEvents.add(datasetEvent);
-			}
-
-			// Metadata change check
-			boolean metadataChanged = checkMetadataChange(currentDataset, updatedDataset);
-			if (metadataChanged) {
-				// notify that metadata is changed
-				DatasetNotificationEvent datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_METADATA_CHANGED,
-						"The dataset has changed his metadata", updatedDataset);
-				datasetEvents.add(datasetEvent);
-			}
-
-			// Licence change check
-			boolean licenceChanged = checkLicenceChange(currentDataset, updatedDataset);
-			if (licenceChanged) {
-				// notify that license is changed
-				DatasetNotificationEvent datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_LICENCE_CHANGED,
-						"The dataset has changed his licence", updatedDataset);
-				datasetEvents.add(datasetEvent);
-
-			}
-
-			// Name change
-			boolean nameChanged = checkNameChange(currentDataset, updatedDataset);
-			if (nameChanged) {
-				// notify that name is changed
-				DatasetNotificationEvent datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_NAME_CHANGED,
-						"The dataset has changed his name", updatedDataset);
-				datasetEvents.add(datasetEvent);
-			}
-
-			// Description change
-			boolean descriptionChanged = checkDescriptionChange(currentDataset, updatedDataset);
-			if (descriptionChanged) {
-				// notify that Description is changed
-				DatasetNotificationEvent datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_DESCRIPTION_CHANGED,
-						"The dataset has changed his description", updatedDataset);
-				datasetEvents.add(datasetEvent);
-			}
-
-			boolean categoryChanged = checkCategoryChange(currentDataset, updatedDataset);
-			if (categoryChanged) {
-				// notify that Category is changed
-				DatasetNotificationEvent datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_CATEGORY_CHANGED,
-						"The dataset has changed his category", updatedDataset);
-				datasetEvents.add(datasetEvent);
-			}
-
-			boolean scopeChanged = checkScopeChange(currentDataset, updatedDataset);
-			if (scopeChanged) {
-				// notify that Scope (Public/Private)
-				DatasetNotificationEvent datasetEvent = new DatasetNotificationEvent(EventConstants.DATASET_EVENT_SCOPE_CHANGED,
-						"The dataset has changed his scope", updatedDataset);
-				datasetEvents.add(datasetEvent);
-
-			}
-
-			// Sending notifications to Manager
-
-			if (!datasetEvents.isEmpty()) {
-				if (datasetEvents.size() == 1) {
-					dsNotificationManager.handleEvent(datasetEvents.get(0));
-				} else {
-					dsNotificationManager.handleMultipleEvents(datasetEvents);
-
-				}
-			}
-
-		} catch (Exception ex) {
-			logger.error("Error during notification of Dataset Events", ex);
-
-		}
 
 	}
 
@@ -864,7 +741,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	@Path("/testDataSet")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	@Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public String testDataSet(@Valid @BeanParam SelfServiceDataSetDTO selfServiceDataSetDTO) {
 		IEngUserProfile profile = UserProfileManager.getProfile();
 
@@ -938,7 +815,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	@Path("/getDataStore")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	@Consumes(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public String getDataStore(@Valid @BeanParam SelfServiceDataSetDTO selfServiceDataSetDTO) {
 		IEngUserProfile profile = UserProfileManager.getProfile();
 		Integer start = new Integer(0);
@@ -951,7 +828,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 		try {
 			IDataSetDAO dao = DAOFactory.getDataSetDAO();
 			dao.setUserProfile(profile);
-//			req.setCharacterEncoding("UTF-8");
+//			req.setCharacterEncoding(StandardCharsets.UTF_8);
 			String datasetMetadata = selfServiceDataSetDTO.getDatasetMetadata();
 			IDataSet dataSet;
 
@@ -1352,12 +1229,8 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 		IDataSet toReturn = null;
 		if (type.equals(DataSetConstants.DS_QBE)) {
 			toReturn = this.getQbeDataSet(selfServiceDataSetDTO);
-		} else if (type.equals(DataSetConstants.DS_CKAN)) {
-			if (checkMaxResults) {
-				toReturn = this.getCkanDataSet(selfServiceDataSetDTO, savingDataset, maxResults);
-			} else {
-				toReturn = this.getCkanDataSet(selfServiceDataSetDTO, savingDataset);
-			}
+		} else if (type.equals(DataSetConstants.PREPARED_DATASET)) {
+			toReturn = new PreparedDataSet();
 		} else {
 			if (checkMaxResults) {
 				toReturn = this.getFileDataSet(selfServiceDataSetDTO, savingDataset, maxResults);
@@ -1374,10 +1247,6 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 
 			// set detail dataset ID
 			toReturn.setTransformerId((dataSet.getTransformerId() == null) ? null : dataSet.getTransformerId());
-			toReturn.setPivotColumnName(dataSet.getPivotColumnName());
-			toReturn.setPivotRowName(dataSet.getPivotRowName());
-			toReturn.setPivotColumnValue(dataSet.getPivotColumnValue());
-			toReturn.setNumRows(dataSet.isNumRows());
 			toReturn.setParameters(dataSet.getParameters());
 			toReturn.setDsMetadata(dataSet.getDsMetadata());
 
@@ -1417,6 +1286,14 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 		}
 		logger.debug("Category code is :  " + categoryCode);
 		toReturn.setCategoryId(categoryCode);
+
+		if (type.equals(DataSetConstants.PREPARED_DATASET)) {
+
+			if (selfServiceDataSetDTO.getConfig() != null) {
+				toReturn.setConfiguration(selfServiceDataSetDTO.getConfig());
+			}
+
+		}
 
 		return toReturn;
 	}
@@ -1579,11 +1456,9 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	// This method rename a file and move it from resources\dataset\files\temp
 	// to resources\dataset\files
 	private void renameAndMoveDatasetFile(String originalFileName, String newFileName, String resourcePath, String fileType) {
-		String filePath = resourcePath + File.separatorChar + "dataset" + File.separatorChar + "files" + File.separatorChar + "temp" + File.separatorChar;
-		String fileNewPath = resourcePath + File.separatorChar + "dataset" + File.separatorChar + "files" + File.separatorChar;
+		File originalDatasetFile = PathTraversalChecker.get(resourcePath, "dataset", "files", "temp", originalFileName);
+		File newDatasetFile = PathTraversalChecker.get(resourcePath, "dataset", "files", newFileName + "." + fileType.toLowerCase());
 
-		File originalDatasetFile = new File(filePath + originalFileName);
-		File newDatasetFile = new File(fileNewPath + newFileName + "." + fileType.toLowerCase());
 		if (originalDatasetFile.exists()) {
 			/*
 			 * This method copies the contents of the specified source file to the specified destination file. The directory holding the destination file is
@@ -1601,108 +1476,9 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 		}
 	}
 
-	private IDataSet getCkanDataSet(SelfServiceDataSetDTO selfServiceDataSetDTO, boolean savingDataset, int maxResults) {
-		IDataSet dataSet = this.getCkanDataSet(selfServiceDataSetDTO, savingDataset);
-		if (dataSet instanceof CkanDataSet) {
-			CkanDataSet ckanDataSet = ((CkanDataSet) dataSet);
-			ckanDataSet.setMaxResults(maxResults);
-			CkanDataProxy ckanDataProxy = ckanDataSet.getDataProxy();
-			if (ckanDataProxy != null) {
-				ckanDataProxy.setMaxResultsReader(ckanDataSet.getMaxResults());
-			}
-		}
-		return dataSet;
-	}
-
-	private IDataSet getCkanDataSet(SelfServiceDataSetDTO selfServiceDataSetDTO, boolean savingDataset) {
-		CkanDataSet toReturn = new CkanDataSet();
-		JSONObject jsonDsConfig = this.getCkanDataSetConfig(selfServiceDataSetDTO, savingDataset);
-		toReturn.setConfiguration(jsonDsConfig.toString());
-
-		Integer id = -1;
-		String idStr = selfServiceDataSetDTO.getId();
-		if (idStr != null && !idStr.equals("")) {
-			id = new Integer(idStr);
-		}
-		String ckanUrl = selfServiceDataSetDTO.getCkanUrl();
-		String ckanId = selfServiceDataSetDTO.getCkanId();
-		toReturn.setCkanId(ckanId);
-		toReturn.setCkanUrl(ckanUrl);
-		toReturn.setResourcePath(ckanUrl);
-		String label = selfServiceDataSetDTO.getLabel();
-		String fileName = selfServiceDataSetDTO.getFileName();
-		String fileType = selfServiceDataSetDTO.getFileType();
-		Boolean newFileUploaded = false;
-		if (selfServiceDataSetDTO.getFileUploaded() != null) {
-			newFileUploaded = Boolean.valueOf(selfServiceDataSetDTO.getFileUploaded());
-		}
-
-		if (id == -1) {
-
-			if (savingDataset) {
-				// rename and move the file
-				String resourcePath = DAOConfig.getResourcePath();
-				deleteDatasetFile(fileName, resourcePath, fileType);
-				toReturn.setFileName(label + "." + fileType.toLowerCase());
-			}
-		} else {
-			// reading or modifying a existing dataset
-			if (newFileUploaded) {
-				String resourcePath = DAOConfig.getResourcePath();
-				deleteDatasetFile(fileName, resourcePath, fileType);
-				toReturn.setFileName(label + "." + fileType.toLowerCase());
-			}
-		}
-		return toReturn;
-	}
-
-	private JSONObject getCkanDataSetConfig(SelfServiceDataSetDTO selfServiceDataSetDTO, boolean savingDataset) {
-		JSONObject jsonDsConfig = new JSONObject();
-		try {
-			String label = selfServiceDataSetDTO.getLabel();
-			String fileName = selfServiceDataSetDTO.getFileName();
-			String csvDelimiter = selfServiceDataSetDTO.getCsvDelimiter();
-			String csvQuote = selfServiceDataSetDTO.getCsvQuote();
-			String csvEncoding = selfServiceDataSetDTO.getCsvEncoding();
-			String fileType = selfServiceDataSetDTO.getFileType();
-			String skipRows = selfServiceDataSetDTO.getSkipRows();
-			String limitRows = selfServiceDataSetDTO.getLimitRows();
-			String xslSheetNumber = selfServiceDataSetDTO.getXslSheetNumber();
-			String ckanId = selfServiceDataSetDTO.getCkanId();
-			String ckanUrl = selfServiceDataSetDTO.getCkanUrl();
-			String scopeCd = DataSetConstants.DS_SCOPE_USER;
-			String dateFormat = selfServiceDataSetDTO.getDateFormat();
-
-			jsonDsConfig.put(DataSetConstants.FILE_TYPE, fileType);
-			if (savingDataset) {
-				// when saving the dataset the file associated will get the
-				// dataset label name
-				jsonDsConfig.put(DataSetConstants.FILE_NAME, label + "." + fileType.toLowerCase());
-			} else {
-				jsonDsConfig.put(DataSetConstants.FILE_NAME, fileName);
-			}
-			jsonDsConfig.put(DataSetConstants.CSV_FILE_DELIMITER_CHARACTER, csvDelimiter);
-			jsonDsConfig.put(DataSetConstants.CSV_FILE_QUOTE_CHARACTER, csvQuote);
-			jsonDsConfig.put(DataSetConstants.CSV_FILE_ENCODING, csvEncoding);
-			jsonDsConfig.put(DataSetConstants.FILE_DATE_FORMAT, dateFormat);
-			jsonDsConfig.put(DataSetConstants.XSL_FILE_SKIP_ROWS, skipRows);
-			jsonDsConfig.put(DataSetConstants.XSL_FILE_LIMIT_ROWS, limitRows);
-			jsonDsConfig.put(DataSetConstants.XSL_FILE_SHEET_NUMBER, xslSheetNumber);
-			jsonDsConfig.put(CkanDataSetConstants.CKAN_ID, ckanId);
-			jsonDsConfig.put(CkanDataSetConstants.CKAN_URL, ckanUrl);
-			jsonDsConfig.put(DataSetConstants.DS_SCOPE, scopeCd);
-
-		} catch (Exception e) {
-			logger.error("Error while defining dataset configuration. Error: " + e.getMessage());
-			throw new SpagoBIRuntimeException("Error while defining dataset configuration", e);
-		}
-		return jsonDsConfig;
-	}
-
 	private void deleteDatasetFile(String fileName, String resourcePath, String fileType) {
-		String filePath = resourcePath + File.separatorChar + "dataset" + File.separatorChar + "files" + File.separatorChar + "temp" + File.separatorChar;
+		File datasetFile = PathTraversalChecker.get(resourcePath, "dataset", "files", "temp", fileName);
 
-		File datasetFile = new File(filePath + fileName);
 		if (datasetFile.exists()) {
 			datasetFile.delete();
 		}
@@ -1717,8 +1493,9 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 
 		try {
 
-			if (datasetTypeCode == null)
+			if (datasetTypeCode == null) {
 				return null;
+			}
 			List<Domain> datasetTypes = null;
 
 			try {
@@ -1738,8 +1515,9 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 				}
 			}
 		} catch (Throwable t) {
-			if (t instanceof SpagoBIRuntimeException)
+			if (t instanceof SpagoBIRuntimeException) {
 				throw (SpagoBIRuntimeException) t;
+			}
 			throw new SpagoBIRuntimeException("An unexpected error occured while resolving dataset type name from dataset type code [" + datasetTypeCode + "]");
 		}
 
@@ -1751,12 +1529,14 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 
 		try {
 
-			if (category == null)
+			if (category == null) {
 				return null;
+			}
 			List<Domain> categories = null;
 
 			try {
-				categories = DAOFactory.getDomainDAO().loadListDomainsByType(DataSetConstants.CATEGORY_DOMAIN_TYPE);
+				ICategoryDAO categoryDao = DAOFactory.getCategoryDAO();
+				categories = categoryDao.getCategoriesForDataset().stream().map(Domain::fromCategory).collect(toList());
 			} catch (Throwable t) {
 				throw new SpagoBIRuntimeException("An unexpected error occured while loading categories types from database", t);
 			}
@@ -1772,8 +1552,9 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 				}
 			}
 		} catch (Throwable t) {
-			if (t instanceof SpagoBIRuntimeException)
+			if (t instanceof SpagoBIRuntimeException) {
 				throw (SpagoBIRuntimeException) t;
+			}
 			throw new SpagoBIRuntimeException("An unexpected error occured while resolving dataset type name from dataset type code [" + category + "]");
 		}
 
@@ -1784,8 +1565,9 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 		Integer scopeId = null;
 		try {
 
-			if (scopeCd == null)
+			if (scopeCd == null) {
 				return null;
+			}
 			List<Domain> scopes = null;
 
 			try {
@@ -1805,8 +1587,9 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 				}
 			}
 		} catch (Throwable t) {
-			if (t instanceof SpagoBIRuntimeException)
+			if (t instanceof SpagoBIRuntimeException) {
 				throw (SpagoBIRuntimeException) t;
+			}
 			throw new SpagoBIRuntimeException("An unexpected error occured while resolving scope id name from dataset scope code [" + scopeCd + "]");
 		}
 		return scopeId;
@@ -1991,8 +1774,8 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 		boolean foundLong = false;
 		boolean foundInteger = false;
 		for (int i = 0; i < Math.min(ROWS_LIMIT_GUESS_TYPE_HEURISTIC, dataStore.getRecordsCount()); i++) {
-			IRecord record = dataStore.getRecordAt(i);
-			IField field = record.getFieldAt(columnIndex);
+			IRecord currRecord = dataStore.getRecordAt(i);
+			IField field = currRecord.getFieldAt(columnIndex);
 			Object value = field.getValue();
 			if ((value == null) || (value.toString().isEmpty())) {
 				continue;
@@ -2032,12 +1815,13 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	private boolean isADate(JSONObject jsonConf, IDataStore dataStore, int columnIndex) throws JSONException {
 		String dateFormat = jsonConf.get(DataSetConstants.FILE_DATE_FORMAT).toString();
 		for (int i = 0; i < Math.min(10, dataStore.getRecordsCount()); i++) {
-			IRecord record = dataStore.getRecordAt(i);
-			IField field = record.getFieldAt(columnIndex);
+			IRecord currRecord = dataStore.getRecordAt(i);
+			IField field = currRecord.getFieldAt(columnIndex);
 			Object value = field.getValue();
 			if (value instanceof Date) {
-				if (value instanceof Timestamp)
+				if (value instanceof Timestamp) {
 					return false;
+				}
 
 				// it's already a Date, skip the check
 				continue;
@@ -2063,8 +1847,8 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 	private boolean isATimestamp(JSONObject jsonConf, IDataStore dataStore, int columnIndex) throws JSONException {
 		String timestampFormat = jsonConf.get(DataSetConstants.FILE_TIMESTAMP_FORMAT).toString();
 		for (int i = 0; i < Math.min(10, dataStore.getRecordsCount()); i++) {
-			IRecord record = dataStore.getRecordAt(i);
-			IField field = record.getFieldAt(columnIndex);
+			IRecord currRecord = dataStore.getRecordAt(i);
+			IField field = currRecord.getFieldAt(columnIndex);
 			Object value = field.getValue();
 			if (value instanceof Timestamp) {
 				continue;
@@ -2127,8 +1911,11 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 		List<Integer> categories = new ArrayList<>();
 		try {
 			// NO CATEGORY IN THE DOMAINS
-			IDomainDAO domaindao = DAOFactory.getDomainDAO();
-			List<Domain> dialects = domaindao.loadListDomainsByType("CATEGORY_TYPE");
+			IDomainDAO domainDao = DAOFactory.getDomainDAO();
+			ICategoryDAO categoryDao = DAOFactory.getCategoryDAO();
+
+			// TODO : Makes sense?
+			List<Domain> dialects = categoryDao.getCategoriesForDataset().stream().map(Domain::fromCategory).collect(toList());
 			if (dialects == null || dialects.size() == 0) {
 				return null;
 			}
@@ -2142,7 +1929,7 @@ public class SelfServiceDataSetCRUD extends AbstractSpagoBIResource {
 
 				List<RoleMetaModelCategory> aRoleCategories = roledao.getMetaModelCategoriesForRole(role.getId());
 				List<RoleMetaModelCategory> resp = new ArrayList<>();
-				List<Domain> array = DAOFactory.getDomainDAO().loadListDomainsByType("CATEGORY_TYPE");
+				List<Domain> array = categoryDao.getCategoriesForDataset().stream().map(Domain::fromCategory).collect(toList());
 				for (RoleMetaModelCategory r : aRoleCategories) {
 					for (Domain dom : array) {
 						if (r.getCategoryId().equals(dom.getValueId())) {

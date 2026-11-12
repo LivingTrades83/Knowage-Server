@@ -19,6 +19,7 @@ package it.eng.qbe.datasource.configuration;
 
 import it.eng.qbe.datasource.configuration.dao.fileimpl.InLineFunctionsDAOFileImpl.InLineFunction;
 import it.eng.qbe.model.properties.IModelProperties;
+import it.eng.qbe.model.structure.IModelGroupDescriptor;
 import it.eng.qbe.model.structure.IModelRelationshipDescriptor;
 import it.eng.qbe.model.structure.IModelViewEntityDescriptor;
 import it.eng.qbe.model.structure.ModelCalculatedField;
@@ -45,6 +46,7 @@ public class InMemoryDataSourceConfiguration extends AbstractDataSourceConfigura
 	Map<String, Object> dataSourceProperties;
 	List<IModelRelationshipDescriptor> realtionships;
 	List<IModelViewEntityDescriptor> views;
+	List<IModelGroupDescriptor> groups;
 	Map<String, List<ModelCalculatedField>> calculatedFields;
 	
 	List inLineFunctions;
@@ -53,19 +55,22 @@ public class InMemoryDataSourceConfiguration extends AbstractDataSourceConfigura
 		super(modelName);
 	}
 
+	@Override
 	public IModelProperties loadModelProperties() {
 		if(modelProperties == null) modelProperties = super.loadModelProperties();
 		return modelProperties;
 	}
 
+	@Override
 	public IModelProperties loadModelI18NProperties() {
 		if(modelI18NProperties == null) modelI18NProperties = super.loadModelI18NProperties();
 		return modelI18NProperties;
 	}
 
+	@Override
 	public IModelProperties loadModelI18NProperties(Locale locale) {
 		if(i18nMap == null) {
-			i18nMap = new HashMap<Locale, IModelProperties>();
+			i18nMap = new HashMap<>();
 		}
 		
 		IModelProperties p = i18nMap.get(locale);
@@ -75,32 +80,44 @@ public class InMemoryDataSourceConfiguration extends AbstractDataSourceConfigura
 		return i18nMap.get(locale);
 	}
 
+	@Override
 	public Map<String, Object> loadDataSourceProperties() {
 		if(dataSourceProperties == null) dataSourceProperties = super.loadDataSourceProperties();
 		return dataSourceProperties;
 	}
 
+	@Override
 	public List<IModelViewEntityDescriptor> loadViews() {
 		if(views == null) views = super.loadViews();
 		return views;
 	}
+
+	@Override
+	public List<IModelGroupDescriptor> loadGroups() {
+		if(groups == null) groups = super.loadGroups();
+		return groups;
+	}
 	
+	@Override
 	public List<IModelRelationshipDescriptor> loadRelationships() {
 		if(realtionships == null) realtionships = super.loadRelationships();
 		return realtionships;
 	}
 
+	@Override
 	public Map<String, List<ModelCalculatedField>> loadCalculatedFields() {
 		if(calculatedFields == null) calculatedFields = super.loadCalculatedFields();
 		return calculatedFields;
 	}
 
+	@Override
 	public void saveCalculatedFields(
 			Map<String, List<ModelCalculatedField>> calculatedFields) {
 		// do nothing	
 		super.saveCalculatedFields(calculatedFields);
 	}
 	
+	@Override
 	public HashMap<String, InLineFunction> loadInLineFunctions(String dialect) {
 		// do nothing	
 		return super.loadInLineFunctions(dialect);

@@ -24,8 +24,9 @@ import it.eng.spagobi.utilities.messages.EngineMessageBundle;
 public class SpagoBIRestServiceException extends SpagoBIRuntimeException {
 
 	private String serviceName;
-	private String localizationCode = "generic.error";
+	private String localizationCode = "100";
 	private String messageBundle;
+	private String[] arguments;
 
 	public String getServiceName() {
 		return serviceName;
@@ -53,6 +54,19 @@ public class SpagoBIRestServiceException extends SpagoBIRuntimeException {
 	/**
 	 * Builds a <code>SpagoBIRestServiceException</code>.
 	 *
+	 * @param locale        the locale
+	 * @param messageBundle the messageBundle
+	 * @param ex            the parent exception
+	 */
+	public SpagoBIRestServiceException(Locale locale, Throwable ex, String messageBundle) {
+		super(ex);
+		this.locale = locale;
+		this.messageBundle = messageBundle;
+	}
+
+	/**
+	 * Builds a <code>SpagoBIRestServiceException</code>.
+	 *
 	 * @param localizationCode the error code for localization
 	 * @param locale           the locale
 	 * @param ex               the parent exception
@@ -63,9 +77,22 @@ public class SpagoBIRestServiceException extends SpagoBIRuntimeException {
 		this.locale = locale;
 	}
 
+	public SpagoBIRestServiceException(String localizationCode, Locale locale, Throwable ex, String[] arguments) {
+		super(ex);
+		setLocalizationCode(localizationCode);
+		this.locale = locale;
+		this.arguments = arguments;
+	}
+
 	public SpagoBIRestServiceException(String localizationCode, Locale locale, Throwable ex, String messageBundle) {
 		this(localizationCode, locale, ex);
 		this.messageBundle = messageBundle;
+	}
+
+	public SpagoBIRestServiceException(String localizationCode, Locale locale, Throwable ex, String messageBundle, String[] arguments) {
+		this(localizationCode, locale, ex);
+		this.messageBundle = messageBundle;
+		this.arguments = arguments;
 	}
 
 	/**
@@ -76,15 +103,32 @@ public class SpagoBIRestServiceException extends SpagoBIRuntimeException {
 	 * @param message          a message for the exception
 	 * @param ex               the parent exception
 	 */
+	// TODO Understand why we are using both localizationCode and message.
 	public SpagoBIRestServiceException(String localizationCode, Locale locale, String message, Throwable ex) {
 		super(message, ex);
 		setLocalizationCode(localizationCode);
 		this.locale = locale;
 	}
 
+	// TODO Understand why we are using both localizationCode and message.
+	public SpagoBIRestServiceException(String localizationCode, Locale locale, String message, Throwable ex, String[] arguments) {
+		super(message, ex);
+		setLocalizationCode(localizationCode);
+		this.locale = locale;
+		this.arguments = arguments;
+	}
+
+	// TODO Understand why we are using both localizationCode and message.
 	public SpagoBIRestServiceException(String localizationCode, Locale locale, String message, Throwable ex, String messageBundle) {
 		this(localizationCode, locale, message, ex);
 		this.messageBundle = messageBundle;
+	}
+
+	// TODO Understand why we are using both localizationCode and message.
+	public SpagoBIRestServiceException(String localizationCode, Locale locale, String message, Throwable ex, String messageBundle, String[] arguments) {
+		this(localizationCode, locale, message, ex);
+		this.messageBundle = messageBundle;
+		this.arguments = arguments;
 	}
 
 	/**
@@ -100,14 +144,17 @@ public class SpagoBIRestServiceException extends SpagoBIRuntimeException {
 		setLocalizationCode(localizationCode);
 	}
 
-	public SpagoBIRestServiceException(String localizationCode, Locale locale, String message, String messageBundle) {
-		this(localizationCode, locale, message);
-		this.messageBundle = messageBundle;
+	// TODO Understand why we are using both localizationCode and message.
+	public SpagoBIRestServiceException(String localizationCode, Locale locale, String message, String[] arguments) {
+		super(message);
+		this.locale = locale;
+		setLocalizationCode(localizationCode);
+		this.arguments = arguments;
 	}
 
 	@Override
 	public String getLocalizedMessage() {
-		String localizedMessage = EngineMessageBundle.getMessage(getLocalizationCode(), getMessageBundle(), getLocale());
+		String localizedMessage = EngineMessageBundle.getMessage(getLocalizationCode(), getMessageBundle(), getLocale(), arguments);
 		return localizedMessage;
 	}
 

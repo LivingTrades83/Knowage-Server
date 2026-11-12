@@ -113,11 +113,12 @@ public class FilterTreeBuilder {
 	 * @return
 	 */
 	public List<NodeFilter> build() {
-		List<NodeFilter> nodes = new ArrayList<NodeFilter>();
+		List<NodeFilter> nodes = new ArrayList<>();
 		try {
 			for (Member member : hierarchy.getRootMembers()) {
-
-				nodes.add(new NodeFilter(member, nodeLimit, treeMembers, visibleMembers, showSiblings));
+				if (member.isVisible()) {
+					nodes.add(new NodeFilter(member, nodeLimit, treeMembers, visibleMembers, showSiblings));
+				}
 			}
 		} catch (OlapException e) {
 			logger.error("Error while creating filter tree", e);

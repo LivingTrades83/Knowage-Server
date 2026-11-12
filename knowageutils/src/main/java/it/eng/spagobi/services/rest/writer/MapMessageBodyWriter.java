@@ -23,8 +23,6 @@ import java.io.PrintWriter;
 import java.io.Writer;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 import javax.ws.rs.Produces;
@@ -35,9 +33,6 @@ import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Provider;
 
 import org.apache.log4j.Logger;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 
@@ -50,7 +45,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class MapMessageBodyWriter implements MessageBodyWriter<Map<Object,Object>> {
 
 	
-	static private Logger logger = Logger.getLogger(MapMessageBodyWriter.class);
+	private static Logger logger = Logger.getLogger(MapMessageBodyWriter.class);
 	
     @Override
     public boolean isWriteable(Class<?> type, Type genericType,

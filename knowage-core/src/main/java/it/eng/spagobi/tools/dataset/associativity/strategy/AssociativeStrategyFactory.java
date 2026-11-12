@@ -8,9 +8,9 @@ import it.eng.spagobi.tools.dataset.graph.associativity.Config;
 
 public class AssociativeStrategyFactory {
 
-	public final static String OUTER_STRATEGY = "OUTER";
+	public static final String OUTER_STRATEGY = "OUTER";
 
-	static private Logger logger = Logger.getLogger(AssociativeStrategyFactory.class);
+	private static Logger logger = Logger.getLogger(AssociativeStrategyFactory.class);
 
 	public static IAssociativityManager createStrategyInstance(Config config, UserProfile userProfile) throws Exception {
 		logger.debug("IN");

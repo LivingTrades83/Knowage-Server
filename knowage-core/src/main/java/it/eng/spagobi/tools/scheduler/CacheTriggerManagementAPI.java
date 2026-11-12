@@ -17,11 +17,12 @@ public class CacheTriggerManagementAPI {
 
 	public boolean updateCronExpression(String confValue) {
 		ISchedulerDAO schedulerDAO = DAOFactory.getSchedulerDAO();
+		schedulerDAO.setGlobal(true);
 
 		Trigger simpleTrigger = new Trigger();
 		simpleTrigger.setName(CleanCacheQuartzInitializer.DEFAULT_TRIGGER_NAME);
 		simpleTrigger.setJob(schedulerDAO.loadJob(CleanCacheQuartzInitializer.DEFAULT_JOB_NAME, CleanCacheQuartzInitializer.DEFAULT_JOB_NAME));
-
+		simpleTrigger.setGroupName(Scheduler.DEFAULT_GROUP);
 		simpleTrigger.getChronExpression().setExpression(getCronExpression(confValue));
 		simpleTrigger.setStartTime(new Date());
 		simpleTrigger.setRunImmediately(false);

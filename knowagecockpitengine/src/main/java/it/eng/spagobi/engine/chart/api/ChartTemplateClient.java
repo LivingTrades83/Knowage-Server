@@ -36,13 +36,13 @@ public class ChartTemplateClient extends SimpleRestClient {
 
 	}
 
-	static protected Logger logger = Logger.getLogger(ChartTemplateClient.class);
+	protected static Logger logger = Logger.getLogger(ChartTemplateClient.class);
 
 	public JSONObject saveTemplate(JSONObject jsonTemplate, String docLabel, String userId) throws Exception {
 
 		logger.debug("IN");
 
-		Map<String, Object> parameters = new java.util.HashMap<String, Object>();
+		Map<String, Object> parameters = new java.util.HashMap<>();
 		JSONObject jo = new JSONObject();
 		jo.put("jsonTemplate", jsonTemplate.toString());
 		jo.put("docLabel", docLabel);

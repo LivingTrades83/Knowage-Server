@@ -25,6 +25,7 @@ import java.sql.Timestamp;
 import java.util.Date;
 
 import org.apache.log4j.Logger;
+import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -35,6 +36,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.tools.dataset.common.datastore.DataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.Field;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
@@ -43,7 +45,7 @@ import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
 import it.eng.spagobi.tools.dataset.common.datastore.Record;
 import it.eng.spagobi.tools.dataset.common.metadata.FieldMetadata;
 import it.eng.spagobi.tools.dataset.common.metadata.MetaData;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 
 /**
  * @author Marco Cortella marco.cortella@eng.it
@@ -63,6 +65,7 @@ public class FileDatasetXlsDataReader extends AbstractDataReader {
 	private int numberOfColumns = 0;
 	private String fileType;
 	private DataFormatter formatter = null;
+	private static final String ZIP_MIN_INFLATE_RATIO = "ZIP_MIN_INFLATE_RATIO";
 
 	public FileDatasetXlsDataReader(JSONObject jsonConf) {
 		super();
@@ -135,13 +138,14 @@ public class FileDatasetXlsDataReader extends AbstractDataReader {
 		if (maxResults > 0) {
 			checkMaxResults = true;
 		}
-
+		Double defaulRatio = Double.parseDouble(SingletonConfig.getInstance().getConfigValue("ZIP_MIN_INFLATE_RATIO"));
 		logger.debug("IN");
 
 		dataStore = new DataStore();
 
 		try {
 			ExcelDataReaderFactory excelFactory = new ExcelDataReaderFactory();
+			ZipSecureFile.setMinInflateRatio(defaulRatio);
 			Workbook wb = excelFactory.getWorkookInstance(getFileType(), inputDataStream);
 			Sheet sheet = getSheet(wb);
 
@@ -249,7 +253,7 @@ public class FileDatasetXlsDataReader extends AbstractDataReader {
 		}
 		for (int cellNum = row.getFirstCellNum(); cellNum < row.getLastCellNum(); cellNum++) {
 			Cell cell = row.getCell(cellNum);
-			if (cell != null && cell.getCellType() != CellType.BLANK && org.apache.commons.lang.StringUtils.isNotBlank(cell.toString())) {
+			if (cell != null && cell.getCellType() != CellType.BLANK && org.apache.commons.lang3.StringUtils.isNotBlank(cell.toString())) {
 				return false;
 			}
 		}
@@ -306,9 +310,8 @@ public class FileDatasetXlsDataReader extends AbstractDataReader {
 				valueField = "Column " + String.valueOf(c + 1);
 			}
 			FieldMetadata fieldMeta = new FieldMetadata();
-			String fieldName = StringUtils.escapeForSQLColumnName(valueField.toString());
+			String fieldName = KnowageStringUtils.escapeForSQLColumnName(valueField.toString());
 			fieldMeta.setName(fieldName);
-			fieldMeta.setType(String.class);
 
 			dataStoreMeta.addFiedMeta(fieldMeta);
 		}
@@ -336,22 +339,24 @@ public class FileDatasetXlsDataReader extends AbstractDataReader {
 				throw new RuntimeException("Impossible to parse cell [" + c + "]", t);
 			}
 
+			FieldMetadata fieldMeta = ((FieldMetadata) dataStore.getMetaData().getFieldMeta(c));
+			Class oldType = fieldMeta.getType();
 			if (valueField != null && valueField instanceof Double) {
-				((FieldMetadata) dataStore.getMetaData().getFieldMeta(c)).setType(Double.class);
+				fieldMeta.setType(getNewMetaType(oldType, Double.class));
 			} else if (valueField != null && valueField instanceof BigDecimal) {
-				((FieldMetadata) dataStore.getMetaData().getFieldMeta(c)).setType(BigDecimal.class);
+				fieldMeta.setType(getNewMetaType(oldType, BigDecimal.class));
 			} else if (valueField != null && valueField instanceof Integer) {
-				((FieldMetadata) dataStore.getMetaData().getFieldMeta(c)).setType(Integer.class);
+				fieldMeta.setType(getNewMetaType(oldType, Integer.class));
 			} else if (valueField != null && valueField instanceof Long) {
-				((FieldMetadata) dataStore.getMetaData().getFieldMeta(c)).setType(Long.class);
+				fieldMeta.setType(getNewMetaType(oldType, Long.class));
 			} else if (valueField != null && valueField instanceof Date) {
 				if (valueField instanceof Timestamp) {
-					((FieldMetadata) dataStore.getMetaData().getFieldMeta(c)).setType(Timestamp.class);
+					fieldMeta.setType(getNewMetaType(oldType, Timestamp.class));
 				} else {
-					((FieldMetadata) dataStore.getMetaData().getFieldMeta(c)).setType(Date.class);
+					fieldMeta.setType(getNewMetaType(oldType, Date.class));
 				}
 			} else {
-				((FieldMetadata) dataStore.getMetaData().getFieldMeta(c)).setType(String.class);
+				fieldMeta.setType(getNewMetaType(oldType, String.class));
 			}
 
 			IField field = new Field(valueField);
@@ -416,7 +421,7 @@ public class FileDatasetXlsDataReader extends AbstractDataReader {
 			break;
 
 		case STRING:
-			if (org.apache.commons.lang.StringUtils.isBlank(cell.getStringCellValue())) {
+			if (org.apache.commons.lang3.StringUtils.isBlank(cell.getStringCellValue())) {
 				valueField = "";
 			} else {
 				valueField = cell.getStringCellValue();

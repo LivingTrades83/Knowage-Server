@@ -24,9 +24,9 @@ import org.json.JSONObject;
 import it.eng.qbe.datasource.IDataSource;
 import it.eng.qbe.query.Query;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.engines.AbstractEngineAction;
 import it.eng.spagobi.engines.qbe.QbeEngineInstance;
 import it.eng.spagobi.tools.dataset.utils.DataSetUtilities;
-import it.eng.spagobi.utilities.engines.AbstractEngineAction;
 import it.eng.spagobi.utilities.engines.EngineConstants;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
@@ -40,7 +40,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 public abstract class AbstractQbeEngineAction extends AbstractEngineAction {
 
 	/** Logger component. */
-	private static transient Logger logger = Logger.getLogger(AbstractQbeEngineAction.class);
+	private static final Logger LOGGER = Logger.getLogger(AbstractQbeEngineAction.class);
 
 	private static final String PARAM_VALUE_NAME = "value";
 	public static final String DEFAULT_VALUE_PARAM = "defaultValue";
@@ -78,6 +78,10 @@ public abstract class AbstractQbeEngineAction extends AbstractEngineAction {
 		return qbeEngineInstance.getActiveQuery();
 	}
 
+	public Query getQuery(String fieldName, String orderType) {
+		return null;
+	}
+
 	public void addParameters(JSONArray parsListJSON) {
 		try {
 			if (parsListJSON != null) {
@@ -100,21 +104,16 @@ public abstract class AbstractQbeEngineAction extends AbstractEngineAction {
 						boolean hasDefaultValue = obj.has(DEFAULT_VALUE_PARAM);
 						if (hasDefaultValue) {
 							tempVal = obj.getString(DEFAULT_VALUE_PARAM);
-							logger.debug("Value of param not present, use default value: " + tempVal);
+							LOGGER.debug("Value of param not present, use default value: " + tempVal);
 						}
 					}
 
 					/**
 					 * This block of code:
 					 *
-					 * boolean multivalue = false;
-					 * if (tempVal != null && tempVal.contains(",")) {
-					 * 	multivalue = true;
-					 * }
+					 * boolean multivalue = false; if (tempVal != null && tempVal.contains(",")) { multivalue = true; }
 					 *
-					 * Was replaced by the following because the user has the ability
-					 * to say if the value is multivalue or not, we don't need to do
-					 * any logic.
+					 * Was replaced by the following because the user has the ability to say if the value is multivalue or not, we don't need to do any logic.
 					 */
 					boolean multivalue = obj.optBoolean(MULTI_PARAM);
 
@@ -125,13 +124,15 @@ public abstract class AbstractQbeEngineAction extends AbstractEngineAction {
 						value = getSingleValue(tempVal, type);
 					}
 
-					logger.debug("name: " + name + " / value: " + value);
+					LOGGER.debug("name: " + name + " / value: " + value);
 
 					getEnv().put(name + SpagoBIConstants.PARAMETER_TYPE, type);
 					getEnv().put(name, value);
 				}
 			}
 
+		} catch (SpagoBIServiceException t) {
+			throw t;
 		} catch (Throwable t) {
 			if (t instanceof SpagoBIServiceException) {
 				throw (SpagoBIServiceException) t;
@@ -141,19 +142,19 @@ public abstract class AbstractQbeEngineAction extends AbstractEngineAction {
 	}
 
 	public String getMultiValue(String value, String type) {
-		String toReturn = "";
+		StringBuilder toReturn = new StringBuilder("");
 
 		String[] tempArrayValues = value.split(",");
 		for (int j = 0; j < tempArrayValues.length; j++) {
 			String tempValue = tempArrayValues[j];
 			if (j == 0) {
-				toReturn = getSingleValue(tempValue, type);
+				toReturn.append(getSingleValue(tempValue, type));
 			} else {
-				toReturn = toReturn + ", " + getSingleValue(tempValue, type);
+				toReturn.append(toReturn + ", " + getSingleValue(tempValue, type));
 			}
 		}
 
-		return toReturn;
+		return toReturn.toString();
 	}
 
 	public String getSingleValue(String value, String type) {

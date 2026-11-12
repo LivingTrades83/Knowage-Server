@@ -26,7 +26,7 @@ import it.eng.spagobi.commons.metadata.SbiBinContents;
 
 public class BinContentDAOHibImpl extends AbstractHibernateDAO implements IBinContentDAO {
 
-	private static transient Logger logger = Logger.getLogger(BinContentDAOHibImpl.class);
+	private static final Logger LOGGER = Logger.getLogger(BinContentDAOHibImpl.class);
 
 	/*
 	 * (non-Javadoc)
@@ -35,9 +35,9 @@ public class BinContentDAOHibImpl extends AbstractHibernateDAO implements IBinCo
 	 */
 	@Override
 	public byte[] getBinContent(Integer binId) throws HibernateException {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		if (binId != null)
-			logger.debug("binId=" + binId.toString());
+			LOGGER.debug("binId=" + binId.toString());
 		byte[] content = new byte[0];
 		Session aSession = null;
 		Transaction tx = null;
@@ -48,16 +48,12 @@ public class BinContentDAOHibImpl extends AbstractHibernateDAO implements IBinCo
 			content = hibBinCont.getContent();
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-			if (tx != null)
-				tx.rollback();
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new HibernateException(he.getLocalizedMessage(), he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("OUT");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 		return content;
 	}

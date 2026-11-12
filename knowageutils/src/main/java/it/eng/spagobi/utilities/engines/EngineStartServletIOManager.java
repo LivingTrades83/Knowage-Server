@@ -17,8 +17,9 @@
  */
 package it.eng.spagobi.utilities.engines;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,7 +33,7 @@ import java.util.Set;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.json.JSONObject;
 
@@ -217,7 +218,7 @@ public class EngineStartServletIOManager extends BaseServletIOManager {
 			templateJSON = template != null ? new JSONObject(template) : null;
 		} catch (Throwable t) {
 			logger.error("Impossible to decode template's content\n" + t);
-			throw new SpagoBIRuntimeException("Impossible to decode template's content [" + template.getFileName() + "]", t);
+			throw new SpagoBIRuntimeException("Impossible to decode template's content [" + getCurrentTemplateName() + "]", t);
 
 		}
 
@@ -228,10 +229,10 @@ public class EngineStartServletIOManager extends BaseServletIOManager {
 		SourceBean templateSB = null;
 		try {
 			String template = getTemplateAsString();
-			templateSB = template != null ? SourceBean.fromXMLString(template) : null;
+			templateSB = TemplateSourceBeanParser.parse(template);
 		} catch (SourceBeanException e) {
 			logger.error("Impossible to decode template's content\n" + e);
-			throw new SpagoBIRuntimeException("Impossible to decode template's content [" + template.getFileName() + "]", e);
+			throw new SpagoBIRuntimeException("Impossible to decode template's content [" + getCurrentTemplateName() + "]", e);
 
 		}
 
@@ -244,7 +245,7 @@ public class EngineStartServletIOManager extends BaseServletIOManager {
 
 	public String getTemplateAsString(boolean forEdit) {
 		byte[] template = getTemplate(forEdit);
-		return template != null ? new String(template, StandardCharsets.UTF_8) : null;
+		return template != null ? new String(template, UTF_8) : null;
 	}
 
 	public byte[] getTemplate(boolean forEdit) {
@@ -287,6 +288,16 @@ public class EngineStartServletIOManager extends BaseServletIOManager {
 		return templateName;
 	}
 
+	private String getCurrentTemplateName() {
+		if (templateName != null) {
+			return templateName;
+		}
+		if (template != null) {
+			return template.getFileName();
+		}
+		return "unknown";
+	}
+
 	public IDataSource getDataSource() {
 		if (dataSource == null) {
 			String connectionName = getParameterAsString("connectionName");
@@ -309,7 +320,7 @@ public class EngineStartServletIOManager extends BaseServletIOManager {
 					try {
 						schema = (String) getUserProfile().getUserAttribute(dataSource.getSchemaAttribute());
 						logger.debug("Schema profile atribute value is equals to [" + schema + "]");
-						if (schema != null) {
+						if (StringUtils.isNotBlank(schema)) {
 							dataSource.setJndi(dataSource.getJndi() + schema);
 						}
 					} catch (EMFInternalError e) {
@@ -481,7 +492,7 @@ public class EngineStartServletIOManager extends BaseServletIOManager {
 		logger.debug("IN");
 
 		try {
-			this.getRequest().setCharacterEncoding("UTF-8");
+			this.getRequest().setCharacterEncoding(UTF_8.name());
 		} catch (UnsupportedEncodingException e) {
 			logger.error(e);
 		}

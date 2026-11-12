@@ -17,6 +17,11 @@
  */
 package it.eng.knowage.knowageapi.resource;
 
+import static it.eng.spagobi.commons.constants.CommunityFunctionalityConstants.CREATE_COCKPIT_FUNCTIONALITY;
+import static it.eng.spagobi.commons.constants.CommunityFunctionalityConstants.CREATE_SELF_SERVICE_COCKPIT;
+import static it.eng.spagobi.commons.constants.CommunityFunctionalityConstants.FUNCTIONS_CATALOG_MANAGEMENT;
+import static it.eng.spagobi.commons.constants.CommunityFunctionalityConstants.FUNCTIONS_CATALOG_USAGE;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,8 +30,8 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
-import javax.ws.rs.PATCH;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -39,9 +44,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
+import it.eng.knowage.boot.error.KnowageRuntimeException;
+import it.eng.knowage.boot.interceptor.UserConstraint;
+import it.eng.knowage.features.Feature;
 import it.eng.knowage.knowageapi.resource.dto.FunctionCompleteDTO;
 import it.eng.knowage.knowageapi.resource.dto.FunctionDTO;
 import it.eng.knowage.knowageapi.service.FunctionCatalogAPI;
+import it.eng.knowage.rest.annotation.FeatureFlag;
 
 /**
  * @author Marco Libanori
@@ -59,6 +68,7 @@ public class FunctionCatalogResource {
 	@GET
 	@Path("/")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	@UserConstraint(functionalities = { FUNCTIONS_CATALOG_MANAGEMENT, FUNCTIONS_CATALOG_USAGE, CREATE_COCKPIT_FUNCTIONALITY, CREATE_SELF_SERVICE_COCKPIT })
 	public List<FunctionDTO> getAll(@QueryParam("s") @DefaultValue("") String searchString) {
 		try {
 			return api.find(searchString);
@@ -69,8 +79,22 @@ public class FunctionCatalogResource {
 	}
 
 	@GET
+	@Path("/completelist")
+	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	@UserConstraint(functionalities = { FUNCTIONS_CATALOG_MANAGEMENT, FUNCTIONS_CATALOG_USAGE, CREATE_COCKPIT_FUNCTIONALITY, CREATE_SELF_SERVICE_COCKPIT })
+	public List<FunctionCompleteDTO> getAllComplete(@QueryParam("s") @DefaultValue("") String searchString) {
+		try {
+			return api.findComplete(searchString);
+		} catch (Exception e) {
+			LOGGER.error("Error looking for function matching \"" + searchString + "\"", e);
+			throw e;
+		}
+	}
+
+	@GET
 	@Path("/{id}")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	@UserConstraint(functionalities = { FUNCTIONS_CATALOG_MANAGEMENT, FUNCTIONS_CATALOG_USAGE, CREATE_COCKPIT_FUNCTIONALITY, CREATE_SELF_SERVICE_COCKPIT })
 	public FunctionCompleteDTO get(@PathParam("id") UUID id) {
 		try {
 			return api.get(id);
@@ -84,6 +108,8 @@ public class FunctionCatalogResource {
 	@Path("/")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	@FeatureFlag(Feature.EDIT_FUNCTIONS_CATALOG)
+	@UserConstraint(functionalities = { FUNCTIONS_CATALOG_MANAGEMENT, FUNCTIONS_CATALOG_USAGE })
 	public Response create(FunctionCompleteDTO function) {
 		try {
 			FunctionCompleteDTO create = api.create(function);
@@ -94,9 +120,30 @@ public class FunctionCatalogResource {
 		}
 	}
 
+	@POST
+	@Path("/new")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	@FeatureFlag(Feature.EDIT_FUNCTIONS_CATALOG)
+	@UserConstraint(functionalities = { FUNCTIONS_CATALOG_MANAGEMENT, FUNCTIONS_CATALOG_USAGE })
+	public Response createWithNewUuid(FunctionCompleteDTO function) {
+		try {
+			function.setId(UUID.randomUUID());
+			FunctionCompleteDTO create = api.create(function);
+			return Response.ok(create).build();
+		} catch (KnowageRuntimeException e) {
+			// TODO : I did this because catching Exception is not right
+			throw e;
+		} catch (Exception e) {
+			LOGGER.error("Error getting function with id " + Optional.ofNullable(function).map(FunctionCompleteDTO::getName).orElse("null"), e);
+			return Response.serverError().build();
+		}
+	}
+
 	@DELETE
 	@Path("/{id}")
 	@Consumes(MediaType.APPLICATION_JSON)
+	@UserConstraint(functionalities = { FUNCTIONS_CATALOG_MANAGEMENT, FUNCTIONS_CATALOG_USAGE })
 	public Response delete(@PathParam("id") UUID id) {
 		try {
 			api.delete(id);
@@ -107,10 +154,12 @@ public class FunctionCatalogResource {
 		}
 	}
 
-	@PATCH
+	@PUT
 	@Path("/")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	@FeatureFlag(Feature.EDIT_FUNCTIONS_CATALOG)
+	@UserConstraint(functionalities = { FUNCTIONS_CATALOG_MANAGEMENT, FUNCTIONS_CATALOG_USAGE })
 	public Response update(FunctionCompleteDTO function) {
 		try {
 			FunctionCompleteDTO ret = api.update(function);

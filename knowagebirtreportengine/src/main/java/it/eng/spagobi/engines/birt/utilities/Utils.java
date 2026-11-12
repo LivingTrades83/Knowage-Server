@@ -19,7 +19,6 @@ package it.eng.spagobi.engines.birt.utilities;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -28,6 +27,7 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.log4j.Logger;
 
+import it.eng.knowage.commons.security.PathTraversalChecker;
 import it.eng.spagobi.engines.birt.BirtReportServlet;
 
 public class Utils {
@@ -37,8 +37,7 @@ public class Utils {
 	/**
 	 * Resolve system properties.
 	 *
-	 * @param logDir
-	 *            the log dir
+	 * @param logDir the log dir
 	 *
 	 * @return the string
 	 */
@@ -55,10 +54,8 @@ public class Utils {
 	/**
 	 * Resolve system properties.
 	 *
-	 * @param logDir
-	 *            the log dir
-	 * @param startIndex
-	 *            the start index
+	 * @param logDir     the log dir
+	 * @param startIndex the start index
 	 *
 	 * @return the string
 	 */
@@ -86,32 +83,23 @@ public class Utils {
 	}
 
 	public static void sendPage(HttpServletResponse response, int pageNumber, String reportExecutionId) {
-		ServletOutputStream ouputStream = null;
-		InputStream fis = null;
 		File htmlFile = null;
 		String completeImageFileName = null;
 		String mimeType = "text/html";
 
-		htmlFile = new File(BirtReportServlet.OUTPUT_FOLDER + File.separator + reportExecutionId, BirtReportServlet.PAGE_FILE_NAME + pageNumber + ".html");
+		String fileName = BirtReportServlet.PAGE_FILE_NAME + pageNumber + ".html";
+		htmlFile = PathTraversalChecker.get(BirtReportServlet.OUTPUT_FOLDER, reportExecutionId, fileName);
 
-		// file path traversal security check
-		if (!((htmlFile.getParentFile().getParent() + File.separator).equals(BirtReportServlet.OUTPUT_FOLDER))) {
-			logger.error("Security exception: parent folder " + htmlFile.getParent() + " is not equal to expected folder " + BirtReportServlet.OUTPUT_FOLDER);
-			throw new RuntimeException(
-					"Security exception: parent folder " + htmlFile.getParent() + " is not equal to expected folder " + BirtReportServlet.OUTPUT_FOLDER);
-		}
-
-		try {
-			fis = new FileInputStream(htmlFile);
-		} catch (FileNotFoundException e) {
+		try (InputStream fis = new FileInputStream(htmlFile)) {
+			writeToOutput(response, mimeType, fis);
+		} catch (IOException e) {
 			logger.warn(completeImageFileName + " file not found, probably end of the file");
-			return;
-			// throw new RuntimeException("File [" + completeImageFileName + "] not found.", e);
 		}
 
-		try {
+	}
 
-			ouputStream = response.getOutputStream();
+	private static void writeToOutput(HttpServletResponse response, String mimeType, InputStream fis) {
+		try (ServletOutputStream ouputStream = response.getOutputStream()) {
 
 			response.setContentType(mimeType);
 			response.setHeader("Content-Type", mimeType);
@@ -123,25 +111,10 @@ public class Utils {
 
 		} catch (Exception e) {
 			logger.error("Error writing image into servlet output stream", e);
-		} finally {
-			if (fis != null)
-				try {
-					fis.close();
-				} catch (IOException e) {
-					logger.error("Error while closing FileInputStream on file " + completeImageFileName, e);
-				}
-			if (ouputStream != null) {
-				try {
-					ouputStream.flush();
-					ouputStream.close();
-				} catch (IOException e) {
-					logger.error("Error flushing servlet output stream", e);
-				}
-			}
-			// if (imageFile != null && imageFile.exists() && imageFile.isFile()) {
-			// imageFile.delete();
-			// }
 		}
+	}
+
+	private Utils() {
 
 	}
 }

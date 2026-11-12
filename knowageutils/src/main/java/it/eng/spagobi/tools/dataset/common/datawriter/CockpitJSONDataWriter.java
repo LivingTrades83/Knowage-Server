@@ -4,6 +4,13 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.TemporalAccessor;
 import java.util.Date;
 import java.util.Map;
 
@@ -19,6 +26,12 @@ public class CockpitJSONDataWriter extends JSONDataWriter {
 		super(properties);
 	}
 
+	/**
+	 * TODO Pretty much a copy of {@link JSONDataWriter#getFieldValue(IField, IFieldMetaData)}. Consider
+	 *   merging and deleting this.
+	 * @deprecated Seems a copy of copy of {@link JSONDataWriter#getFieldValue(IField, IFieldMetaData)}
+	 */
+	@Deprecated
 	@Override
 	protected Object getFieldValue(IField field, IFieldMetaData fieldMetaData) {
 		Object result = null;
@@ -31,7 +44,7 @@ public class CockpitJSONDataWriter extends JSONDataWriter {
 			if (multiValue) {
 				result = value;
 			} else if (Timestamp.class.isAssignableFrom(type)) {
-				result = TIMESTAMP_FORMATTER.format(value);
+				result = TIMESTAMP_FORMATTER_V2.format(LocalDateTime.ofInstant(((Timestamp) value).toInstant(), ZoneId.systemDefault()));
 			} else if ("oracle.sql.TIMESTAMP".equals(typeName)) {
 				String s = value.toString();
 				int year = Integer.parseInt(s.substring(0, 4)) - 1900;
@@ -52,9 +65,13 @@ public class CockpitJSONDataWriter extends JSONDataWriter {
 				Timestamp timestamp = new Timestamp(year, month, date, 0, 0, 0, 0);
 				result = TIMESTAMP_FORMATTER.format(timestamp);
 			} else if (Time.class.isAssignableFrom(type)) {
-				result = CACHE_TIMEONLY_FORMATTER.format(value);
-			} else if (Date.class.isAssignableFrom(type)) {
-				result = DATE_FORMATTER.format(value);
+				result = CACHE_TIMEONLY_FORMATTER_V2.format(((Time) value).toLocalTime());
+			} else if (java.sql.Date.class.isAssignableFrom(fieldMetaData.getType())) {
+				java.sql.Date sqlDate = (java.sql.Date) field.getValue();
+				Date valueAsDate = new Date(sqlDate.getTime());
+				result = DATE_FORMATTER_V2.format(valueAsDate.toInstant().atZone(ZoneId.systemDefault()));
+			} else if (java.util.Date.class.isAssignableFrom(type)) {
+				result = DATE_FORMATTER_V2.format(LocalDateTime.ofInstant(((Date) value).toInstant(), ZoneId.systemDefault()));
 			} else if (Boolean.class.isAssignableFrom(type)) {
 				result = Boolean.valueOf(value.toString());
 			} else if (Byte.class.isAssignableFrom(type)) {
@@ -73,6 +90,16 @@ public class CockpitJSONDataWriter extends JSONDataWriter {
 				result = Double.valueOf(value.toString());
 			} else if (BigDecimal.class.isAssignableFrom(type)) {
 				result = value;
+			} else if (LocalTime.class.isAssignableFrom(type)) {
+				result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) value);
+			} else if (LocalDateTime.class.isAssignableFrom(type)) {
+				result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) value);
+			} else if (OffsetTime.class.isAssignableFrom(type)) {
+				result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) value);
+			} else if (OffsetDateTime.class.isAssignableFrom(type)) {
+				result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) value);
+			} else if (ZonedDateTime.class.isAssignableFrom(type)) {
+				result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) value);
 			} else {
 				result = value.toString();
 			}

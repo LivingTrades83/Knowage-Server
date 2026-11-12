@@ -22,8 +22,6 @@ package it.eng.spagobi.tools.dataset.strategy;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.log4j.Logger;
-
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.tools.dataset.bo.DatasetEvaluationStrategyType;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
@@ -36,15 +34,13 @@ import it.eng.spagobi.utilities.database.DataBaseException;
 
 class RealtimeEvaluationStrategy extends CachedEvaluationStrategy {
 
-	private static final Logger logger = Logger.getLogger(RealtimeEvaluationStrategy.class);
-
 	public RealtimeEvaluationStrategy(UserProfile userProfile, IDataSet dataSet, ICache cache) {
 		super(userProfile, dataSet, cache);
 	}
 
 	@Override
 	protected IDataStore execute(List<AbstractSelectionField> projections, Filter filter, List<AbstractSelectionField> groups, List<Sorting> sortings,
-			List<List<AbstractSelectionField>> summaryRowProjections, int offset, int fetchSize, int maxRowCount, Set<String> indexes) {
+			List<List<AbstractSelectionField>> summaryRowProjections, int offset, int fetchSize, int maxRowCount, Set<String> indexes, boolean useGroupBy) {
 		try {
 			return manageDatasetNotInCache(projections, filter, groups, sortings, summaryRowProjections, offset, fetchSize, maxRowCount, indexes);
 		} catch (DataBaseException e) {

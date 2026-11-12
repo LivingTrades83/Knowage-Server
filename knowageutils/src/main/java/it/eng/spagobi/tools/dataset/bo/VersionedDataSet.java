@@ -17,6 +17,7 @@
  */
 package it.eng.spagobi.tools.dataset.bo;
 
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -67,8 +68,7 @@ public class VersionedDataSet implements IDataSet {
 	}
 
 	/**
-	 * @param wrappedDataset
-	 *            the wrappedDataset to set
+	 * @param wrappedDataset the wrappedDataset to set
 	 */
 	public void setWrappedDataset(IDataSet wrappedDataset) {
 		this.wrappedDataset = wrappedDataset;
@@ -83,8 +83,7 @@ public class VersionedDataSet implements IDataSet {
 	}
 
 	/**
-	 * @param organization
-	 *            the organization to set
+	 * @param organization the organization to set
 	 */
 	@Override
 	public void setOrganization(String organization) {
@@ -99,8 +98,7 @@ public class VersionedDataSet implements IDataSet {
 	}
 
 	/**
-	 * @param version
-	 *            the version to set
+	 * @param version the version to set
 	 */
 	public void setVersionNum(Integer version) {
 		this.version = version;
@@ -114,8 +112,7 @@ public class VersionedDataSet implements IDataSet {
 	}
 
 	/**
-	 * @param isActive
-	 *            the isActive to set
+	 * @param isActive the isActive to set
 	 */
 	public void setActive(boolean isActive) {
 		this.isActive = isActive;
@@ -337,56 +334,6 @@ public class VersionedDataSet implements IDataSet {
 	}
 
 	@Override
-	public String getPivotColumnName() {
-		return wrappedDataset.getPivotColumnName();
-	}
-
-	@Override
-	public void setPivotColumnName(String pivotColumnName) {
-		wrappedDataset.setPivotColumnName(pivotColumnName);
-	}
-
-	@Override
-	public String getPivotRowName() {
-		return wrappedDataset.getPivotRowName();
-	}
-
-	@Override
-	public void setPivotRowName(String pivotRowName) {
-		wrappedDataset.setPivotRowName(pivotRowName);
-	}
-
-	@Override
-	public boolean isNumRows() {
-		return wrappedDataset.isNumRows();
-	}
-
-	@Override
-	public void setNumRows(boolean numRows) {
-		wrappedDataset.setNumRows(numRows);
-	}
-
-	@Override
-	public String getPivotColumnValue() {
-		return wrappedDataset.getPivotColumnValue();
-	}
-
-	@Override
-	public void setPivotColumnValue(String pivotColumnValue) {
-		wrappedDataset.setPivotColumnValue(pivotColumnValue);
-	}
-
-	@Override
-	public boolean hasDataStoreTransformer() {
-		return wrappedDataset.hasDataStoreTransformer();
-	}
-
-	@Override
-	public void removeDataStoreTransformer() {
-		wrappedDataset.removeDataStoreTransformer();
-	}
-
-	@Override
 	public void setAbortOnOverflow(boolean abortOnOverflow) {
 		wrappedDataset.setAbortOnOverflow(abortOnOverflow);
 	}
@@ -394,16 +341,6 @@ public class VersionedDataSet implements IDataSet {
 	@Override
 	public void addBinding(String bindingName, Object bindingValue) {
 		wrappedDataset.addBinding(bindingName, bindingValue);
-	}
-
-	@Override
-	public void setDataStoreTransformer(IDataStoreTransformer transformer) {
-		wrappedDataset.setDataStoreTransformer(transformer);
-	}
-
-	@Override
-	public IDataStoreTransformer getDataStoreTransformer() {
-		return wrappedDataset.getDataStoreTransformer();
 	}
 
 	@Override
@@ -432,8 +369,18 @@ public class VersionedDataSet implements IDataSet {
 	}
 
 	@Override
+	public boolean isPreparedDataSet() {
+		return wrappedDataset.isPreparedDataSet();
+	}
+
+	@Override
 	public String getFlatTableName() {
 		return wrappedDataset.getFlatTableName();
+	}
+
+	@Override
+	public String getPreparedTableName() {
+		return wrappedDataset.getPreparedTableName();
 	}
 
 	@Override
@@ -759,4 +706,40 @@ public class VersionedDataSet implements IDataSet {
 	public void setTags(Set tags) {
 		wrappedDataset.setTags(tags);
 	}
+
+	@Override
+	public boolean hasDataStoreTransformers() {
+		return wrappedDataset.hasDataStoreTransformers();
+	}
+
+	@Override
+	public void clearDataStoreTransformers() {
+		wrappedDataset.clearDataStoreTransformers();
+	}
+
+	@Override
+	public void addDataStoreTransformer(IDataStoreTransformer transformer) {
+		wrappedDataset.addDataStoreTransformer(transformer);
+	}
+
+	@Override
+	public void addDataStoreTransformers(Collection<IDataStoreTransformer> transformers) {
+		wrappedDataset.addDataStoreTransformers(transformers);
+	}
+
+	@Override
+	public List<IDataStoreTransformer> getDataStoreTransformers() {
+		return wrappedDataset.getDataStoreTransformers();
+	}
+
+	@Override
+	public void executeDataStoreTransformers(IDataStore dataStore) {
+		wrappedDataset.executeDataStoreTransformers(dataStore);
+	}
+
+	@Override
+	public DataIterator iterator(IMetaData dsMetadata) {
+		return null;
+	}
+
 }

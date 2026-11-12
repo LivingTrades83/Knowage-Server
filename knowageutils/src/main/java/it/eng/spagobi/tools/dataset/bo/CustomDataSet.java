@@ -24,6 +24,7 @@ import it.eng.spagobi.container.ObjectUtils;
 import it.eng.spagobi.services.dataset.bo.SpagoBiDataSet;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStoreFilter;
+import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import it.eng.spagobi.tools.dataset.persist.IDataSetTableDescriptor;
 import it.eng.spagobi.tools.dataset.utils.DatasetMetadataParser;
@@ -80,6 +81,7 @@ public class CustomDataSet extends ConfigurableDataSet {
 	//	setJavaClassName( dataSetConfig.getJavaClassName() );
 	}
 
+	@Override
 	public SpagoBiDataSet toSpagoBiDataSet() {
 		SpagoBiDataSet sbd;
 
@@ -170,6 +172,7 @@ public class CustomDataSet extends ConfigurableDataSet {
 		return javaClassName;
 	}
 
+	@Override
 	public void loadData() {
 		logger.debug("IN");
 		if(classToLaunch == null)
@@ -180,6 +183,7 @@ public class CustomDataSet extends ConfigurableDataSet {
 
 
 
+	@Override
 	public void loadData(int offset, int fetchSize, int maxResults) {
 		logger.debug("IN");
 		if(classToLaunch == null)
@@ -189,6 +193,7 @@ public class CustomDataSet extends ConfigurableDataSet {
 
 	}
 
+	@Override
 	public IDataStore getDataStore() {
 
 		if(classToLaunch == null)
@@ -310,6 +315,11 @@ public class CustomDataSet extends ConfigurableDataSet {
 	}
 
 	@Override
+	public DataIterator iterator(IMetaData dsMetadata) {
+		return null;
+	}
+
+	@Override
 	public IDataSetTableDescriptor persist(String tableName,
 			IDataSource dataSource) {
 		if(classToLaunch == null)
@@ -318,21 +328,25 @@ public class CustomDataSet extends ConfigurableDataSet {
 				dataSource) ;
 	}
 
+	@Override
 	public Integer getScopeId() {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
+	@Override
 	public void setScopeId(Integer scopeId) {
 		// TODO Auto-generated method stub
 		
 	}
 
+	@Override
 	public String getScopeCd() {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
+	@Override
 	public void setScopeCd(String scopeCd) {
 		// TODO Auto-generated method stub
 		

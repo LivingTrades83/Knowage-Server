@@ -26,8 +26,9 @@ import org.apache.log4j.Logger;
 
 public class TestConnectionServiceImpl extends AbstractSDKService implements TestConnectionService {
 
-	static private Logger logger = Logger.getLogger(TestConnectionServiceImpl.class);
+	private static Logger logger = Logger.getLogger(TestConnectionServiceImpl.class);
 
+	@Override
 	public boolean connect() {
 		boolean toReturn = false;
         logger.debug("IN");

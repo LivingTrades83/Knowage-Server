@@ -8,7 +8,7 @@
 
 ${jpaTable.uniqueName}.visible = $jpaTable.getAttribute("structural.visible")
 ${jpaTable.uniqueName}.type = $jpaTable.type
-${jpaTable.uniqueName}.position = $velocityCount
+${jpaTable.uniqueName}.position = $foreach.count
 ${jpaTable.uniqueName}.sqlFilter =  $jpaTable.getAttribute("structural.sqlFilter")
 
 #foreach ($jpaColumn in $jpaTable.getColumns())
@@ -18,6 +18,11 @@ ${jpaColumn.uniqueName}.attribute = $jpaColumn.getAttribute("structural.attribut
 ${jpaColumn.uniqueName}.filtercondition = $jpaColumn.getAttribute("structural.filtercondition")
 ${jpaColumn.uniqueName}.datatype = $jpaColumn.getAttribute("structural.datatype")
 ${jpaColumn.uniqueName}.aggtype = $jpaColumn.getAttribute("structural.aggtype")
+${jpaColumn.uniqueName}.personal = #{if}($jpaColumn.getAttribute("structural.personal") != "")$jpaColumn.getAttribute("structural.personal")#{else}false#{end}
+
+${jpaColumn.uniqueName}.decrypt = #{if}($jpaColumn.getAttribute("structural.decrypt") != "")$jpaColumn.getAttribute("structural.decrypt")#{else}false#{end}
+
+${jpaColumn.uniqueName}.subjectId = #{if}($jpaColumn.getAttribute("structural.subjectId") != "")$jpaColumn.getAttribute("structural.subjectId")#{else}false#{end}
 
 
 #if($jpaColumn.getAttribute("structural.datatype") == "DATE")
@@ -35,7 +40,7 @@ ${jpaColumn.uniqueName}.format = $jpaColumn.getAttribute("structural.format")
 
 ${jpaColumn.uniqueName}.customFunction = $jpaColumn.getAttribute("structural.customFunction")
 ${jpaColumn.uniqueName}.excludedRoles = $jpaColumn.getAttribute("behavioural.notEnabledRoles")
-${jpaColumn.uniqueName}.position = $velocityCount
+${jpaColumn.uniqueName}.position = $foreach.count
 #end
 
 
@@ -63,7 +68,7 @@ ${jpaColumn.uniqueName}.attribute = $jpaColumn.getAttribute("structural.attribut
 ${jpaColumn.uniqueName}.datatype = $jpaColumn.getAttribute("structural.datatype")
 ${jpaColumn.uniqueName}.format = $jpaColumn.getAttribute("structural.format")
 ${jpaColumn.uniqueName}.excludedRoles = $jpaColumn.getAttribute("behavioural.notEnabledRoles")
-${jpaColumn.uniqueName}.position = $velocityCount
+${jpaColumn.uniqueName}.position = $foreach.count
 #end
 
 

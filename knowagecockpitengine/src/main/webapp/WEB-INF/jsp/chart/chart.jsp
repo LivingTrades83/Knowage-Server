@@ -40,11 +40,13 @@ author:
 <%@page import="it.eng.spagobi.utilities.engines.rest.ExecutionSession"%>
 <%@page import="it.eng.spagobi.utilities.engines.EngineConstants"%>
 <%@page import="it.eng.spago.security.IEngUserProfile"%>
-<%@page import="it.eng.spagobi.commons.utilities.ChannelUtilities"%>
 <%@page import="it.eng.spagobi.commons.constants.SpagoBIConstants"%>
+<%@page import="it.eng.spagobi.commons.constants.CommunityFunctionalityConstants"%>
 <%@page import="java.util.Iterator"%>
 <%@page import="com.fasterxml.jackson.databind.ObjectMapper"%>
 <%@page import="org.json.JSONObject"%>
+<%@page import="it.eng.knowage.security.OwaspDefaultEncoderFactory"%>
+<%@page import="org.owasp.esapi.Encoder"%>	
 
 <%-- ---------------------------------------------------------------------- --%>
 <%-- JAVA CODE 																--%>
@@ -169,6 +171,7 @@ author:
 	}
 	String driverParams = new JSONObject(driverParamsMap).toString(0).replaceAll("'", "\\\\'");
 	String uuidO=request.getParameter("SBI_EXECUTION_ID")!=null? request.getParameter("SBI_EXECUTION_ID"): "null";
+	Encoder esapiEncoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
 %>
 
 
@@ -184,8 +187,8 @@ author:
 <%@include file="commons/includeExtJS5.jspf"%>
 <%@include file="commons/includeMessageResource.jspf"%>
 
-<script>
-	var sbiExecutionId = <%=request.getParameter("SBI_EXECUTION_ID")!=null? "'"+request.getParameter("SBI_EXECUTION_ID")+"'" : "null"%>;
+<script type="text/javascript" nonce="<%= request.getAttribute("cspNonce") %>">
+	var sbiExecutionId = <%=esapiEncoder.encodeForJavaScript(request.getParameter("SBI_EXECUTION_ID")!=null? "'"+request.getParameter("SBI_EXECUTION_ID")+"'" : "null")%>;
 	//var sbiExecutionId = '<%=uuidO%>';
 	var userId = '<%=userId%>';
 	var hostName = '<%=request.getServerName()%>';

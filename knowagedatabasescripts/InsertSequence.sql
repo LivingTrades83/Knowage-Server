@@ -20,8 +20,6 @@ insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select m
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(ID)+1 from SBI_EVENTS_LOG),1) ,'SBI_EVENTS_LOG');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(ID)+1 from SBI_REMEMBER_ME),1) ,'SBI_REMEMBER_ME');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(ID)+1 from SBI_KPI_VALUE),1) ,'SBI_KPI_VALUE');
-insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(FEATURE_ID)+1 from SBI_GEO_FEATURES),1) ,'SBI_GEO_FEATURES');
-insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(MAP_ID)+1 from SBI_GEO_MAPS),1) ,'SBI_GEO_MAPS');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(ID)+1 from SBI_AUDIT),1) ,'SBI_AUDIT');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(ATTRIBUTE_ID)+1 from SBI_ATTRIBUTE),1) ,'SBI_ATTRIBUTE');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(ID)+1 from SBI_USER) ,1),'SBI_USER');
@@ -33,6 +31,7 @@ insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select m
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(OBJ_METACONTENT_ID)+1 from SBI_OBJ_METACONTENTS),1) ,'SBI_OBJ_METACONTENTS');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(OBJ_META_ID)+1 from SBI_OBJ_METADATA),1) ,'SBI_OBJ_METADATA');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(MENU_ID)+1 from SBI_MENU) ,1),'SBI_MENU');
+insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(ID)+1 from SBI_HOMEPAGE) ,1),'SBI_HOMEPAGE');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(PROGRESS_THREAD_ID)+1 from SBI_PROGRESS_THREAD) ,1),'SBI_PROGRESS_THREAD');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(SOURCE_ID)+1 from SBI_META_SOURCE) ,1),'SBI_META_SOURCE');
 insert into hibernate_sequences(next_val,sequence_name) values (ifnull((select max(TABLE_ID)+1 from SBI_META_TABLE) ,1),'SBI_META_TABLE');

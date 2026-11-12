@@ -17,6 +17,8 @@
  */
 package it.eng.qbe.datasource.jpa;
 
+import static it.eng.knowage.encryption.EncryptionPreferencesRegistry.DEFAULT_CFG_KEY;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,9 +31,14 @@ import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
+import org.apache.commons.lang3.ObjectUtils;
 import org.apache.log4j.Logger;
+import org.jasypt.encryption.pbe.PBEStringEncryptor;
+import org.jasypt.hibernate3.encryptor.HibernatePBEEncryptorRegistry;
 import org.json.JSONObject;
 
+import it.eng.knowage.encryption.DataEncryptionGlobalCfg;
+import it.eng.knowage.encryption.EncryptorFactory;
 import it.eng.qbe.datasource.AbstractDataSource;
 import it.eng.qbe.datasource.ConnectionDescriptor;
 import it.eng.qbe.datasource.IPersistenceManager;
@@ -53,6 +60,7 @@ import it.eng.qbe.utility.CustomFunctionsSingleton;
 import it.eng.qbe.utility.CustomizedFunctionsReader;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.tools.dataset.metasql.query.DatabaseDialect;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.user.UserProfileManager;
 import it.eng.spagobi.utilities.assertion.Assert;
@@ -63,16 +71,16 @@ import it.eng.spagobi.utilities.sql.SqlUtils;
  */
 public class JPADataSource extends AbstractDataSource implements IJpaDataSource {
 
+	private static final Logger LOGGER = Logger.getLogger(JPADataSource.class);
+	private static final boolean CLASS_LOADER_EXTENDED = false;
+
 	private EntityManagerFactory factory;
 	private EntityManager entityManager;
-	private final boolean classLoaderExtended = false;
 
 	private UserProfile userProfile = null;
 
-	private static transient Logger logger = Logger.getLogger(JPADataSource.class);
-
 	protected JPADataSource(String dataSourceName, IDataSourceConfiguration configuration) {
-		logger.debug("Creating a new JPADataSource -1");
+		LOGGER.debug("Creating a new JPADataSource -1");
 		setName(dataSourceName);
 		dataMartModelAccessModality = new AbstractModelAccessModality();
 
@@ -80,7 +88,8 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 		if (configuration instanceof FileDataSourceConfiguration) {
 			this.configuration = configuration;
 		} else if (configuration instanceof CompositeDataSourceConfiguration) {
-			IDataSourceConfiguration subConf = ((CompositeDataSourceConfiguration) configuration).getSubConfigurations().get(0);
+			IDataSourceConfiguration subConf = ((CompositeDataSourceConfiguration) configuration).getSubConfigurations()
+					.get(0);
 			if (subConf instanceof FileDataSourceConfiguration) {
 				this.configuration = subConf;
 				this.configuration.loadDataSourceProperties().putAll(configuration.loadDataSourceProperties());
@@ -90,7 +99,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 		} else {
 			Assert.assertUnreachable("Not suitable configuration to create a JPADataSource");
 		}
-		logger.debug("Created a new JPADataSource");
+		LOGGER.debug("Created a new JPADataSource");
 	}
 
 	public FileDataSourceConfiguration getFileDataSourceConfiguration() {
@@ -99,6 +108,26 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 
 	protected void initEntityManagerFactory(String name) {
 		factory = Persistence.createEntityManagerFactory(name, buildEmptyConfiguration());
+	}
+
+	private void initJasypt() {
+
+		String cfgKey = DEFAULT_CFG_KEY;
+
+		DataEncryptionGlobalCfg decfee = DataEncryptionGlobalCfg.getInstance();
+		String algorithm = decfee.getKeyTemplateForAlgorithm(cfgKey);
+		String password = decfee.getKeyTemplateForPassword(cfgKey);
+
+		if (ObjectUtils.allNotNull(algorithm, password)) {
+
+			String modelName = configuration.getModelName();
+			String encryptorName = modelName + "_encryptor";
+
+			PBEStringEncryptor encryptor = EncryptorFactory.getInstance().create(algorithm, password);
+
+			HibernatePBEEncryptorRegistry registry = HibernatePBEEncryptorRegistry.getInstance();
+			registry.registerPBEStringEncryptor(encryptorName, encryptor);
+		}
 	}
 
 	/*
@@ -138,12 +167,13 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 			return;
 		}
 
-		if (!classLoaderExtended) {
+		if (!CLASS_LOADER_EXTENDED) {
 			updateCurrentClassLoader(jarFile);
 		}
 
 		initEntityManagerFactory(getConfiguration().getModelName());
 		initEntityManager();
+		initJasypt();
 
 	}
 
@@ -166,7 +196,8 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 		IDataSource dataSource = (IDataSource) configuration.loadDataSourceProperties().get("datasource");
 		// FOR SPAGOBIMETA
 		if (dataSource == null) {
-			ConnectionDescriptor connectionDescriptor = (ConnectionDescriptor) configuration.loadDataSourceProperties().get("connection");
+			ConnectionDescriptor connectionDescriptor = (ConnectionDescriptor) configuration.loadDataSourceProperties()
+					.get("connection");
 			if (connectionDescriptor != null) {
 				dataSource = connectionDescriptor.getDataSource();
 			}
@@ -179,8 +210,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 		userProfile = profile;
 		IModelStructureBuilder structureBuilder;
 		if (dataMartModelStructure == null) {
-			IDataSource dsSource = getToolsDataSource();
-			String dialect = dsSource.getHibDialectClass();
+
 			if (profile != null) {
 				JSONObject jsonObj = new CustomizedFunctionsReader().getJSONCustomFunctionsVariable(profile);
 				CustomFunctionsSingleton.getInstance().setCustomizedFunctionsJSON(jsonObj);
@@ -193,9 +223,10 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 			List<Filter> filtersOnProfileAttributes = getFiltersOnProfileAttributes();
 			Map<String, String> filtersConditionsOnProfileAttributes = getFiltersConditionsOnProfileAttribute();
 			if (!filtersOnProfileAttributes.isEmpty() || !fieldsFilteredByRole.isEmpty()) {
-				logger.debug("One or more profile attributes filters were found therefore profile attributes model access modality will be activated.");
-				this.setDataMartModelAccessModality(new ProfileAttributesModelAccessModality(filtersOnProfileAttributes, fieldsFilteredByRole, profile,
-						filtersConditionsOnProfileAttributes));
+				LOGGER.debug(
+						"One or more profile attributes filters were found therefore profile attributes model access modality will be activated.");
+				this.setDataMartModelAccessModality(new ProfileAttributesModelAccessModality(filtersOnProfileAttributes,
+						fieldsFilteredByRole, profile, filtersConditionsOnProfileAttributes));
 			}
 		}
 		return dataMartModelStructure;
@@ -210,14 +241,13 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 	public IModelStructure getModelStructure(boolean getFullModel) {
 		if (getFullModel && this.userProfile == null) {
 			this.userProfile = new UserProfile("", "");
-			this.userProfile.setAttributes(new HashMap<>());
 			this.userProfile.setAttributeValue(ALL_FIELDS_ACCESSIBLE, "true");
 		}
 		return getModelStructure();
 	}
 
 	private List<Filter> getFiltersOnProfileAttributes() {
-		List<Filter> toReturn = new ArrayList<Filter>();
+		List<Filter> toReturn = new ArrayList<>();
 		Iterator<String> it = dataMartModelStructure.getModelNames().iterator();
 		while (it.hasNext()) {
 			List<IModelEntity> list = dataMartModelStructure.getRootEntities(it.next());
@@ -228,7 +258,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 	}
 
 	private List<Filter> getFiltersOnProfileAttributes(List<IModelEntity> list) {
-		List<Filter> toReturn = new ArrayList<Filter>();
+		List<Filter> toReturn = new ArrayList<>();
 		Iterator<IModelEntity> it = list.iterator();
 		while (it.hasNext()) {
 			IModelEntity entity = it.next();
@@ -238,10 +268,11 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 				IModelField field = fieldsIt.next();
 				String attributeName = (String) field.getProperty("attribute");
 				if (attributeName != null && !attributeName.trim().equals("")) {
-					logger.debug("Found profile attribute filter on field " + field.getUniqueName() + ": profile attribute is " + attributeName);
+					LOGGER.debug("Found profile attribute filter on field " + field.getUniqueName()
+							+ ": profile attribute is " + attributeName);
 					// Filter filter = new Filter(entity.getUniqueName(), "F{" +
 					// field.getName() + "} = {" + attributeName + "}");
-					List<String> values = new ArrayList<String>();
+					List<String> values = new ArrayList<>();
 					// we put just the profile attribute name, it's value will
 					// be evaluated later, when evaluating the filters
 					values.add(attributeName);
@@ -254,7 +285,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 	}
 
 	private Map<String, String> getFiltersConditionsOnProfileAttribute() {
-		Map<String, String> toReturn = new HashMap<String, String>();
+		Map<String, String> toReturn = new HashMap<>();
 		Iterator<String> it = dataMartModelStructure.getModelNames().iterator();
 		while (it.hasNext()) {
 			List<IModelEntity> list = dataMartModelStructure.getRootEntities(it.next());
@@ -265,7 +296,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 	}
 
 	private Map<String, String> getFiltersConditionsOnProfileAttribute(List<IModelEntity> list) {
-		Map<String, String> toReturn = new HashMap<String, String>();
+		Map<String, String> toReturn = new HashMap<>();
 		Iterator<IModelEntity> it = list.iterator();
 		while (it.hasNext()) {
 			IModelEntity entity = it.next();
@@ -279,8 +310,9 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 					String filtercondition = (String) field.getProperty("filtercondition");
 					if (filtercondition != null && !filtercondition.trim().equals("")) {
 						toReturn.put(field.getUniqueName(), filtercondition);
-						logger.debug("Found profile attribute filter on field " + field.getUniqueName() + ": profile attribute is " + attributeName
-								+ " and is filter condition is " + filtercondition);
+						LOGGER.debug("Found profile attribute filter on field " + field.getUniqueName()
+								+ ": profile attribute is " + attributeName + " and is filter condition is "
+								+ filtercondition);
 					}
 				}
 			}
@@ -289,7 +321,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 	}
 
 	private Map<String, List<String>> getFieldsFilteredByRole() {
-		Map<String, List<String>> toReturn = new HashMap<String, List<String>>();
+		Map<String, List<String>> toReturn = new HashMap<>();
 		Iterator<String> it = dataMartModelStructure.getModelNames().iterator();
 		while (it.hasNext()) {
 			List<IModelEntity> list = dataMartModelStructure.getRootEntities(it.next());
@@ -300,7 +332,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 	}
 
 	private Map<String, List<String>> getFieldsFilteredByRole(List<IModelEntity> list) {
-		Map<String, List<String>> toReturn = new HashMap<String, List<String>>();
+		Map<String, List<String>> toReturn = new HashMap<>();
 		Iterator<IModelEntity> it = list.iterator();
 		while (it.hasNext()) {
 			IModelEntity entity = it.next();
@@ -318,16 +350,18 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 	}
 
 	protected Map<String, Object> buildEmptyConfiguration() {
-		logger.debug("IN");
-		Map<String, Object> cfg = new HashMap<String, Object>();
+		LOGGER.debug("IN");
+		Map<String, Object> cfg = new HashMap<>();
 		IDataSource dataSource = getToolsDataSource();
 		String dialect = dataSource.getHibDialectClass();
 
 		// to solve http://spagoworld.org/jira/browse/SPAGOBI-1934
 		// KNOWAGE-XXXX : Removed because the class was deleted at some point
-		/* TODO : Check if (dialect != null && dialect.contains("SQLServerDialect")) {
-			dialect = "org.hibernate.dialect.ExtendedSQLServerDialect";
-		} else */ if (dialect != null && dialect.contains("MySQL")) {
+		/*
+		 * TODO : Check if (dialect != null && dialect.contains("SQLServerDialect")) { dialect = "org.hibernate.dialect.ExtendedSQLServerDialect"; } else
+		 */ if (dialect != null && dialect.contains("MySQL")) {
+			dialect = "org.hibernate.dialect.ExtendedMySQLDialect";
+		} else if (dialect != null && dialect.contains(DatabaseDialect.DORIS.getValue())) {
 			dialect = "org.hibernate.dialect.ExtendedMySQLDialect";
 		} else if (dialect != null && dialect.contains("CustomOracleSpatialDialect")) {
 			dialect = "org.hibernatespatial.oracle.CustomOracleSpatialDialect";
@@ -355,7 +389,7 @@ public class JPADataSource extends AbstractDataSource implements IJpaDataSource 
 			cfg.put("hibernate.validator.apply_to_ddl", "false");
 			cfg.put("hibernate.validator.autoregister_listeners", "false");
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 
 		return cfg;
 

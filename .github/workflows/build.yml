@@ -1,0 +1,73 @@
+name: "Build"
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'adopt'
+        java-version: '8'
+        cache: 'maven'
+
+    - name: Setup Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        # cache: 'npm'
+
+    - name: Setting up 
+      uses: s4u/maven-settings-action@v2.8.0
+      with:
+        servers: |
+          [{
+            "id": "knowage-group",
+            "username": "${{ secrets.KNOWAGE_NEXUS_USERNAME }}",
+            "password": "${{ secrets.KNOWAGE_NEXUS_PASSWORD }}"
+          }]
+        mirrors: |
+          [{
+            "id": "knowage-group",
+            "name": "KNOWAGE Nexus",
+            "mirrorOf": "*",
+            "url": "${{ secrets.KNOWAGE_NEXUS_URL_KNOWAGE_GROUP }}"
+          }]
+
+    - name: Check POMs
+      run: mvn sortpom:verify -q -f knowage-ce-parent/pom.xml
+
+    - name: Checkstyle
+      run: mvn checkstyle:check -q -f knowage-ce-parent/pom.xml
+
+    - name: Build
+      run: mvn compile -pl -:knowage-vue -q -f knowage-ce-parent/pom.xml
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Find WAR files
+      run: |
+        WAR_FILES=$(find ./target -name "*.war")
+        echo "WAR files found: $WAR_FILES"
+        echo "WAR_FILES=$WAR_FILES" >> $GITHUB_ENV
+
+    - name: Create GitHub Release
+      uses: ghalexv/github-release-action@v1
+      with:
+        tag_name: "v.test"
+        release_name: "Release v.test"
+        files: ${{ env.WAR_FILES }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

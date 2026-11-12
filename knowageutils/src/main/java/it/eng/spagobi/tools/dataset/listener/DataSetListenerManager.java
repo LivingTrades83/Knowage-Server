@@ -17,16 +17,13 @@
  */
 package it.eng.spagobi.tools.dataset.listener;
 
-import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import it.eng.spagobi.commons.bo.UserProfile;
 import org.apache.log4j.Logger;
 
-import it.eng.spagobi.services.common.JWTSsoService;
+import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
 import it.eng.spagobi.tools.dataset.cache.client.CacheClient;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
@@ -40,7 +37,7 @@ public class DataSetListenerManager {
 	/**
 	 * Operator by DataSet Label by User Unique Identifiers
 	 */
-	private final Map<String, Map<String, DataStoreListenerOperator>> operatorsyByLabelByUUId = new HashMap<String, Map<String, DataStoreListenerOperator>>();
+	private final Map<String, Map<String, DataStoreListenerOperator>> operatorsyByLabelByUUId = new HashMap<>();
 
 	public synchronized void addIDataSetListenerIfAbsent(String uuid, String dataSetLabel, IDataSetListener listener, String listenerId) {
 		Helper.checkNotNullNotTrimNotEmpty(uuid, "uuid");
@@ -93,7 +90,7 @@ public class DataSetListenerManager {
 	private synchronized DataStoreListenerOperator getOperator(String uuid, String dataSetLabel) {
 		Map<String, DataStoreListenerOperator> operatorsByLabel = operatorsyByLabelByUUId.get(uuid);
 		if (operatorsByLabel == null) {
-			operatorsByLabel = new HashMap<String, DataStoreListenerOperator>();
+			operatorsByLabel = new HashMap<>();
 			operatorsyByLabelByUUId.put(uuid, operatorsByLabel);
 		}
 
@@ -147,31 +144,4 @@ public class DataSetListenerManager {
 		manageListenerResult(res);
 	}
 
-	/**
-	 * If it's not initialized then it does nothing.
-	 *
-	 * @param uuid
-	 * @param dataSetLabel
-	 * @param listenerId
-	 */
-	public void addCometListenerIfInitializedAndAbsent(final String uuid, final String dataSetLabel, final String listenerId) {
-		if (!CometDInitializerChecker.isCometdInitialized()) {
-			return;
-		}
-
-		IDataSetListener listener = new IDataSetListener() {
-
-			@Override
-			public void dataStoreChanged(DataStoreChangedEvent event) throws DataSetListenerException {
-
-				// notify the frontend clients about the dataStore changes
-				CometServiceManager manager = CometServiceManagerFactory.getManager();
-				manager.dataStoreChanged(uuid, dataSetLabel, event, listenerId);
-			}
-
-		};
-
-		DataStoreListenerOperator op = getOperator(uuid, dataSetLabel);
-		op.addIDataSetListenerIfAbsent(listener, listenerId);
-	}
 }

@@ -5,8 +5,6 @@ import static it.eng.spagobi.commons.constants.SpagoBIConstants.DATE_RANGE_QUANT
 import static it.eng.spagobi.commons.constants.SpagoBIConstants.DATE_RANGE_TYPE_JSON;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -28,12 +26,15 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.owasp.esapi.Encoder;
+import org.owasp.esapi.errors.EncodingException;
 
-import it.eng.spago.base.RequestContainer;
-import it.eng.spago.base.RequestContainerAccess;
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
 import it.eng.spago.base.SourceBean;
 import it.eng.spago.base.SourceBeanAttribute;
 import it.eng.spago.error.EMFUserError;
@@ -60,7 +61,6 @@ import it.eng.spagobi.commons.serializer.JSONStoreFeedTransformer;
 import it.eng.spagobi.commons.serializer.SerializationException;
 import it.eng.spagobi.commons.services.DelegatedBasicListService;
 import it.eng.spagobi.commons.utilities.DateRangeDAOUtilities;
-import it.eng.spagobi.commons.utilities.GeneralUtilities;
 import it.eng.spagobi.commons.utilities.messages.MessageBuilderFactory;
 import it.eng.spagobi.tools.catalogue.bo.MetaModel;
 import it.eng.spagobi.tools.catalogue.dao.IMetaModelsDAO;
@@ -72,20 +72,22 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 @Path("/1.0/businessModelOpening")
 public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
+	private static final Logger LOGGER = LogManager.getLogger(BusinessModelOpenParameters.class);
+
 	public static final String SERVICE_NAME = "GET BUSINESS MODEL PARAMETERS ";
 
 	// request parameters
-	public static String PARAMETER_ID = "PARAMETER_ID";
-	public static String SELECTED_PARAMETER_VALUES = "PARAMETERS";
-	public static String FILTERS = "FILTERS";
-	public static String NODE_ID_SEPARATOR = "___SEPA__";
-	public static String MODE = "MODE";
-	public static String NODE = "node";
-	public static String MODE_SIMPLE = "simple";
-	public static String MODE_COMPLETE = "complete";
-	public static String MODE_EXTRA = "extra";
-	public static String START = "start";
-	public static String LIMIT = "limit";
+	public static final String PARAMETER_ID = "PARAMETER_ID";
+	public static final String SELECTED_PARAMETER_VALUES = "PARAMETERS";
+	public static final String FILTERS = "FILTERS";
+	public static final String NODE_ID_SEPARATOR = "___SEPA__";
+	public static final String MODE = "MODE";
+	public static final String NODE = "node";
+	public static final String MODE_SIMPLE = "simple";
+	public static final String MODE_COMPLETE = "complete";
+	public static final String MODE_EXTRA = "extra";
+	public static final String START = "start";
+	public static final String LIMIT = "limit";
 
 	private static final String ROLE = "ROLE";
 	private static final String OBJECT_LABEL = "OBJECT_LABEL";
@@ -209,7 +211,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 								selectedParameterValues.put(key, "" + v);
 							} else {
 								Assert.assertUnreachable("Attribute [" + key + "] value [" + v
-										+ "] of PARAMETERS is not of type JSONArray nor String. It is of type [" + v.getClass().getName() + "]");
+										+ "] of PARAMETERS is not of type JSONArray nor String. It is of type ["
+										+ v.getClass().getName() + "]");
 							}
 						}
 					} catch (JSONException e) {
@@ -220,15 +223,16 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				// hashmap
 				// START get the relevant meta model parameter
 				biMetaModelParameter = null;
-				List parameters = obj.getDrivers();
+				List<BIMetaModelParameter> parameters = obj.getDrivers();
 				for (int i = 0; i < parameters.size(); i++) {
-					BIMetaModelParameter p = (BIMetaModelParameter) parameters.get(i);
+					BIMetaModelParameter p = parameters.get(i);
 					if (metaModelParameterId.equalsIgnoreCase(p.getParameterUrlName())) {
 						biMetaModelParameter = p;
 						break;
 					}
 				}
-				Assert.assertNotNull(biMetaModelParameter, "Impossible to find parameter [" + metaModelParameterId + "]");
+				Assert.assertNotNull(biMetaModelParameter,
+						"Impossible to find parameter [" + metaModelParameterId + "]");
 
 				lovProvDet = dum.getLovDetail(biMetaModelParameter);
 				// START get the lov result
@@ -239,15 +243,16 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 					// get from cache, if available
 					LovResultCacheManager executionCacheManager = new LovResultCacheManager();
-					lovResult = executionCacheManager.getLovResultDum(profile, lovProvDet, dum.getDependencies(biMetaModelParameter, role), obj, true,
-							req.getLocale());
+					lovResult = executionCacheManager.getLovResultDum(profile, lovProvDet,
+							dum.getDependencies(biMetaModelParameter, role), obj, true, req.getLocale());
 
 					// get all the rows of the result
 					LovResultHandler lovResultHandler = new LovResultHandler(lovResult);
 					rows = lovResultHandler.getRows();
 
 				} catch (MissingLOVDependencyException mldaE) {
-					String localizedMessage = getLocalizedMessage("sbi.api.documentExecParameters.dependencyNotFill", req);
+					String localizedMessage = getLocalizedMessage("sbi.api.documentExecParameters.dependencyNotFill",
+							req);
 					String msg = localizedMessage + ": " + mldaE.getDependsFrom();
 					throw new SpagoBIServiceException(SERVICE_NAME, msg);
 				} catch (Exception e) {
@@ -264,7 +269,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 						String columnfilter = (String) filtersJSON.get(SpagoBIConstants.COLUMN_FILTER);
 						String typeFilter = (String) filtersJSON.get(SpagoBIConstants.TYPE_FILTER);
 						String typeValueFilter = (String) filtersJSON.get(SpagoBIConstants.TYPE_VALUE_FILTER);
-						rows = DelegatedBasicListService.filterList(rows, valuefilter, typeValueFilter, columnfilter, typeFilter);
+						rows = DelegatedBasicListService.filterList(rows, valuefilter, typeValueFilter, columnfilter,
+								typeFilter);
 					}
 				} catch (JSONException e) {
 					throw new SpagoBIServiceException(SERVICE_NAME, "Impossible to read filter's configuration", e);
@@ -275,15 +281,17 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				// DependenciesPostProcessingLov, i.e. scripts, java classes and
 				// fixed lists)
 				biMetaModelParameterExecDependencies = dum.getDependencies(biMetaModelParameter, role);
-				if (lovProvDet instanceof DependenciesPostProcessingLov && selectedParameterValues != null && biMetaModelParameterExecDependencies != null
-						&& biMetaModelParameterExecDependencies.size() > 0) { // && contest != null && !contest.equals(MASSIVE_EXPORT)
-					rows = ((DependenciesPostProcessingLov) lovProvDet).processDependencies(rows, selectedParameterValues,
-							biMetaModelParameterExecDependencies);
+				if (lovProvDet instanceof DependenciesPostProcessingLov && selectedParameterValues != null
+						&& biMetaModelParameterExecDependencies != null
+						&& !biMetaModelParameterExecDependencies.isEmpty()) { // && contest != null && !contest.equals(MASSIVE_EXPORT)
+					rows = ((DependenciesPostProcessingLov) lovProvDet).processDependencies(rows,
+							selectedParameterValues, biMetaModelParameterExecDependencies);
 				}
 				// END filtering for correlation
 
 				if (lovProvDet.getLovType() != null && lovProvDet.getLovType().contains("tree")) {
-					JSONArray valuesJSONArray = getChildrenForTreeLov(lovProvDet, rows, mode, treeLovNodeLevel, treeLovNodeValue);
+					JSONArray valuesJSONArray = getChildrenForTreeLov(lovProvDet, rows, mode, treeLovNodeLevel,
+							treeLovNodeValue);
 					result = buildJsonResult("OK", "", null, valuesJSONArray, metaModelParameterId).toString();
 				} else {
 					valuesJSON = buildJSONForLOV(lovProvDet, rows, mode, start, limit);
@@ -291,20 +299,24 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				}
 			} catch (Exception e1) {
 				// result = buildJsonResult("KO", e1.getMessage(), null,null).toString();
-				throw new SpagoBIServiceException(SERVICE_NAME, "Impossible to get business model Execution Parameter EMFUserError", e1);
+				throw new SpagoBIServiceException(SERVICE_NAME,
+						"Impossible to get business model Execution Parameter EMFUserError", e1);
 			}
 
 		} catch (IOException e2) {
-			throw new SpagoBIServiceException(SERVICE_NAME, "Impossible to get business model Execution Parameter IOException", e2);
+			throw new SpagoBIServiceException(SERVICE_NAME,
+					"Impossible to get business model Execution Parameter IOException", e2);
 		} catch (JSONException e2) {
-			throw new SpagoBIServiceException(SERVICE_NAME, "Impossible to get business model Execution Parameter JSONException", e2);
+			throw new SpagoBIServiceException(SERVICE_NAME,
+					"Impossible to get business model Execution Parameter JSONException", e2);
 		}
 
 		// return Response.ok(resultAsMap).build();
 		return result;
 	}
 
-	private JSONArray getChildrenForTreeLov(ILovDetail lovProvDet, List rows, String mode, int treeLovNodeLevel, String treeLovNodeValue) {
+	private JSONArray getChildrenForTreeLov(ILovDetail lovProvDet, List rows, String mode, int treeLovNodeLevel,
+			String treeLovNodeValue) {
 		String valueColumn;
 		String descriptionColumn;
 		boolean addNode;
@@ -332,7 +344,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				treeLovParentNodeName = lovProvDet.getTreeLevelsColumns().get(treeLovNodeLevel).getFirst();
 			}
 
-			Set<JSONObject> valuesDataJSON = new LinkedHashSet<JSONObject>();
+			Set<JSONObject> valuesDataJSON = new LinkedHashSet<>();
 
 			valueColumn = lovProvDet.getValueColumnName();
 			descriptionColumn = lovProvDet.getDescriptionColumnName();
@@ -344,12 +356,13 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				List columns = row.getContainedAttributes();
 				valueJSON = new JSONObject();
 				boolean notNullNode = false; // if the row does not contain the
-												// value atribute we don't add
-												// the node
+											 // value atribute we don't add
+											 // the node
 				for (int i = 0; i < columns.size(); i++) {
 					SourceBeanAttribute attribute = (SourceBeanAttribute) columns.get(i);
-					if ((treeLovParentNodeName == "lovroot") || (attribute.getKey().equalsIgnoreCase(treeLovParentNodeName)
-							&& (attribute.getValue().toString()).equalsIgnoreCase(treeLovNodeValue))) {
+					if ((treeLovParentNodeName == "lovroot")
+							|| (attribute.getKey().equalsIgnoreCase(treeLovParentNodeName)
+									&& (attribute.getValue().toString()).equalsIgnoreCase(treeLovNodeValue))) {
 						addNode = true;
 					}
 
@@ -392,8 +405,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 			JSONArray valuesDataJSONArray = new JSONArray();
 
-			for (Iterator iterator = valuesDataJSON.iterator(); iterator.hasNext();) {
-				JSONObject jsonObject = (JSONObject) iterator.next();
+			for (Iterator<JSONObject> iterator = valuesDataJSON.iterator(); iterator.hasNext();) {
+				JSONObject jsonObject = iterator.next();
 				valuesDataJSONArray.put(jsonObject);
 			}
 
@@ -404,7 +417,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 	}
 
-	private JSONObject buildJsonResult(String status, String error, JSONObject obj, JSONArray objArr, String metamodelparameterId) {
+	private JSONObject buildJsonResult(String status, String error, JSONObject obj, JSONArray objArr,
+			String metamodelparameterId) {
 		JSONObject jsonObj = new JSONObject();
 		try {
 			jsonObj.put("status", status);
@@ -417,7 +431,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				jsonObj.put("result", obj);
 			}
 		} catch (JSONException e) {
-			logger.error("Error build Json Result Business Model Open Parameter : " + e.getMessage());
+			LOGGER.error("Error build Json Result Business Model Open Parameter", e);
 		}
 
 		return jsonObj;
@@ -480,8 +494,9 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				visiblecolumns[j] = visiblecolumns[j].toUpperCase();
 			}
 
-			valuesJSON = (JSONObject) JSONStoreFeedTransformer.getInstance().transform(valuesDataJSON, valueColumn.toUpperCase(), displayColumn.toUpperCase(),
-					descriptionColumn.toUpperCase(), visiblecolumns, new Integer(rows.size()));
+			valuesJSON = (JSONObject) JSONStoreFeedTransformer.getInstance().transform(valuesDataJSON,
+					valueColumn.toUpperCase(), displayColumn.toUpperCase(), descriptionColumn.toUpperCase(),
+					visiblecolumns, rows.size());
 			return valuesJSON;
 		} catch (Exception e) {
 			throw new SpagoBIServiceException("Impossible to serialize response", e);
@@ -498,11 +513,10 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 	@Path("/filters")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response getBusinessModelExecutionFilters(@Context HttpServletRequest req)
-			throws BusinessModelExecutionException, EMFUserError, IOException, JSONException {
+			throws BusinessModelExecutionException, EMFUserError, IOException, JSONException, EncodingException {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
-		RequestContainer aRequestContainer = RequestContainerAccess.getRequestContainer(req);
 		JSONObject requestVal = RestUtilities.readBodyAsJSONObject(req);
 		// decode requestVal parameters
 		// JSONObject requestValParams = requestVal.getJSONObject("parameters");
@@ -511,31 +525,31 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 		String name = requestVal.getString("name");
 		String role = requestVal.getString("role");
 		// JSONObject jsonCrossParameters = requestVal.getJSONObject("parameters");
-		Map<String, JSONObject> sessionParametersMap = new HashMap<String, JSONObject>();
-		if (("true").equals(SingletonConfig.getInstance().getConfigValue("SPAGOBI.SESSION_PARAMETERS_MANAGER.enabled")))
+		Map<String, JSONObject> sessionParametersMap = new HashMap<>();
+		if (("true").equals(SingletonConfig.getInstance().getConfigValue("SPAGOBI.SESSION_PARAMETERS_MANAGER.enabled"))) {
 			sessionParametersMap = getSessionParameters(requestVal);
+		}
 
 		// keep track of par coming from cross to get descriptions from admissible values
 		// List<String> parsFromCross = new ArrayList<String>();
 
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 
 		IMetaModelsDAO dao = DAOFactory.getMetaModelsDAO();
 		IParameterUseDAO parameterUseDAO = DAOFactory.getParameterUseDAO();
 		MetaModel businessModel = dao.loadMetaModelForExecutionByNameAndRole(name, role, false);
 
-		Locale locale = GeneralUtilities.getCurrentLocale(aRequestContainer);
-
 		// applyRequestParameters(businessModel, jsonCrossParameters, sessionParametersMap, role, locale, parsFromCross);
 
 		ArrayList<HashMap<String, Object>> parametersArrayList = new ArrayList<>();
-		BusinessModelRuntime dum = new BusinessModelRuntime(this.getUserProfile(), locale);
-		List<BusinessModelDriverRuntime> parameters = BusinessModelOpenUtils.getParameters(businessModel, role, req.getLocale(), null, true, dum);
+		BusinessModelRuntime dum = new BusinessModelRuntime(this.getUserProfile(), getLocale());
+		List<BusinessModelDriverRuntime> parameters = BusinessModelOpenUtils.getParameters(businessModel, role,
+				req.getLocale(), null, true, dum);
 		for (BusinessModelDriverRuntime objParameter : parameters) {
 			Integer paruseId = objParameter.getParameterUseId();
 			ParameterUse parameterUse = parameterUseDAO.loadByUseID(paruseId);
 
-			HashMap<String, Object> parameterAsMap = new HashMap<String, Object>();
+			HashMap<String, Object> parameterAsMap = new HashMap<>();
 			parameterAsMap.put("id", objParameter.getBiObjectId());
 			parameterAsMap.put("label", objParameter.getLabel());
 			parameterAsMap.put("urlName", objParameter.getId());
@@ -545,8 +559,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			parameterAsMap.put("valueSelection", parameterUse.getValueSelection());
 			parameterAsMap.put("selectedLayer", objParameter.getSelectedLayer());
 			parameterAsMap.put("selectedLayerProp", objParameter.getSelectedLayerProp());
-			parameterAsMap.put("visible", ((objParameter.isVisible())));
-			parameterAsMap.put("mandatory", ((objParameter.isMandatory())));
+			parameterAsMap.put("visible", objParameter.isVisible());
+			parameterAsMap.put("mandatory", objParameter.isMandatory());
 			parameterAsMap.put("multivalue", objParameter.isMultivalue());
 			parameterAsMap.put("driverLabel", objParameter.getPar().getLabel());
 			parameterAsMap.put("driverUseLabel", objParameter.getAnalyticalDriverExecModality().getLabel());
@@ -562,12 +576,13 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				Object paramValues = objParameter.getDriver().getParameterValues();
 				Object paramDescriptionValues = objParameter.getDriver().getParameterValuesDescription();
 
+				Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
 				if (paramValues instanceof List) {
 
 					List<String> valuesList = (List) paramValues;
 					List<String> descriptionList = (List) paramDescriptionValues;
 					if (paramDescriptionValues == null || !(paramDescriptionValues instanceof List)) {
-						descriptionList = new ArrayList<String>();
+						descriptionList = new ArrayList<>();
 					}
 
 					// String item = null;
@@ -575,15 +590,17 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 						String itemVal = valuesList.get(k);
 
-						String itemDescr = descriptionList.size() > k && descriptionList.get(k) != null ? descriptionList.get(k) : itemVal;
+						String itemDescr = descriptionList.size() > k && descriptionList.get(k) != null
+								? descriptionList.get(k)
+								: itemVal;
 
 						try {
 							// % character breaks decode method
 							if (!itemVal.contains("%")) {
-								itemVal = URLDecoder.decode(itemVal, "UTF-8");
+								itemVal = encoder.decodeFromURL(itemVal);
 							}
 							if (!itemDescr.contains("%")) {
-								itemDescr = URLDecoder.decode(itemDescr, "UTF-8");
+								itemDescr = encoder.decodeFromURL(itemDescr);
 							}
 
 							// check input value and convert if it's an old multivalue syntax({;{xxx;yyy}STRING}) to list of values :["A-OMP", "A-PO", "CL"]
@@ -593,33 +610,34 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 								String[] valLst = val.split(sep);
 								for (int k2 = 0; k2 < valLst.length; k2++) {
 									String itemVal2 = valLst[k2];
-									if (itemVal2 != null && !"".equals(itemVal2))
+									if (itemVal2 != null && !"".equals(itemVal2)) {
 										paramValueLst.add(itemVal2);
+									}
 
 								}
 							} else {
-								if (itemVal != null && !"".equals(itemVal))
+								if (itemVal != null && !"".equals(itemVal)) {
 									paramValueLst.add(itemVal);
+								}
 								paramDescrLst.add(itemDescr);
 
 							}
-						} catch (UnsupportedEncodingException e) {
-							// TODO Auto-generated catch block
-							// e.printStackTrace();
-							logger.debug("An error occured while decoding parameter with value[" + itemVal + "]" + e);
+						} catch (EncodingException e) {
+							LOGGER.debug("An error occured while decoding parameter with value[{}]", itemVal, e);
 						}
 					}
 				} else if (paramValues instanceof String) {
 					// % character breaks decode method
 					if (!((String) paramValues).contains("%")) {
-						paramValues = URLDecoder.decode((String) paramValues, "UTF-8");
+						paramValues = encoder.decodeFromURL((String) paramValues);
 					}
 					paramValueLst.add(paramValues.toString());
 
-					String parDescrVal = paramDescriptionValues != null && paramDescriptionValues instanceof String ? paramDescriptionValues.toString()
+					String parDescrVal = paramDescriptionValues != null && paramDescriptionValues instanceof String
+							? paramDescriptionValues.toString()
 							: paramValues.toString();
 					if (!parDescrVal.contains("%")) {
-						parDescrVal = URLDecoder.decode(parDescrVal, "UTF-8");
+						parDescrVal = encoder.decodeFromURL(parDescrVal);
 					}
 					paramDescrLst.add(parDescrVal);
 
@@ -642,12 +660,15 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				} else {
 					parameterAsMap.put("defaultValues", new ArrayList<>());
 				}
-				parameterAsMap.put("defaultValuesMeta", objParameter.getLovColumnsNames());
-				parameterAsMap.put(DocumentExecutionUtils.VALUE_COLUMN_NAME_METADATA, objParameter.getLovValueColumnName());
-				parameterAsMap.put(DocumentExecutionUtils.DESCRIPTION_COLUMN_NAME_METADATA, objParameter.getLovDescriptionColumnName());
+				parameterAsMap.put("defaultValuesMeta", objParameter.getLovVisibleColumnsNames());
+				parameterAsMap.put(DocumentExecutionUtils.VALUE_COLUMN_NAME_METADATA,
+						objParameter.getLovValueColumnName());
+				parameterAsMap.put(DocumentExecutionUtils.DESCRIPTION_COLUMN_NAME_METADATA,
+						objParameter.getLovDescriptionColumnName());
 
 				// hide the parameter if is mandatory and have one value in lov (no error parameter)
-				if (admissibleValues != null && admissibleValues.size() == 1 && objParameter.isMandatory() && !admissibleValues.get(0).containsKey("error")
+				if (admissibleValues != null && admissibleValues.size() == 1 && objParameter.isMandatory()
+						&& !admissibleValues.get(0).containsKey("error")
 						&& (objParameter.getDataDependencies() == null || objParameter.getDataDependencies().isEmpty())
 						&& (objParameter.getLovDependencies() == null || objParameter.getLovDependencies().isEmpty())) {
 					showParameterLov = false;
@@ -664,10 +685,11 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			// DATE RANGE DEFAULT VALUE
 			if (objParameter.getParType().equals("DATE_RANGE")) {
 				try {
-					ArrayList<HashMap<String, Object>> defaultValues = manageDataRange(businessModel, role, objParameter.getId());
+					ArrayList<HashMap<String, Object>> defaultValues = manageDataRange(businessModel, role,
+							objParameter.getId());
 					parameterAsMap.put("defaultValues", defaultValues);
 				} catch (SerializationException e) {
-					logger.debug("Filters DATE RANGE ERRORS ", e);
+					LOGGER.debug("Filters DATE RANGE ERRORS ", e);
 				}
 
 			}
@@ -675,12 +697,15 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			// convert the parameterValue from array of string in array of object
 			DefaultValuesList parameterValueList = new DefaultValuesList();
 			Object oVals = parameterAsMap.get("parameterValue");
-			Object oDescr = parameterAsMap.get("parameterDescription") != null ? parameterAsMap.get("parameterDescription") : new ArrayList<String>();
+			Object oDescr = parameterAsMap.get("parameterDescription") != null
+					? parameterAsMap.get("parameterDescription")
+					: new ArrayList<String>();
 
 			if (oVals != null) {
 				if (oVals instanceof List) {
 					// CROSS NAV : INPUT PARAM PARAMETER TARGET DOC IS STRING
-					if (oVals.toString().startsWith("[") && oVals.toString().endsWith("]") && parameterUse.getValueSelection().equals("man_in")) {
+					if (oVals.toString().startsWith("[") && oVals.toString().endsWith("]")
+							&& parameterUse.getValueSelection().equals("man_in")) {
 						List<String> valList = (ArrayList) oVals;
 						String stringResult = "";
 						for (int k = 0; k < valList.size(); k++) {
@@ -718,10 +743,12 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			parameterAsMap.put("dependsOn", objParameter.getDependencies());
 			parameterAsMap.put("dataDependencies", objParameter.getDataDependencies());
 			parameterAsMap.put("visualDependencies", objParameter.getVisualDependencies());
-			parameterAsMap.put("lovDependencies", (objParameter.getLovDependencies() != null) ? objParameter.getLovDependencies() : new ArrayList<>());
+			parameterAsMap.put("lovDependencies",
+					(objParameter.getLovDependencies() != null) ? objParameter.getLovDependencies()
+							: new ArrayList<>());
 
 			// load DEFAULT VALUE if present and if the parameter value is empty
-			if (objParameter.getDefaultValues() != null && objParameter.getDefaultValues().size() > 0
+			if (objParameter.getDefaultValues() != null && !objParameter.getDefaultValues().isEmpty()
 					&& objParameter.getDefaultValues().get(0).getValue() != null) {
 				DefaultValuesList valueList = null;
 				// check if the parameter is really valorized (for example if it isn't an empty list)
@@ -732,7 +759,9 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				String parLab = objParameter.getDriver() != null && objParameter.getDriver().getParameter() != null
 						? objParameter.getDriver().getParameter().getLabel()
 						: "";
-				String useModLab = objParameter.getAnalyticalDriverExecModality() != null ? objParameter.getAnalyticalDriverExecModality().getLabel() : "";
+				String useModLab = objParameter.getAnalyticalDriverExecModality() != null
+						? objParameter.getAnalyticalDriverExecModality().getLabel()
+						: "";
 				String sessionKey = parLab + "_" + useModLab;
 
 				valueList = objParameter.getDefaultValues();
@@ -773,7 +802,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			}
 		}
 
-		if (parameters.size() > 0) {
+		if (!parameters.isEmpty()) {
 			resultAsMap.put("filterStatus", parametersArrayList);
 
 		} else {
@@ -783,22 +812,24 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 		resultAsMap.put("isReadyForExecution", isReadyForExecution(parameters));
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return Response.ok(resultAsMap).build();
 	}
 
-	private JSONObject decodeRequestParameters(JSONObject requestValParams) throws JSONException, IOException {
+	private JSONObject decodeRequestParameters(JSONObject requestValParams)
+			throws JSONException, IOException, EncodingException {
 		JSONObject toReturn = new JSONObject();
 
-		Iterator keys = requestValParams.keys();
+		Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+		Iterator<String> keys = requestValParams.keys();
 		while (keys.hasNext()) {
-			String key = (String) keys.next();
+			String key = keys.next();
 			Object valueObj = requestValParams.get(key);
 			if (valueObj instanceof Number) {
 				String value = String.valueOf(valueObj);
 				// if (!value.equals("%7B%3B%7B") && !value.equalsIgnoreCase("%")) {
 				if (!value.equals("") && !value.equalsIgnoreCase("%")) {
-					toReturn.put(key, URLDecoder.decode(value, "UTF-8"));
+					toReturn.put(key, encoder.decodeFromURL(value));
 				} else {
 					toReturn.put(key, value); // uses the original value for list and %
 				}
@@ -806,7 +837,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				String value = String.valueOf(valueObj);
 				// if (!value.equals("%7B%3B%7B") && !value.equalsIgnoreCase("%")) {
 				if (!value.equals("") && !value.equalsIgnoreCase("%")) {
-					toReturn.put(key, URLDecoder.decode(value, "UTF-8"));
+					toReturn.put(key, encoder.decodeFromURL(value));
 				} else {
 					toReturn.put(key, value); // uses the original value for list and %
 				}
@@ -817,10 +848,10 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 					// String value = (String) valuesLst.get(v);
 					String value = (valuesLst.get(v) != null) ? String.valueOf(valuesLst.get(v)) : "";
 					if (!value.equals("") && !value.equalsIgnoreCase("%")) {
-						ValuesLstDecoded.put(URLDecoder.decode(value, "UTF-8"));
+						ValuesLstDecoded.put(encoder.decodeFromURL(value));
 					} else {
 						ValuesLstDecoded.put(value);
-						URLDecoder.decode(value, "UTF-8"); // uses the original value for list and %
+						encoder.decodeFromURL(value); // uses the original value for list and %
 					}
 				}
 				toReturn.put(key, ValuesLstDecoded);
@@ -832,7 +863,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 	private Map<String, JSONObject> getSessionParameters(JSONObject requestVal) {
 
-		Map<String, JSONObject> sessionParametersMap = new HashMap<String, JSONObject>();
+		Map<String, JSONObject> sessionParametersMap = new HashMap<>();
 
 		try {
 			Object jsonSessionParametersObject = requestVal.get("sessionParameters");
@@ -845,19 +876,19 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				sessionParametersMap.put(key, parJson);
 			}
 		} catch (Exception e) {
-			logger.error("Error converting session parameters to JSON: ", e);
+			LOGGER.error("Error converting session parameters to JSON", e);
 		}
 
 		return sessionParametersMap;
 	}
 
-	private void applyRequestParameters(MetaModel businessModel, JSONObject crossNavigationParametesMap, Map<String, JSONObject> sessionParametersMap,
-			String role, Locale locale, List<String> parsFromCross) {
+	private void applyRequestParameters(MetaModel businessModel, JSONObject crossNavigationParametesMap,
+			Map<String, JSONObject> sessionParametersMap, String role, Locale locale, List<String> parsFromCross) {
 		BusinessModelRuntime dum = new BusinessModelRuntime(this.getUserProfile(), locale);
 		List<BIMetaModelParameter> parameters = businessModel.getDrivers();
 		for (BIMetaModelParameter parameter : parameters) {
 			if (crossNavigationParametesMap.has(parameter.getParameterUrlName())) {
-				logger.debug("Found value from request for parmaeter [" + parameter.getParameterUrlName() + "]");
+				LOGGER.debug("Found value from request for parmaeter [{}]", parameter.getParameterUrlName());
 				dum.refreshParameterForFilters(parameter, crossNavigationParametesMap);
 				parsFromCross.add(parameter.getParameterUrlName());
 				continue;
@@ -878,8 +909,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			JSONObject sessionValue = sessionParametersMap.get(key);
 			if (sessionValue != null && sessionValue.optString("value") != null) {
 
-				DefaultValuesList defValueList = buildParameterSessionValueList(sessionValue.optString("value"), sessionValue.optString("description"),
-						parameter);
+				DefaultValuesList defValueList = buildParameterSessionValueList(sessionValue.optString("value"),
+						sessionValue.optString("description"), parameter);
 				List values = defValueList.getValuesAsList();
 				List descriptions = defValueList.getDescriptionsAsList();
 
@@ -890,21 +921,23 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 		}
 	}
 
-	private DefaultValuesList buildParameterSessionValueList(String sessionParameterValue, String sessionParameterDescription,
-			BIMetaModelParameter metaModelParameter) {
+	private DefaultValuesList buildParameterSessionValueList(String sessionParameterValue,
+			String sessionParameterDescription, BIMetaModelParameter metaModelParameter) {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		DefaultValuesList valueList = new DefaultValuesList();
 
-		SimpleDateFormat serverDateFormat = new SimpleDateFormat(SingletonConfig.getInstance().getConfigValue("SPAGOBI.DATE-FORMAT-SERVER.format"));
+		SimpleDateFormat serverDateFormat = new SimpleDateFormat(
+				SingletonConfig.getInstance().getConfigValue("SPAGOBI.DATE-FORMAT-SERVER.format"));
 
 		if (metaModelParameter.getParameter().getType().equals("DATE")) {
 			String valueDate = sessionParameterValue;
 
 			String[] date = valueDate.split("#");
 			if (date.length < 2) {
-				throw new SpagoBIRuntimeException("Illegal format for Value List Date Type [" + valueDate + "+], unable to find symbol [#]");
+				throw new SpagoBIRuntimeException(
+						"Illegal format for Value List Date Type [" + valueDate + "+], unable to find symbol [#]");
 			}
 			SimpleDateFormat format = new SimpleDateFormat(date[1]);
 			LovValue valueDef = new LovValue();
@@ -916,7 +949,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				valueList.add(valueDef);
 				return valueList;
 			} catch (ParseException e) {
-				logger.error("Error while building default Value List Date Type ", e);
+				LOGGER.error("Error while building default Value List Date Type ", e);
 				return null;
 			}
 		} else if (metaModelParameter.getParameter().getType().equals("DATE_RANGE")) {
@@ -938,20 +971,20 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				valueList.add(valueDef);
 				return valueList;
 			} catch (ParseException e) {
-				logger.error("Error while building default Value List Date Type ", e);
+				LOGGER.error("Error while building default Value List Date Type ", e);
 				return null;
 			}
 		}
 
 		else if (metaModelParameter.isMultivalue()) {
-			logger.debug("Multivalue case");
+			LOGGER.debug("Multivalue case");
 			try {
 				// split sessionValue
 				JSONArray valuesArray = new JSONArray(sessionParameterValue);
 				StringTokenizer st = new StringTokenizer(sessionParameterDescription, ";", false);
 
-				ArrayList<String> values = new ArrayList<String>();
-				ArrayList<String> descriptions = new ArrayList<String>();
+				ArrayList<String> values = new ArrayList<>();
+				ArrayList<String> descriptions = new ArrayList<>();
 
 				int i = 0;
 				while (st.hasMoreTokens()) {
@@ -975,16 +1008,17 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				}
 
 			} catch (Exception e) {
-				logger.error("Error in converting multivalue session values", e);
+				LOGGER.error("Error in converting multivalue session values", e);
 			}
 
 		} else {
-			logger.debug("NOT - multivalue case");
+			LOGGER.debug("NOT - multivalue case");
 			// value could be String or array
 
 			try {
 				String value = null;
-				if (sessionParameterValue != null && sessionParameterValue.length() > 0 && sessionParameterValue.charAt(0) == '[') {
+				if (sessionParameterValue != null && sessionParameterValue.length() > 0
+						&& sessionParameterValue.charAt(0) == '[') {
 					JSONArray valuesArray = new JSONArray(sessionParameterValue);
 					if (valuesArray.get(0) != null) {
 						value = valuesArray.get(0).toString();
@@ -999,11 +1033,11 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 				valueList.add(valueDef);
 
 			} catch (Exception e) {
-				logger.error("Error in converting single value session values", e);
+				LOGGER.error("Error in converting single value session values", e);
 			}
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return valueList;
 	}
 
@@ -1031,13 +1065,13 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 		}
 	}
 
-	public ArrayList<HashMap<String, Object>> manageDataRange(MetaModel businessModel, String executionRole, String biparameterId)
-			throws EMFUserError, SerializationException, JSONException, IOException {
+	public ArrayList<HashMap<String, Object>> manageDataRange(MetaModel businessModel, String executionRole,
+			String biparameterId) throws EMFUserError, SerializationException, JSONException, IOException {
 
 		BIMetaModelParameter biMetaModelParameter = null;
-		List parameters = businessModel.getDrivers();
+		List<BIMetaModelParameter> parameters = businessModel.getDrivers();
 		for (int i = 0; i < parameters.size(); i++) {
-			BIMetaModelParameter p = (BIMetaModelParameter) parameters.get(i);
+			BIMetaModelParameter p = parameters.get(i);
 			if (biparameterId.equalsIgnoreCase(p.getParameterUrlName())) {
 				biMetaModelParameter = p;
 				break;
@@ -1046,7 +1080,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 		try {
 			if (DateRangeDAOUtilities.isDateRange(biMetaModelParameter)) {
-				logger.debug("loading date range combobox");
+				LOGGER.debug("loading date range combobox");
 
 			}
 		} catch (Exception e) {
@@ -1086,7 +1120,7 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			String value = type + "_" + quantity;
 			String label = quantity + " " + type;
 			// message properties !!!
-			HashMap<String, Object> obj = new HashMap<String, Object>();
+			HashMap<String, Object> obj = new HashMap<>();
 			obj.put(VALUE_FIELD, value);
 			obj.put(LABEL_FIELD, label);
 			obj.put(DESCRIPTION_FIELD, label);
@@ -1103,7 +1137,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 			List values = parameter.getDriver().getParameterValues();
 			// if parameter is mandatory and has no value, execution cannot start automatically
 			if (parameter.isMandatory() && (values == null || values.isEmpty())) {
-				logger.debug("Parameter [" + parameter.getId() + "] is mandatory but has no values. Execution cannot start automatically");
+				LOGGER.debug("Parameter [{}] is mandatory but has no values. Execution cannot start automatically",
+						parameter.getId());
 				return false;
 			}
 		}
@@ -1117,10 +1152,8 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 	// @QueryParam("mode") String mode, @QueryParam("treeLovNode") String treeLovNode,
 	// // @QueryParam("treeLovNode") Integer treeLovNodeLevel,
 	// @Context HttpServletRequest req) throws EMFUserError {
-	public Response getParameterValues(@Context HttpServletRequest req) throws EMFUserError, IOException, JSONException {
-
-		RequestContainer aRequestContainer = RequestContainerAccess.getRequestContainer(req);
-		Locale locale = GeneralUtilities.getCurrentLocale(aRequestContainer);
+	public Response getParameterValues(@Context HttpServletRequest req)
+			throws EMFUserError, IOException, JSONException {
 
 		String role;
 		String name;
@@ -1163,27 +1196,28 @@ public class BusinessModelOpenParameters extends AbstractSpagoBIResource {
 
 		// ArrayList<HashMap<String, Object>> result = DocumentExecutionUtils.getLovDefaultValues(
 		// role, biObject, biObjectParameter, requestVal, treeLovNodeLevel, treeLovNodeValue, req);
-		HashMap<String, Object> defaultValuesData = BusinessModelOpenUtils.getLovDefaultValues(role, businessModel, biMetaModelParameter, requestVal,
-				treeLovNodeLevel, treeLovNodeValue, req);
+		Map<String, Object> defaultValuesData = BusinessModelOpenUtils.getLovDefaultValues(role, businessModel,
+				biMetaModelParameter, requestVal, treeLovNodeLevel, treeLovNodeValue, req);
 
-		ArrayList<HashMap<String, Object>> result = (ArrayList<HashMap<String, Object>>) defaultValuesData.get(BusinessModelOpenUtils.DEFAULT_VALUES);
+		ArrayList<HashMap<String, Object>> result = (ArrayList<HashMap<String, Object>>) defaultValuesData
+				.get(BusinessModelOpenUtils.DEFAULT_VALUES);
 
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 
-		if (result != null && result.size() > 0) {
+		if (result != null && !result.isEmpty()) {
 			resultAsMap.put("filterValues", result);
 			resultAsMap.put("errors", new ArrayList<>());
 		} else {
 			resultAsMap.put("filterValues", new ArrayList<>());
 
-			List errorList = BusinessModelOpenUtils.handleNormalExecutionError(this.getUserProfile(), businessModel, req,
-					this.getAttributeAsString("SBI_ENVIRONMENT"), role, biMetaModelParameter.getParameter().getModalityValue().getSelectionType(), null,
-					locale);
+			List errorList = BusinessModelOpenUtils.handleNormalExecutionError(this.getUserProfile(), businessModel,
+					req, this.getAttributeAsString("SBI_ENVIRONMENT"), role,
+					biMetaModelParameter.getParameter().getModalityValue().getSelectionType(), null, getLocale());
 
 			resultAsMap.put("errors", errorList);
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return Response.ok(resultAsMap).build();
 	}
 

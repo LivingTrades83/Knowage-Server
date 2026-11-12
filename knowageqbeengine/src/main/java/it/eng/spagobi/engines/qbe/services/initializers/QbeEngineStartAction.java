@@ -24,7 +24,8 @@ import org.apache.log4j.Logger;
 import org.json.JSONObject;
 
 import it.eng.spago.base.SourceBean;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
+import it.eng.spagobi.engines.AbstractEngineStartAction;
 import it.eng.spagobi.engines.qbe.QbeEngine;
 import it.eng.spagobi.engines.qbe.QbeEngineAnalysisState;
 import it.eng.spagobi.engines.qbe.QbeEngineInstance;
@@ -33,44 +34,52 @@ import it.eng.spagobi.engines.qbe.registry.serializer.RegistryConfigurationJSONS
 import it.eng.spagobi.engines.qbe.template.QbeTemplateParseException;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.utilities.assertion.Assert;
-import it.eng.spagobi.utilities.engines.AbstractEngineStartAction;
 import it.eng.spagobi.utilities.engines.EngineConstants;
 import it.eng.spagobi.utilities.engines.SpagoBIEngineStartupException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
- * The Class QbeEngineStartAction.
- *
  * @author Andrea Gioia
+ * @deprecated Replaced by {@link QbeEngineStartResource}
  */
+@Deprecated
 public class QbeEngineStartAction extends AbstractEngineStartAction {
+
+	/** Logger component. */
+	private static final Logger LOGGER = Logger.getLogger(QbeEngineStartAction.class);
 
 	// INPUT PARAMETERS
 
 	// OUTPUT PARAMETERS
+	@Deprecated
 	public static final String LANGUAGE = "LANGUAGE";
+	@Deprecated
 	public static final String COUNTRY = "COUNTRY";
+	@Deprecated
 	public static final String SCRIPT = "SCRIPT";
 
 	// SESSION PARAMETRES
+	@Deprecated
 	public static final String ENGINE_INSTANCE = EngineConstants.ENGINE_INSTANCE;
+	@Deprecated
 	public static final String REGISTRY_CONFIGURATION = "REGISTRY_CONFIGURATION";
 
+	@Deprecated
 	public static final String IS_FEDERATED = "IS_FEDERATED";
+	@Deprecated
 	public static final String IS_TECHNICAL_USER = "isTechnicalUser";
 
-	/** Logger component. */
-	private static transient Logger logger = Logger.getLogger(QbeEngineStartAction.class);
-
+	@Deprecated
 	public static final String ENGINE_NAME = "SpagoBIQbeEngine";
 
+	@Deprecated
 	@Override
 	public void service(SourceBean serviceRequest, SourceBean serviceResponse) {
 		QbeEngineInstance qbeEngineInstance = null;
 		QbeEngineAnalysisState analysisState;
 		Locale locale;
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
 			setEngineName(ENGINE_NAME);
@@ -78,21 +87,21 @@ public class QbeEngineStartAction extends AbstractEngineStartAction {
 
 			// if(true) throw new SpagoBIEngineStartupException(getEngineName(), "Test exception");
 			SourceBean templateBean = getTemplateAsSourceBean();
-			logger.debug("User Id: " + getUserId());
-			logger.debug("Audit Id: " + getAuditId());
-			logger.debug("Document Id: " + getDocumentId());
-			logger.debug("Template: " + templateBean);
+			LOGGER.debug("User Id: " + getUserId());
+			LOGGER.debug("Audit Id: " + getAuditId());
+			LOGGER.debug("Document Id: " + getDocumentId());
+			LOGGER.debug("Template: " + templateBean);
 
 			if (getAuditServiceProxy() != null) {
-				logger.debug("Audit enabled: [TRUE]");
+				LOGGER.debug("Audit enabled: [TRUE]");
 				getAuditServiceProxy().notifyServiceStartEvent();
 			} else {
-				logger.debug("Audit enabled: [FALSE]");
+				LOGGER.debug("Audit enabled: [FALSE]");
 			}
 
 			// Add the datyaset
 			Map env = addDatasetsToEnv();
-			logger.debug("Creating engine instance ...");
+			LOGGER.debug("Creating engine instance ...");
 			try {
 				qbeEngineInstance = QbeEngine.createInstance(templateBean, env);
 			} catch (Throwable t) {
@@ -112,15 +121,15 @@ public class QbeEngineStartAction extends AbstractEngineStartAction {
 
 				throw serviceException;
 			}
-			logger.debug("Engine instance succesfully created");
+			LOGGER.debug("Engine instance succesfully created");
 
 			// CHECKS WHETHER IF IT IS A QBE DOCUMENT OR REGISTRY, BY LOOKING AT THE TEMPLATE
 			RegistryConfiguration registryConf = qbeEngineInstance.getRegistryConfiguration();
 			if (registryConf != null) {
-				if (!getUserProfile().isAbleToExecuteAction(SpagoBIConstants.REGISTRY_DATA_ENTRY)) {
+				if (!getUserProfile().isAbleToExecuteAction(CommunityFunctionalityConstants.REGISTRY_DATA_ENTRY)) {
 					throw new SpagoBIRuntimeException("It is not allowed to use the Registry document.");
 				}
-				logger.debug("Registry document");
+				LOGGER.debug("Registry document");
 				getServiceResponse().setAttribute("DOCTYPE", "REGISTRY");
 				Assert.assertNotNull(registryConf, "Registry configuration not found, check document's template");
 				RegistryConfigurationJSONSerializer serializer = new RegistryConfigurationJSONSerializer();
@@ -128,13 +137,13 @@ public class QbeEngineStartAction extends AbstractEngineStartAction {
 				setAttribute(REGISTRY_CONFIGURATION, registryConfJSON);
 
 			} else {
-				logger.debug("Qbe document");
+				LOGGER.debug("Qbe document");
 				getServiceResponse().setAttribute("DOCTYPE", "QBE");
 			}
 
 			qbeEngineInstance.setAnalysisMetadata(getAnalysisMetadata());
 			if (getAnalysisStateRowData() != null) {
-				logger.debug("Loading subobject [" + qbeEngineInstance.getAnalysisMetadata().getName() + "] ...");
+				LOGGER.debug("Loading subobject [" + qbeEngineInstance.getAnalysisMetadata().getName() + "] ...");
 				try {
 					analysisState = new QbeEngineAnalysisState(qbeEngineInstance.getDataSource());
 					analysisState.load(getAnalysisStateRowData());
@@ -152,7 +161,7 @@ public class QbeEngineStartAction extends AbstractEngineStartAction {
 
 					throw serviceException;
 				}
-				logger.debug("Subobject [" + qbeEngineInstance.getAnalysisMetadata().getName() + "] succesfully loaded");
+				LOGGER.debug("Subobject [" + qbeEngineInstance.getAnalysisMetadata().getName() + "] succesfully loaded");
 			}
 
 			locale = (Locale) qbeEngineInstance.getEnv().get(EngineConstants.ENV_LOCALE);
@@ -190,20 +199,22 @@ public class QbeEngineStartAction extends AbstractEngineStartAction {
 
 			// throw SpagoBIEngineServiceExceptionHandler.getInstance().getWrappedException(getActionName(), qbeEngineInstance, e);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 
 	}
 
+	@Deprecated
 	public boolean isFederated() {
 		return false;
 	}
 
+	@Deprecated
 	public Map addDatasetsToEnv() {
-		Map env = getEnv();
-		return env;
+		return getEnv();
 	}
 
+	@Deprecated
 	@Override
 	public Map getEnv() {
 
@@ -211,7 +222,7 @@ public class QbeEngineStartAction extends AbstractEngineStartAction {
 		Map env = super.getEnv();
 
 		if (dataSource == null || dataSource.checkIsReadOnly()) {
-			logger.debug("Getting datasource for writing, since the datasource is not defined or it is read-only");
+			LOGGER.debug("Getting datasource for writing, since the datasource is not defined or it is read-only");
 			IDataSource datasourceForWriting = this.getDataSourceForWriting();
 			env.put(EngineConstants.DATASOURCE_FOR_WRITING, datasourceForWriting);
 		} else {
@@ -226,12 +237,13 @@ public class QbeEngineStartAction extends AbstractEngineStartAction {
 	 *
 	 * @return
 	 */
+	@Deprecated
 	protected IDataSource getCacheDataSource() {
-		logger.debug("Loading the cache datasource");
+		LOGGER.debug("Loading the cache datasource");
 		String datasourceLabel = (String) getSpagoBIRequestContainer().get(EngineConstants.ENV_DATASOURCE_FOR_CACHE);
-		logger.debug("The datasource for cahce is " + datasourceLabel);
+		LOGGER.debug("The datasource for cahce is " + datasourceLabel);
 		IDataSource dataSource = getDataSourceServiceProxy().getDataSourceByLabel(datasourceLabel);
-		logger.debug("cache datasource loaded");
+		LOGGER.debug("cache datasource loaded");
 		return dataSource;
 	}
 

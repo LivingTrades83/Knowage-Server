@@ -23,6 +23,8 @@ import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,7 +61,7 @@ public class HibernateSessionManager {
 	private static final String JDBC_MARIADB = "jdbc:mariadb";
 	private static final String JDBC_SQLSERVER = "jdbc:sqlserver";
 
-	public static final Map<String, String> JDBC_URL_PREFIX_2_DIALECT = new HashMap<String, String>();
+	public static final Map<String, String> JDBC_URL_PREFIX_2_DIALECT = new HashMap<>();
 
 	static {
 		JDBC_URL_PREFIX_2_DIALECT.put(JDBC_MYSQL, DIALECT_MYSQL);
@@ -72,12 +74,13 @@ public class HibernateSessionManager {
 		JDBC_URL_PREFIX_2_DIALECT.put(JDBC_DB2, DIALECT_DB2);
 	}
 
-	public static transient Logger logger = Logger.getLogger(HibernateSessionManager.class);
+	public static final Logger LOGGER = Logger.getLogger(HibernateSessionManager.class);
 
 	private static SessionFactory sessionFactory;
 
 	private static void initSessionFactory() {
-		logger.info("Initializing hibernate Session Factory Described by [" + DAOConfig.getHibernateConfigurationFile() + "]");
+		LOGGER.info("Initializing hibernate Session Factory Described by [" + DAOConfig.getHibernateConfigurationFile()
+				+ "]");
 
 		Configuration conf = setDialectPropertyToConfiguration();
 
@@ -98,16 +101,17 @@ public class HibernateSessionManager {
 		String figuredOutValue = conf.getProperty(PROPERTY_DIALECT);
 
 		if (figuredOutValue != null) {
-			logger.info("Hibernate configuration set dialect to " + figuredOutValue);
+			LOGGER.info("Hibernate configuration set dialect to " + figuredOutValue);
 		} else {
-			logger.warn("Property hibernate.dialect not set! Trying to figure out what dialect needs to be used...");
+			LOGGER.warn("Property hibernate.dialect not set! Trying to figure out what dialect needs to be used...");
 			determineDialect(conf);
 		}
 		return conf;
 	}
 
 	public static String getDialect() {
-		logger.info("Initializing hibernate Session Factory Described by [" + DAOConfig.getHibernateConfigurationFile() + "]");
+		LOGGER.info("Initializing hibernate Session Factory Described by [" + DAOConfig.getHibernateConfigurationFile()
+				+ "]");
 
 		Configuration conf = setDialectPropertyToConfiguration();
 
@@ -127,7 +131,7 @@ public class HibernateSessionManager {
 		}
 
 		String figuredOutValue = getDialect(datasourceJndi);
-		logger.warn("Property hibernate.dialect set to " + figuredOutValue);
+		LOGGER.warn("Property hibernate.dialect set to " + figuredOutValue);
 		conf.setProperty(PROPERTY_DIALECT, figuredOutValue);
 
 	}
@@ -139,7 +143,7 @@ public class HibernateSessionManager {
 		}
 
 		String figuredOutValue = getDialect(datasourceJndi);
-		logger.warn("Property hibernate.dialect set to " + figuredOutValue);
+		LOGGER.warn("Property hibernate.dialect set to " + figuredOutValue);
 
 		return figuredOutValue;
 	}
@@ -155,18 +159,21 @@ public class HibernateSessionManager {
 			DatabaseMetaData metaData = connection.getMetaData();
 			String url = metaData.getURL();
 
-			Pattern jdbcPattern = Pattern.compile("(jdbc:[^:]+).+");
-			Matcher matcher = jdbcPattern.matcher(url);
-			matcher.matches();
-			String urlPrefix = matcher.group(1);
-
-			if (!JDBC_URL_PREFIX_2_DIALECT.containsKey(urlPrefix)) {
-				throw new IllegalStateException("Prefix " + urlPrefix + " doesn't have a matching dialect.");
+			// @formatter:off		
+			Optional<Entry<String, String>> delegate = JDBC_URL_PREFIX_2_DIALECT
+					.entrySet()
+					.stream()
+					.filter(e -> url.startsWith(e.getKey()))
+					.findFirst();
+			// @formatter:on
+			
+			if (delegate.isEmpty()) {
+				throw new IllegalStateException("The url " + url + " doesn't have a matching delegate class.");
 			}
 
-			figuredOutValue = JDBC_URL_PREFIX_2_DIALECT.get(urlPrefix);
+			figuredOutValue = delegate.get().getValue();
 		} catch (Exception e) {
-			logger.error("Error determining Hibernate's dialect", e);
+			LOGGER.error("Error determining Hibernate's dialect", e);
 		} finally {
 			if (connection != null) {
 				try {
@@ -180,7 +187,7 @@ public class HibernateSessionManager {
 
 	}
 
-	private synchronized static SessionFactory getSessionFactory() {
+	private static synchronized SessionFactory getSessionFactory() {
 		if (HibernateSessionManager.sessionFactory == null) {
 			initSessionFactory();
 		}
@@ -209,4 +216,7 @@ public class HibernateSessionManager {
 		return HibernateTransaction.getConnection(session);
 	}
 
+	private HibernateSessionManager() {
+
+	}
 }

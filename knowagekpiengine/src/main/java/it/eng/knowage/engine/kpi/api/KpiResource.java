@@ -3,7 +3,9 @@ package it.eng.knowage.engine.kpi.api;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactoryConfigurationError;
 
@@ -28,10 +30,11 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 @Path("/1.0/kpisTemplate")
 @ManageAuthorization
 public class KpiResource extends AbstractFullKpiEngineResource {
-	static protected Logger logger = Logger.getLogger(KpiResource.class);
+	protected static Logger logger = Logger.getLogger(KpiResource.class);
 
 	@POST
 	@Path("/getKpiTemplate")
+	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public String loadTemplate(@Context HttpServletRequest req)
 			throws EMFUserError, EMFInternalError, JSONException, TransformerFactoryConfigurationError, TransformerException {
 		ObjTemplate template;

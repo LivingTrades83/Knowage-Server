@@ -18,11 +18,14 @@
 
 package it.eng.knowage.backendservices.rest.widgets;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.log4j.Logger;
@@ -36,12 +39,15 @@ public abstract class MLEngineUtils {
 
 	private static Logger logger = Logger.getLogger(MLEngineUtils.class);
 
+	private static Pattern urlPattern = Pattern.compile("^https?:\\/\\/.*");
+
+
 	static String dataStore2DataFrame(String knowageDs) {
 		JSONObject oldDataset;
 		JSONArray newDataframe = new JSONArray();
 		try {
 			oldDataset = new JSONObject(knowageDs);
-			Map<String, String> columnNames = new HashMap<String, String>();
+			Map<String, String> columnNames = new HashMap<>();
 			JSONObject metaData = oldDataset.getJSONObject("metaData");
 			JSONArray fields = (JSONArray) metaData.get("fields");
 			for (int i = 1; i < fields.length(); i++) {
@@ -72,7 +78,7 @@ public abstract class MLEngineUtils {
 		JSONObject templateJson;
 		try {
 			byte[] decodedBytes = Base64.decodeBase64(base64template);
-			templateJson = new JSONObject(new String(decodedBytes, "UTF-8"));
+			templateJson = new JSONObject(new String(decodedBytes, UTF_8));
 			JSONArray sheets = (JSONArray) templateJson.get("sheets");
 			for (int i = 0; i < sheets.length(); i++) {
 				JSONObject sheet = sheets.getJSONObject(i);
@@ -98,5 +104,14 @@ public abstract class MLEngineUtils {
 		Date expiresAt = calendar.getTime();
 		String jwtToken = JWTSsoService.pythonScript2jwtToken(script, expiresAt);
 		return jwtToken;
+	}
+
+	static String fixUrl(String url) {
+
+		if (!urlPattern.matcher(url).matches()) {
+			url = "http://" + url;
+		}
+
+		return url;
 	}
 }

@@ -17,6 +17,7 @@
  */
 package it.eng.knowage.knowageapi.dao.dto;
 
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -31,7 +32,6 @@ import javax.persistence.Lob;
 import javax.persistence.NamedQuery;
 import javax.persistence.OneToMany;
 import javax.persistence.PrimaryKeyJoinColumn;
-import javax.persistence.PrimaryKeyJoinColumns;
 import javax.persistence.Table;
 
 import org.hibernate.annotations.Type;
@@ -46,16 +46,14 @@ import org.hibernate.annotations.Type;
 public class SbiWidgetGallery implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-//	@Id
-//	private String uuid;
-
 	private String author;
 
 	private String description;
 
 	private String name;
 
-//	private String organization;
+	private String label;
+
 	@EmbeddedId
 	private SbiWidgetGalleryId id;
 
@@ -106,9 +104,9 @@ public class SbiWidgetGallery implements Serializable {
 
 	// bi-directional many-to-one association to SbiWidgetGalleryTag
 	@OneToMany(mappedBy = "sbiWidgetGallery", targetEntity = SbiWidgetGalleryTag.class, orphanRemoval = true, fetch = FetchType.EAGER, cascade = CascadeType.ALL)
-	@PrimaryKeyJoinColumns({ @PrimaryKeyJoinColumn(name = "UUID", referencedColumnName = "WIDGET_ID"),
-			@PrimaryKeyJoinColumn(name = "ORGANIZATION", referencedColumnName = "ORGANIZATION") })
-	private final List<SbiWidgetGalleryTag> sbiWidgetGalleryTags = new ArrayList<SbiWidgetGalleryTag>();
+	@PrimaryKeyJoinColumn(name = "UUID", referencedColumnName = "WIDGET_ID")
+	@PrimaryKeyJoinColumn(name = "ORGANIZATION", referencedColumnName = "ORGANIZATION")
+	private final List<SbiWidgetGalleryTag> sbiWidgetGalleryTags = new ArrayList<>();
 
 	public SbiWidgetGallery() {
 		id = new SbiWidgetGalleryId();
@@ -136,6 +134,14 @@ public class SbiWidgetGallery implements Serializable {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	public String getLabel() {
+		return this.label;
+	}
+
+	public void setLabel(String label) {
+		this.label = label;
 	}
 
 	public byte[] getPreviewImage() {
@@ -274,6 +280,10 @@ public class SbiWidgetGallery implements Serializable {
 
 	public void setId(SbiWidgetGalleryId id) {
 		this.id = id;
+	}
+
+	private final void writeObject(ObjectOutputStream aOutputStream) {
+		  throw new UnsupportedOperationException("Security violation : cannot serialize object to a stream");
 	}
 
 }

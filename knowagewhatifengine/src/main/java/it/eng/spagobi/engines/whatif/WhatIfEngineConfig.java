@@ -18,8 +18,9 @@
 
 package it.eng.spagobi.engines.whatif;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.File;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -40,7 +41,6 @@ import it.eng.spago.configuration.ConfigSingleton;
 import it.eng.spago.error.EMFInternalError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.engines.whatif.export.ExportConfig;
-import it.eng.spagobi.engines.whatif.model.transform.algorithm.AllocationAlgorithmDefinition;
 import it.eng.spagobi.engines.whatif.template.WhatIfTemplate;
 import it.eng.spagobi.services.common.EnginConf;
 import it.eng.spagobi.tenant.TenantManager;
@@ -59,8 +59,7 @@ public class WhatIfEngineConfig {
 
 	private Map<String, List> includes;
 	private Set<String> enabledIncludes;
-	private Map<String, AllocationAlgorithmDefinition> algorithmsDefinitionMap;
-	private static transient Logger logger = Logger.getLogger(WhatIfEngineConfig.class);
+	private static final Logger logger = Logger.getLogger(WhatIfEngineConfig.class);
 	private static final String PROPORTIONAL_ALGORITHM_CONF = "proportionalAlgorithmPersistQueryWhereClause";
 
 	// -- singleton pattern --------------------------------------------
@@ -103,25 +102,25 @@ public class WhatIfEngineConfig {
 
 	// -- PARSE Methods -------------------------------------------------
 
-	private final static String INCLUDES_TAG = "INCLUDES";
-	private final static String INCLUDE_TAG = "INCLUDE";
-	private final static String URL_TAG = "URL";
-	private final static String WRITEBACK_TAG = "WRITEBACK";
-	private final static String ALGORITHMS_TAG = "ALGORITHMS";
-	private final static String ALGORITHM_TAG = "ALGORITHM";
-	private final static String NAME_ATTRIBUTE = "name";
-	private final static String CLASS_ATTRIBUTE = "class";
-	private final static String INMEMORY_ATTRIBUTE = "inMemory";
-	private final static String PERSISTENT_ATTRIBUTE = "persistent";
-	private final static String XMLA_URL = "url";
-	private final static String DEFAULT_ATTRIBUTE = "default";
-	private final static String DEPTHLIMIT_TAG = "DEPTHLIMIT";
-	private final static String DRILLTROUGH_MAX_ROWS_TAG = "DRILLTROUGH_MAX_ROWS";
-	private final static String EXPORT_TAG = "EXPORT_TAG";
-	private final static String EXPORT_FONT_SIZE_TAG = "fontSize";
-	private final static String EXPORT_FONT_FAMILY_TAG = "fontFamily";
-	private final static String EXPORT_ORIENTATION_TAG = "orientation";
-	private final static String PIVOT_TABLE_PAGES_LOAD_COUNT = "PIVOT_TABLE_PAGES_LOAD_COUNT";
+	private static final String INCLUDES_TAG = "INCLUDES";
+	private static final String INCLUDE_TAG = "INCLUDE";
+	private static final String URL_TAG = "URL";
+	private static final String WRITEBACK_TAG = "WRITEBACK";
+	private static final String ALGORITHMS_TAG = "ALGORITHMS";
+	private static final String ALGORITHM_TAG = "ALGORITHM";
+	private static final String NAME_ATTRIBUTE = "name";
+	private static final String CLASS_ATTRIBUTE = "class";
+	private static final String INMEMORY_ATTRIBUTE = "inMemory";
+	private static final String PERSISTENT_ATTRIBUTE = "persistent";
+	private static final String XMLA_URL = "url";
+	private static final String DEFAULT_ATTRIBUTE = "default";
+	private static final String DEPTHLIMIT_TAG = "DEPTHLIMIT";
+	private static final String DRILLTROUGH_MAX_ROWS_TAG = "DRILLTROUGH_MAX_ROWS";
+	private static final String EXPORT_TAG = "EXPORT_TAG";
+	private static final String EXPORT_FONT_SIZE_TAG = "fontSize";
+	private static final String EXPORT_FONT_FAMILY_TAG = "fontFamily";
+	private static final String EXPORT_ORIENTATION_TAG = "orientation";
+	private static final String PIVOT_TABLE_PAGES_LOAD_COUNT = "PIVOT_TABLE_PAGES_LOAD_COUNT";
 
 	public String getTemplateFilePath() {
 		String templatePath = "";
@@ -246,8 +245,9 @@ public class WhatIfEngineConfig {
 				String attributeName = it.next();
 				Object value = env.get(attributeName);
 
-				if (value == null)
+				if (value == null) {
 					continue;
+				}
 
 				String cl = value.getClass().getName();
 				if (cl.contains("String") && !"".equals(value)) {
@@ -289,7 +289,7 @@ public class WhatIfEngineConfig {
 		String valueBase64 = encodeValue(value);
 		// if (value != null) {
 		// try {
-		// valueBase64 = ENCODER.encode(value.getBytes("UTF-8"));
+		// valueBase64 = ENCODER.encode(value.getBytes(StandardCharsets.UTF_8));
 		// } catch (UnsupportedEncodingException e) {
 		// logger.error("UTF-8 encoding not supported!!!!!", e);
 		// valueBase64 = ENCODER.encode(value.getBytes());
@@ -304,12 +304,7 @@ public class WhatIfEngineConfig {
 		// encoding value in Base64
 		String valueBase64 = null;
 		if (v != null) {
-			try {
-				valueBase64 = ENCODER.encodeToString(v.getBytes("UTF-8"));
-			} catch (UnsupportedEncodingException e) {
-				logger.error("UTF-8 encoding not supported!!!!!", e);
-				valueBase64 = ENCODER.encodeToString(v.getBytes());
-			}
+			valueBase64 = ENCODER.encodeToString(v.getBytes(UTF_8));
 		}
 		return valueBase64;
 	}
@@ -442,47 +437,4 @@ public class WhatIfEngineConfig {
 		return path;
 	}
 
-	/**
-	 * Reads the configuration file and gets the list of allocation algorithms
-	 *
-	 * @return
-	 */
-	public Map<String, AllocationAlgorithmDefinition> getAllocationAlgorithms() {
-
-		if (algorithmsDefinitionMap == null) {
-			SourceBean algorithmsBean;
-			List<SourceBean> algorithmsListBean;
-
-			algorithmsDefinitionMap = new HashMap<String, AllocationAlgorithmDefinition>();
-
-			SourceBean writeBackBean = (SourceBean) getConfigSourceBean().getAttribute(WRITEBACK_TAG);
-			if (writeBackBean != null) {
-				algorithmsBean = (SourceBean) writeBackBean.getAttribute(ALGORITHMS_TAG);
-				if (algorithmsBean != null) {
-					algorithmsListBean = algorithmsBean.getAttributeAsList(ALGORITHM_TAG);
-					if (algorithmsListBean != null) {
-						for (int i = 0; i < algorithmsListBean.size(); i++) {
-							SourceBean algorithmBean = algorithmsListBean.get(i);
-							String name = (String) algorithmBean.getAttribute(NAME_ATTRIBUTE);
-							String className = (String) algorithmBean.getAttribute(CLASS_ATTRIBUTE);
-							String deafultString = (String) algorithmBean.getAttribute(DEFAULT_ATTRIBUTE);
-
-							Boolean defaultBoolean = false;
-							if (deafultString != null) {
-								try {
-									defaultBoolean = new Boolean(deafultString);
-								} catch (Exception e) {
-									logger.error("persistent attribute is a boolean, so the admissible values are [true, false] not [" + deafultString + "]");
-								}
-							}
-
-							algorithmsDefinitionMap.put(name, new AllocationAlgorithmDefinition(name, className, defaultBoolean));
-
-						}
-					}
-				}
-			}
-		}
-		return algorithmsDefinitionMap;
-	}
 }

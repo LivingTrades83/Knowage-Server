@@ -1,7 +1,7 @@
 /*
  * Knowage, Open Source Business Intelligence suite
  * Copyright (C) 2016 Engineering Ingegneria Informatica S.p.A.
- * 
+ *
  * Knowage is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -11,14 +11,23 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package it.eng.spagobi.monitoring.dao;
 
-import it.eng.spago.base.SourceBean;
-import it.eng.spago.configuration.ConfigSingleton;
+import java.io.InputStream;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
@@ -26,6 +35,7 @@ import it.eng.spagobi.analiticalmodel.document.bo.SubObject;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.BIObjectParameter;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.Parameter;
 import it.eng.spagobi.behaviouralmodel.lov.bo.ModalitiesValue;
+import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.commons.bo.Domain;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
@@ -34,18 +44,9 @@ import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.engines.config.bo.Engine;
 import it.eng.spagobi.monitoring.metadata.SbiAudit;
 
-import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-
-import org.apache.log4j.Logger;
-
 public class AuditManager {
 
-	static private Logger logger = Logger.getLogger(AuditManager.class);
+	private static Logger logger = Logger.getLogger(AuditManager.class);
 
 	public static final String MODULE_NAME = "AuditService";
 
@@ -61,71 +62,79 @@ public class AuditManager {
 	private static boolean _disabled = false;
 	private static String _documentState = "ALL";
 	private static IAuditDAO _auditDAO = null;
-	
-    private String separator;
-    private String openBlockMarker;
-    private String closeBlockMarker;
+
+	private String separator;
+	private String openBlockMarker;
+	private String closeBlockMarker;
 
 	private AuditManager() {
+
 		logger.debug("Begin istantiation of AuditManager");
-		SourceBean config = (SourceBean) ConfigSingleton.getInstance().getAttribute("AUDIT.CONFIG");
-		logger.debug("Audit configuration found: \n" + config.toString());
-		String disable = (String) config.getAttribute("disable");
-		if (disable != null && disable.toLowerCase().trim().equals("true")) {
-			_disabled = true;
-		}
+		try (InputStream inputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream("conf/audit.properties")) {
 
-		if (!_disabled) {
-			/*
-			 * loads the document state and try to find it in the SBI_DOMAINS
-			 * table; if it does not exist, the default value is considered
-			 */
-			String documentState = (String) config.getAttribute("document_state");
-			logger.debug("document_state="+documentState);
-			if (documentState != null) {
-				documentState = documentState.toUpperCase().trim();
-				if (!documentState.toUpperCase().trim().equals("ALL")) {
-					List availableStates = new ArrayList();
-					try {
-						availableStates = DAOFactory.getDomainDAO().loadListDomainsByType("STATE");
-					} catch (EMFUserError e) {
-						logger.error("Error while getting available document states from db", e);
-					}
-					boolean stateFound = false;
-					Iterator it = availableStates.iterator();
-					while (it.hasNext()) {
-						Domain aDomain = (Domain) it.next();
-						if (aDomain.getValueCd().equalsIgnoreCase(documentState)) {
-							stateFound = true;
-							break;
-						}
-					}
-					if (stateFound) {
-						_documentState = documentState;
-					}
-				}
-			}
+			Properties props = new Properties();
+			props.load(inputStream);
 
-			/*
-			 * instantiates the persistence class; if some errors occur, the
-			 * audit log is disabled
-			 */
-			String persistenceClassName = (String) config.getAttribute("persistenceClass");
-			try {
-				Class persistenceClass = Class.forName(persistenceClassName);
-				_auditDAO = (IAuditDAO) persistenceClass.newInstance();
-				
-			} catch (Exception e) {
-				logger.error("Error while instantiating persistence class. Audit log will be disabled", e);
+			String disable = props.getProperty("audit.disable");
+			if (disable != null && disable.toLowerCase().trim().equals("true")) {
 				_disabled = true;
 			}
+			String activeStr = SingletonConfig.getInstance().getConfigValue("KNOWAGE.AUDIT_ENABLED");
+			if (!_disabled || activeStr.equals("true")) {
+				/*
+				 * loads the document state and try to find it in the SBI_DOMAINS table; if it does not exist, the default value is considered
+				 */
+				String documentState = props.getProperty("audit.document_state");
+				logger.debug("document_state=" + documentState);
+				if (documentState != null) {
+					documentState = documentState.toUpperCase().trim();
+					if (!documentState.toUpperCase().trim().equals("ALL")) {
+						List availableStates = new ArrayList();
+						try {
+							availableStates = DAOFactory.getDomainDAO().loadListDomainsByType("STATE");
+						} catch (EMFUserError e) {
+							logger.error("Error while getting available document states from db", e);
+						}
+						boolean stateFound = false;
+						Iterator it = availableStates.iterator();
+						while (it.hasNext()) {
+							Domain aDomain = (Domain) it.next();
+							if (aDomain.getValueCd().equalsIgnoreCase(documentState)) {
+								stateFound = true;
+								break;
+							}
+						}
+						if (stateFound) {
+							_documentState = documentState;
+						}
+					}
+				}
+
+				/*
+				 * instantiates the persistence class; if some errors occur, the audit log is disabled
+				 */
+				String persistenceClassName = props.getProperty("audit.persistenceClass");
+				try {
+					Class persistenceClass = Class.forName(persistenceClassName);
+					_auditDAO = (IAuditDAO) persistenceClass.newInstance();
+
+				} catch (Exception e) {
+					logger.error("Error while instantiating persistence class. Audit log will be disabled", e);
+					_disabled = true;
+				}
+			}
+			logger.debug("AuditManager instatiation end");
+
+		} catch (Exception e) {
+			logger.error("Error reading and parsing audit.xml", e);
+			_disabled = true;
 		}
-		logger.debug("AuditManager instatiation end");
 	}
+
 
 	/**
 	 * Gets the single instance of AuditManager.
-	 * 
+	 *
 	 * @return single instance of AuditManager
 	 */
 	public static AuditManager getInstance() {
@@ -137,11 +146,11 @@ public class AuditManager {
 
 	/**
 	 * Load audit.
-	 * 
+	 *
 	 * @param id the id
-	 * 
+	 *
 	 * @return the sbi audit
-	 * 
+	 *
 	 * @throws EMFUserError the EMF user error
 	 */
 	public SbiAudit loadAudit(Integer id) throws EMFUserError {
@@ -151,26 +160,28 @@ public class AuditManager {
 
 	/**
 	 * Insert audit.
-	 * 
+	 *
 	 * @param aSbiAudit the a sbi audit
-	 * 
+	 *
 	 * @throws EMFUserError the EMF user error
 	 */
 	private void insertAudit(SbiAudit aSbiAudit) throws EMFUserError {
-		if (canBeRegistered(aSbiAudit))
+		if (canBeRegistered(aSbiAudit)) {
 			_auditDAO.insertAudit(aSbiAudit);
+		}
 	}
 
 	/**
 	 * Modify audit.
-	 * 
+	 *
 	 * @param aSbiAudit the a sbi audit
-	 * 
+	 *
 	 * @throws EMFUserError the EMF user error
 	 */
 	private void modifyAudit(SbiAudit aSbiAudit) throws EMFUserError {
-		if (canBeRegistered(aSbiAudit))
+		if (canBeRegistered(aSbiAudit)) {
 			_auditDAO.modifyAudit(aSbiAudit);
+		}
 	}
 
 	private boolean canBeRegistered(SbiAudit aSbiAudit) {
@@ -189,21 +200,21 @@ public class AuditManager {
 
 	/**
 	 * Inserts a record on the audit log.
-	 * 
-	 * @param obj The BIObject being executed
-	 * @param profile The user profile
-	 * @param role The execution role
+	 *
+	 * @param obj      The BIObject being executed
+	 * @param profile  The user profile
+	 * @param role     The execution role
 	 * @param modality The execution modality
-	 * @param subObj the sub obj
-	 * 
+	 * @param subObj   the sub obj
+	 *
 	 * @return The Integer representing the execution id
 	 */
 	public Integer insertAudit(BIObject obj, SubObject subObj, IEngUserProfile profile, String role, String modality) {
 		logger.debug("IN");
 		_auditDAO.setUserProfile(profile);
 		SbiAudit audit = new SbiAudit();
-		logger.debug("userID for audit"+ ((UserProfile)profile).getUserId().toString());
-		audit.setUserName(((UserProfile)profile).getUserId().toString());
+		logger.debug("userID for audit" + ((UserProfile) profile).getUserId().toString());
+		audit.setUserName(((UserProfile) profile).getUserId().toString());
 
 		audit.setUserGroup(role);
 		audit.setDocumentId(obj.getId());
@@ -221,10 +232,12 @@ public class AuditManager {
 				if (parameter.getParameterValues() != null) {
 					String value = encode(parameter);
 					documentParameters += value;
-				} else
+				} else {
 					documentParameters += "NULL";
-				if (i < parameters.size() - 1)
+				}
+				if (i < parameters.size() - 1) {
 					documentParameters += "&";
+				}
 			}
 		}
 		audit.setDocumentParameters(documentParameters);
@@ -269,26 +282,25 @@ public class AuditManager {
 
 	/**
 	 * Update audit.
-	 * 
-	 * @param auditId the audit id
-	 * @param startTime the start time
-	 * @param endTime the end time
+	 *
+	 * @param auditId        the audit id
+	 * @param startTime      the start time
+	 * @param endTime        the end time
 	 * @param executionState the execution state
-	 * @param errorMessage the error message
-	 * @param errorCode the error code
+	 * @param errorMessage   the error message
+	 * @param errorCode      the error code
 	 */
-	public void updateAudit(Integer auditId, Long startTime, Long endTime, String executionState, String errorMessage,
-			String errorCode) {
+	public void updateAudit(Integer auditId, Long startTime, Long endTime, String executionState, String errorMessage, String errorCode) {
 		logger.debug("IN");
 		if (auditId == null) {
 			logger.warn("Audit record id not specified, no updating is possible.");
 			return;
 		}
 
-		SbiAudit audit=null;
+		SbiAudit audit = null;
 		try {
 			audit = loadAudit(auditId);
-			if (audit==null) {
+			if (audit == null) {
 				logger.error("audit==null ");
 				return;
 			}
@@ -299,8 +311,7 @@ public class AuditManager {
 		}
 
 		if (audit.getExecutionStartTime() != null && audit.getExecutionEndTime() != null) {
-			logger.warn("Audit record with id = [" + auditId.toString() + "] has already a start time and an "
-					+ "end time. This record will not be modified.");
+			logger.warn("Audit record with id = [" + auditId.toString() + "] has already a start time and an " + "end time. This record will not be modified.");
 			logger.debug("OUT");
 			return;
 		}
@@ -347,10 +358,10 @@ public class AuditManager {
 
 	/**
 	 * Gets the most popular.
-	 * 
+	 *
 	 * @param profile the profile
-	 * @param limit the limit
-	 * 
+	 * @param limit   the limit
+	 *
 	 * @return the most popular
 	 */
 	public List getMostPopular(IEngUserProfile profile, int limit) {
@@ -358,12 +369,10 @@ public class AuditManager {
 		List toReturn = new ArrayList();
 		try {
 			Collection roles = null;
-			roles = ((UserProfile)profile).getRolesForUse();
+			roles = ((UserProfile) profile).getRolesForUse();
 			toReturn = _auditDAO.getMostPopular(roles, limit);
 		} catch (Exception e) {
-			logger
-			.error("Error while loading most popular for user " + ((UserProfile)profile).getUserId().toString(),
-					e);
+			logger.error("Error while loading most popular for user " + ((UserProfile) profile).getUserId().toString(), e);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -372,20 +381,19 @@ public class AuditManager {
 
 	/**
 	 * Gets the my recently used.
-	 * 
+	 *
 	 * @param profile the profile
-	 * @param limit the limit
-	 * 
+	 * @param limit   the limit
+	 *
 	 * @return the my recently used
 	 */
 	public List getMyRecentlyUsed(IEngUserProfile profile, int limit) {
 		logger.debug("IN");
 		List toReturn = new ArrayList();
 		try {
-			toReturn = _auditDAO.getMyRecentlyUsed(((UserProfile)profile).getUserId().toString(), limit);
+			toReturn = _auditDAO.getMyRecentlyUsed(((UserProfile) profile).getUserId().toString(), limit);
 		} catch (Exception e) {
-			logger.error("Error while loading my recently used for user "
-					+ ((UserProfile)profile).getUserId().toString(), e);
+			logger.error("Error while loading my recently used for user " + ((UserProfile) profile).getUserId().toString(), e);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -394,9 +402,9 @@ public class AuditManager {
 
 	/**
 	 * Gets the last execution.
-	 * 
+	 *
 	 * @param objId the obj id
-	 * 
+	 *
 	 * @return the last execution
 	 */
 	public SbiAudit getLastExecution(Integer objId) {
@@ -414,9 +422,9 @@ public class AuditManager {
 
 	/**
 	 * Gets the medium exec time.
-	 * 
+	 *
 	 * @param objId the obj id
-	 * 
+	 *
 	 * @return the medium exec time
 	 */
 	public Double getMediumExecTime(Integer objId) {
@@ -431,16 +439,16 @@ public class AuditManager {
 		}
 		return toReturn;
 	}
-	
+
 	/*
 	 * Methods copied from ParameterValuesEncoder for DAO Refactoring
 	 */
-	
+
 	/**
 	 * Encode.
-	 * 
+	 *
 	 * @param biobjPar the biobj par
-	 * 
+	 *
 	 * @return the string
 	 */
 	public String encode(BIObjectParameter biobjPar) {
@@ -450,8 +458,6 @@ public class AuditManager {
 			return null;
 		}
 
-
-
 		Parameter parameter = biobjPar.getParameter();
 		if (parameter != null) {
 
@@ -459,10 +465,10 @@ public class AuditManager {
 			ModalitiesValue modValue = parameter.getModalityValue();
 			if (modValue != null) {
 
-				boolean multivalue =  biobjPar.isMultivalue();
+				boolean multivalue = biobjPar.isMultivalue();
 
 				String typeCode = biobjPar.getParameter().getModalityValue().getITypeCd();
-				logger.debug("typeCode="+typeCode);
+				logger.debug("typeCode=" + typeCode);
 				if (typeCode.equalsIgnoreCase(SpagoBIConstants.INPUT_TYPE_MAN_IN_CODE)) {
 					multivalue = false;
 				}
@@ -475,19 +481,21 @@ public class AuditManager {
 			} else {
 				List values = biobjPar.getParameterValues();
 				if (values != null && values.size() > 0) {
-					if (values.size() == 1)
+					if (values.size() == 1) {
 						return (String) biobjPar.getParameterValues().get(0);
-					else
+					} else {
 						return encodeMultivaluesParam(biobjPar.getParameterValues(), type);
-				} else
+					}
+				} else {
 					return "";
+				}
 			}
 		} else {
 			Integer parId = biobjPar.getParID();
 			String type = null;
 			if (parId == null) {
-				logger.warn("Parameter object nor parameter id are set into BiObjectPrameter with label = "
-						+ biobjPar.getLabel() + " of document with id = " + biobjPar.getBiObjectID());
+				logger.warn("Parameter object nor parameter id are set into BiObjectPrameter with label = " + biobjPar.getLabel() + " of document with id = "
+						+ biobjPar.getBiObjectID());
 			} else {
 				try {
 					Parameter aParameter = DAOFactory.getParameterDAO().loadForDetailByParameterID(parId);
@@ -498,31 +506,31 @@ public class AuditManager {
 			}
 			List values = biobjPar.getParameterValues();
 			if (values != null && values.size() > 0) {
-				if (values.size() == 1)
+				if (values.size() == 1) {
 					return (String) biobjPar.getParameterValues().get(0);
-				else
+				} else {
 					return encodeMultivaluesParam(biobjPar.getParameterValues(), type);
-			} else
+				}
+			} else {
 				return "";
+			}
 		}
 
 	}
-	
+
 	/**
-	 * Multi values parameters are encoded in the following way:
-	 * openBlockMarker + separator + openBlockMarker + [values separated by the separator] + closeBlockMarker + parameterType + closeBlockMarker
-	 * Examples:
-	 * {,{string1,string2,string3}STRING}
-	 * {,{number1,number1,number1}NUM}
-	 * 
+	 * Multi values parameters are encoded in the following way: openBlockMarker + separator + openBlockMarker + [values separated by the separator] +
+	 * closeBlockMarker + parameterType + closeBlockMarker Examples: {,{string1,string2,string3}STRING} {,{number1,number1,number1}NUM}
+	 *
 	 * parameterType: the type of the parameter (NUM/STRING/DATE)
 	 */
 	private String encodeMultivaluesParam(List values, String parameterType) {
 		logger.debug("IN");
 		String value = "";
 
-		if (values == null || values.size() == 0)
+		if (values == null || values.size() == 0) {
 			return value;
+		}
 
 		value += openBlockMarker;
 		value += separator;
@@ -538,6 +546,24 @@ public class AuditManager {
 		logger.debug("IN.value=" + value);
 		return value;
 	}
-	
-	//----------------------------------------------------------------
+
+	/**
+	 * Erase periodic audit.
+	 *
+	 * @param period the integer days period
+	 *
+	 * @throws EMFUserError the EMF user error
+	 */
+	public void eraseAuditPeriodic(Integer period) {
+		logger.debug("IN");
+		try {
+			_auditDAO.eraseAuditPeriodic(period);
+		} catch (Exception e) {
+			logger.error("Error while periodic deleting audit data", e);
+		} finally {
+			logger.debug("OUT");
+		}
+	}
+
+	// ----------------------------------------------------------------
 }

@@ -35,7 +35,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 public class QbeDataSetActionsChecker extends AbstractDatasetActionsChecker {
 
-	static private Logger logger = Logger.getLogger(QbeDataSetActionsChecker.class);
+	private static Logger logger = Logger.getLogger(QbeDataSetActionsChecker.class);
 
 	public QbeDataSetActionsChecker(UserProfile userProfile, IDataSet dataset) {
 		super(userProfile, dataset);
@@ -82,7 +82,9 @@ public class QbeDataSetActionsChecker extends AbstractDatasetActionsChecker {
 			roleDao.setUserProfile(getUserProfile());
 
 			List<String> roleNames = UserUtilities.getCurrentRoleNames(getUserProfile());
+			logger.warn("Roles: " + roleNames);
 			List<Integer> categories = roleDao.getMetaModelCategoriesForRoles(roleNames);
+			logger.warn("Categories founded: " + categories);
 			logger.debug("Found the following categories [" + categories + "].");
 			if (categories != null && !categories.isEmpty()) {
 				businessModelList = businessModelsDAO.loadMetaModelByCategories(categories);

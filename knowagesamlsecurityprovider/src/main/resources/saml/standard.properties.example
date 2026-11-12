@@ -1,0 +1,21 @@
+# Standard SAML: SHA-256, no MyID Scoping/Advice exception or regional logout.
+provider=standard
+profiling.mode=local
+frontend.url=https://REPLACE_PUBLIC_HOST/knowage-vue/saml-login
+sp.entity-id=https://REPLACE_PUBLIC_HOST/knowage/restful-services/saml/metadata
+sp.acs-url=https://REPLACE_PUBLIC_HOST/knowage/restful-services/saml/acs
+sp.slo-url=https://REPLACE_PUBLIC_HOST/knowage/restful-services/saml/slo
+idp.entity-id=env:KNOWAGE_SAML_IDP_ENTITY_ID
+idp.metadata-file=env:KNOWAGE_SAML_IDP_METADATA_FILE
+idp.slo-url=env:KNOWAGE_SAML_IDP_SLO_URL
+idp.slo-response-url=env:KNOWAGE_SAML_IDP_SLO_RESPONSE_URL
+authn.contexts=REPLACE_STANDARD_IDP_CONTEXT
+sp.name-id-format=urn:oasis:names:tc:SAML:2.0:nameid-format:transient
+sp.keystore-type=PKCS12
+sp.keystore-file=env:KNOWAGE_SAML_KEYSTORE_FILE
+sp.keystore-password=env:KNOWAGE_SAML_KEYSTORE_PASSWORD
+sp.key-alias=env:KNOWAGE_SAML_KEY_ALIAS
+sp.key-password=env:KNOWAGE_SAML_KEY_PASSWORD
+session.seconds=36000
+identity.attribute=REPLACE_ATTRIBUTE_MATCHING_KNOWAGE_USER_ID
+identity.prefix=

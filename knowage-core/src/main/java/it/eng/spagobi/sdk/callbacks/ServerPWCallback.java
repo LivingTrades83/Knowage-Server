@@ -23,12 +23,12 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
 
-import org.apache.axis.MessageContext;
 import org.apache.log4j.Logger;
 import org.apache.ws.security.WSPasswordCallback;
 import org.apache.ws.security.WSSecurityException;
 import org.apache.ws.security.handler.WSHandlerConstants;
 
+import it.eng.spagobi.sdk.utilities.KnowageSoapMessageContext;
 import it.eng.spagobi.services.security.bo.SpagoBIUserProfile;
 import it.eng.spagobi.services.security.service.ISecurityServiceSupplier;
 import it.eng.spagobi.services.security.service.SecurityServiceSupplierFactory;
@@ -40,7 +40,7 @@ import it.eng.spagobi.services.security.service.SecurityServiceSupplierFactory;
  */
 public class ServerPWCallback implements CallbackHandler {
 
-	static private Logger logger = Logger.getLogger(ServerPWCallback.class);
+	private static Logger logger = Logger.getLogger(ServerPWCallback.class);
 
 	@Override
 	public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
@@ -53,28 +53,27 @@ public class ServerPWCallback implements CallbackHandler {
 				if (pc.getUsage() == WSPasswordCallback.DECRYPT) {
 					logger.debug("WSPasswordCallback.DECRYPT=" + WSPasswordCallback.DECRYPT);
 					pc.setPassword("security");
-					// } else if (pc.getUsage() == WSPasswordCallback.USERNAME_TOKEN) {
-					// logger.debug("WSPasswordCallback.USERNAME_TOKEN = " + pc.getUsage() + " callback usage");
-					// // for passwords sent in digest mode we need to provide the password,
-					// // because the original one can't be un-digested from the message
-					// String password = getPassword(userId);
-					// // this will throw an exception if the passwords don't match
-					// pc.setPassword(password);
 				} else if (pc.getUsage() == WSPasswordCallback.USERNAME_TOKEN_UNKNOWN) {
 					logger.debug("WSPasswordCallback.USERNAME_TOKEN_UNKNOWN = " + pc.getUsage() + " callback usage");
 					// for passwords sent in clear-text mode we can compare passwords directly
 					// Get the password that was sent
 					String password = pc.getPassword();
 					// Now pass them to your authentication mechanism
-					SpagoBIUserProfile profile = authenticate(userId, password); // throws WSSecurityException.FAILED_AUTHENTICATION on failure
-					logger.debug("New userId is " + profile.getUniqueIdentifier());
-					userId = profile.getUniqueIdentifier();
+					try{
+						SpagoBIUserProfile profile = authenticate(userId, password); // throws WSSecurityException.FAILED_AUTHENTICATION on failure
+						logger.debug("New userId is " + profile.getUniqueIdentifier());
+						userId = profile.getUniqueIdentifier();
+					} catch (WSSecurityException e) {
+                    logger.error("Authentication failed", e);
+                    throw new IOException("Authentication failed", e);
+                	}
 				} else {
 					logger.error("WSPasswordCallback usage [" + pc.getUsage() + "] not treated.");
-					throw new UnsupportedCallbackException(callbacks[i], "WSPasswordCallback usage [" + pc.getUsage() + "] not treated.");
+					throw new UnsupportedCallbackException(callbacks[i],
+							"WSPasswordCallback usage [" + pc.getUsage() + "] not treated.");
 				}
 				// Put userId into MessageContext (for services that depend on profiling)
-				MessageContext mc = MessageContext.getCurrentContext();
+				KnowageSoapMessageContext.Context mc = KnowageSoapMessageContext.getCurrentContext();
 				logger.debug("Setting userId to " + userId);
 				mc.setProperty(WSHandlerConstants.USER, userId);
 			} else {

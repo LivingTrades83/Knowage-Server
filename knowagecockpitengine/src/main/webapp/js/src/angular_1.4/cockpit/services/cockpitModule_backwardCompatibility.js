@@ -55,22 +55,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		}
 
 		self.updateCockpitModel = function(template){
+			const version = template.knowageVersion || template.version
 			//to version 6.3
-			if(!self.compareVersion("6.3.0",template.knowageVersion)){
+			if(!self.compareVersion("6.3.0",version)){
 				if(template.configuration && typeof(template.configuration.showScreenshot)=='undefined') template.configuration.showScreenshot = true;
 			}
-			if(!self.compareVersion("7.3.0",template.knowageVersion)){
+			if(!self.compareVersion("7.3.0",version)){
 				if(template.configuration && typeof(template.configuration.showExcelExport)=='undefined') template.configuration.showExcelExport = true;
 			}
 
-			//Cycle trough all widgets
-			for(var sheet in template.sheets){
-				for(var widget in template.sheets[sheet].widgets){
-					self.updateModel(template.sheets[sheet].widgets[widget],template.knowageVersion);
+			if (!template.version) {
+				//Cycle trough all widgets
+				for(var sheet in template.sheets){
+					for(var widget in template.sheets[sheet].widgets){
+						self.updateModel(template.sheets[sheet].widgets[widget],version);
+					}
 				}
 			}
 
-			template.knowageVersion = currentVersion;
+			if(template.knowageVersion) template.knowageVersion = currentVersion;
+			else template.version = currentVersion;
+
 			return template;
 		}
 
@@ -141,7 +146,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 						for(var k in model.content.columnSelectedOfDataset){
 							if(model.content.columnSelectedOfDataset[k].isCalculated) {
 								model.content.columnSelectedOfDataset[k].aggregationSelected = "NONE";
-								if(!model.content.columnSelectedOfDataset[k].formula.match(/(AVG|SUM|MIN|MAX|COUNT|COUNT DISTINCT|TOTAL_SUM|TOTAL_AVG|TOTAL_MIN|TOTAL_MAX|TOTAL_COUNT)\(\"+[\D\+\-\*\/\w]*\)/gm)){
+								if(!model.content.columnSelectedOfDataset[k].formula.match(/(?:AVG|SUM|MIN|MAX|COUNT|COUNT DISTINCT|TOTAL_SUM|TOTAL_AVG|TOTAL_MIN|TOTAL_MAX|TOTAL_COUNT)\("+[\+\-\*\/\w]*"\)/gm)){
 									model.content.columnSelectedOfDataset[k].formula = "SUM(" + model.content.columnSelectedOfDataset[k].formula + ")";
 									model.content.columnSelectedOfDataset[k].formulaEditor = "SUM(" + model.content.columnSelectedOfDataset[k].formulaEditor + ")";
 								}
@@ -177,6 +182,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 						if (model.content.chartTemplate.CHART.AXES_LIST.AXIS[k].LABELS && model.content.chartTemplate.CHART.AXES_LIST.AXIS[k].LABELS.rotation && model.content.chartTemplate.CHART.AXES_LIST.AXIS[k].LABELS.rotation!='auto') {
 							model.content.chartTemplate.CHART.AXES_LIST.AXIS[k].LABELS.rotationEnabled = true;
 						}
+					}
+					if(model.content.chartTemplate.CHART.TOOLTIP && !model.content.chartTemplate.CHART.TOOLTIP.backgroundColor) {
+							model.content.chartTemplate.CHART.TOOLTIP.backgroundColor= "#D6D6D6"
 					}
 				 }
 				}
@@ -335,6 +343,38 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 									delete model.content.crosstabDefinition.measures[k].colorThresholdOptions;
 								}
 							}
+						}
+					}
+				}
+			}
+
+			if(!self.compareVersion("7.4.8",version)){
+				if(model.type=='map'){
+					if (!model.style.legend) model.style.legend = {};
+				}
+			}
+
+			if(!self.compareVersion("8.1.0",version)){
+				if(model.type=='table'){
+					for(var k in model.content.columnSelectedOfDataset){
+						if(model.content.columnSelectedOfDataset[k].ranges && model.content.columnSelectedOfDataset[k].ranges.length > 0){
+							model.content.columnSelectedOfDataset[k].ranges = model.content.columnSelectedOfDataset[k].ranges.map((item)=>{
+								item.compareValueType = "static"
+								return item
+							})
+						}
+					}
+				}
+				if(model.type=='static-pivot-table'){
+					for(var k in model.content.crosstabDefinition.measures){
+						delete model.content.crosstabDefinition.measures[k].colorThresholdOptions;
+						if (model.content.crosstabDefinition.measures[k].ranges && model.content.crosstabDefinition.measures[k].ranges.length > 0){
+							model.content.crosstabDefinition.measures[k].ranges = model.content.crosstabDefinition.measures[k].ranges.map((item)=>{
+								if (item.operator == "=") {
+									item.operator = "==";
+								}
+								return item;
+							})
 						}
 					}
 				}

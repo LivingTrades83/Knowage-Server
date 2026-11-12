@@ -24,11 +24,21 @@ import java.sql.Clob;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAccessor;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
@@ -36,7 +46,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import it.eng.spagobi.tools.dataset.bo.DataSetVariable;
+import it.eng.spagobi.tools.dataset.common.datastore.DataStoreStats;
 import it.eng.spagobi.tools.dataset.common.datastore.Field;
+import it.eng.spagobi.tools.dataset.common.datastore.FieldStats;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IField;
 import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
@@ -60,10 +72,14 @@ public class JSONDataWriter implements IDataWriter {
 	public static final String DATE_FORMAT = "dd/MM/yyyy";
 	public static final String CACHE_DATE_FORMAT = "yyyy-MM-dd";
 	public static final String TIME_FORMAT = "HH:mm:ss";
-	public static final String DATE_TIME_FORMAT = DATE_FORMAT + " " + TIME_FORMAT;
-	public static final String CACHE_DATE_TIME_FORMAT = CACHE_DATE_FORMAT + " " + TIME_FORMAT;
-	public static final String TIMESTAMP_FORMAT = DATE_TIME_FORMAT + ".SSS";
-	public static final String CACHE_TIMESTAMP_FORMAT = CACHE_DATE_TIME_FORMAT + ".SSS";
+	public static final String DATE_TIME_FORMAT = "dd/MM/yyyy HH:mm:ss";
+	public static final String CACHE_DATE_TIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
+	public static final String TIMESTAMP_FORMAT = "dd/MM/yyyy HH:mm:ss.SSS";
+	public static final String CACHE_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
+	public static final String TIME_FORMAT_WITH_MILLIS = "HH:mm:ss.SSS";
+	public static final String OFFSET = "HH:mm:ssXXX";
+	public static final String OFFSET_DATE_TIME = "dd/MM/yyyyTHH:mm:ssXXX";
+	public static final String ZONED_DATE_TIME = "dd/MM/yyyy HH:mm:ss.SSSXXX";
 
 	private boolean putIDs = true;
 	private boolean adjust = false;
@@ -74,14 +90,34 @@ public class JSONDataWriter implements IDataWriter {
 	private boolean useIdProperty;
 	private boolean preserveOriginalDataTypes = false;
 
+	/**
+	 * @deprecated Replace it with {@link DateTimeFormatter}
+	 */
+	@Deprecated
 	protected final SimpleDateFormat DATE_FORMATTER = new SimpleDateFormat(DATE_FORMAT);
+	/**
+	 * @deprecated Replace it with {@link DateTimeFormatter}
+	 */
+	@Deprecated
 	protected final SimpleDateFormat TIMESTAMP_FORMATTER = new SimpleDateFormat(TIMESTAMP_FORMAT);
+	/**
+	 * @deprecated Replace it with {@link DateTimeFormatter}
+	 */
+	@Deprecated
 	protected final SimpleDateFormat CACHE_TIMESTAMP_FORMATTER = new SimpleDateFormat(CACHE_TIMESTAMP_FORMAT);
+	/**
+	 * @deprecated Replace it with {@link DateTimeFormatter}
+	 */
+	@Deprecated
 	protected final SimpleDateFormat CACHE_TIMEONLY_FORMATTER = new SimpleDateFormat(TIME_FORMAT);
 
+	protected final DateTimeFormatter DATE_FORMATTER_V2 = DateTimeFormatter.ofPattern(DATE_FORMAT);
+	protected final DateTimeFormatter TIMESTAMP_FORMATTER_V2 = DateTimeFormatter.ofPattern(TIMESTAMP_FORMAT);
+	protected final DateTimeFormatter CACHE_TIMESTAMP_FORMATTER_V2 = DateTimeFormatter
+			.ofPattern(CACHE_TIMESTAMP_FORMAT);
+	protected final DateTimeFormatter CACHE_TIMEONLY_FORMATTER_V2 = DateTimeFormatter.ofPattern(TIME_FORMAT);
 	// public static final String WORKSHEETS_ADDITIONAL_DATA_FIELDS_OPTIONS_OPTIONS = "options";
 	// public static final String WORKSHEETS_ADDITIONAL_DATA_FIELDS_OPTIONS_SCALE_FACTOR = "measureScaleFactor";
-
 	public static final String METADATA = "metaData";
 	public static final String PROPERTY_FIELD_OPTION = "PROPERTY_FIELD_OPTION";
 	public static final String PROPERTY_ADJUST = "PROPERTY_ADJUST";
@@ -158,6 +194,69 @@ public class JSONDataWriter implements IDataWriter {
 		return result;
 	}
 
+	private Object write(DataStoreStats stats) {
+		JSONObject ret = new JSONObject();
+		Map<Integer, FieldStats> fields = stats.getFields();
+
+		for (Entry<Integer, FieldStats> entry : fields.entrySet()) {
+
+			Integer key = entry.getKey();
+			FieldStats value = entry.getValue();
+
+			try {
+				ret.put(Integer.toString(key + 1 /* because we add the recNo */), write(value));
+			} catch (JSONException e) {
+				// I put in a JSONObject, it should not generate any error
+			}
+		}
+
+		return ret;
+	}
+
+	private JSONObject write(FieldStats stats) {
+		JSONObject ret = new JSONObject();
+
+		String name = stats.getName();
+		Object max = stats.getMax();
+		Object min = stats.getMin();
+		Set<Object> distinct = stats.getDistinct();
+		int cardinality = stats.getCardinality();
+
+		try {
+			ret.put("name", name);
+		} catch (JSONException e) {
+			// TODO: handle exception
+		}
+
+		try {
+			ret.put("max", max);
+		} catch (JSONException e) {
+			// TODO: handle exception
+		}
+
+		try {
+			ret.put("min", min);
+		} catch (JSONException e) {
+			// TODO: handle exception
+		}
+
+		try {
+			for (Object i : distinct) {
+				ret.append("distinct", i);
+			}
+		} catch (JSONException e) {
+			// TODO: handle exception
+		}
+
+		try {
+			ret.put("cardinality", cardinality);
+		} catch (JSONException e) {
+			// TODO: handle exception
+		}
+
+		return ret;
+	}
+
 	@SuppressWarnings("rawtypes")
 	public JSONArray writeOnlyData(IDataStore dataStore) throws RuntimeException {
 
@@ -176,10 +275,11 @@ public class JSONDataWriter implements IDataWriter {
 				propertyRawValue = new Integer(1);
 			}
 			Assert.assertNotNull(propertyRawValue, "DataStore property [resultNumber] cannot be null");
-			Assert.assertTrue(propertyRawValue instanceof Integer, "DataStore property [resultNumber] must be of type [Integer]");
+			Assert.assertTrue(propertyRawValue instanceof Integer,
+					"DataStore property [resultNumber] must be of type [Integer]");
 			resultNumber = ((Integer) propertyRawValue).intValue();
-			Assert.assertTrue(resultNumber >= 0,
-					"DataStore property [resultNumber] cannot be equal to [" + resultNumber + "]. It must be greater or equal to zero");
+			Assert.assertTrue(resultNumber >= 0, "DataStore property [resultNumber] cannot be equal to [" + resultNumber
+					+ "]. It must be greater or equal to zero");
 
 			// records
 			recNo = 0;
@@ -211,7 +311,8 @@ public class JSONDataWriter implements IDataWriter {
 			IFieldMetaData fieldMetaData = metaData.getFieldMeta(i);
 
 			Object propertyRawValue = fieldMetaData.getProperty("visible");
-			if (propertyRawValue != null && (propertyRawValue instanceof Boolean) && ((Boolean) propertyRawValue).booleanValue() == false) {
+			if (propertyRawValue != null && (propertyRawValue instanceof Boolean)
+					&& !((Boolean) propertyRawValue).booleanValue()) {
 				continue;
 			}
 
@@ -239,13 +340,8 @@ public class JSONDataWriter implements IDataWriter {
 	protected Object getFieldValue(IField field, IFieldMetaData fieldMetaData) {
 
 		if (preserveOriginalDataTypes) {
-			Object toReturn;
-			if (BigDecimal.class.isAssignableFrom(fieldMetaData.getType()) && field.getValue() != null) {
-				toReturn = Float.parseFloat(field.getValue().toString());
-			} else {
-				toReturn = field.getValue();
-			}
-			return toReturn;
+
+			return field.getValue();
 
 		} else {
 			Object result = "";
@@ -259,11 +355,17 @@ public class JSONDataWriter implements IDataWriter {
 					}
 					result = _result;
 				} else if (Timestamp.class.isAssignableFrom(fieldMetaData.getType())) {
-					result = TIMESTAMP_FORMATTER.format(field.getValue());
+					Timestamp valueAsTimestamp = (Timestamp) field.getValue();
+					result = TIMESTAMP_FORMATTER_V2.format(valueAsTimestamp.toInstant().atZone(ZoneId.systemDefault()));
 				} else if (Time.class.isAssignableFrom(fieldMetaData.getType())) {
-					result = CACHE_TIMEONLY_FORMATTER.format(field.getValue());
-				} else if (Date.class.isAssignableFrom(fieldMetaData.getType())) {
-					result = DATE_FORMATTER.format(field.getValue());
+					result = CACHE_TIMEONLY_FORMATTER_V2.format(((Time) field.getValue()).toLocalTime());
+				} else if (java.sql.Date.class.isAssignableFrom(fieldMetaData.getType())) {
+					java.sql.Date sqlDate = (java.sql.Date) field.getValue();
+					Date valueAsDate = new Date(sqlDate.getTime());
+					result = DATE_FORMATTER_V2.format(valueAsDate.toInstant().atZone(ZoneId.systemDefault()));
+				} else if (java.util.Date.class.isAssignableFrom(fieldMetaData.getType())) {
+					Date valueAsDate = (Date) field.getValue();
+					result = DATE_FORMATTER_V2.format(valueAsDate.toInstant().atZone(ZoneId.systemDefault()));
 				} else if (Boolean.class.isAssignableFrom(fieldMetaData.getType())) {
 					result = Boolean.valueOf(field.getValue().toString());
 				} else if (Byte.class.isAssignableFrom(fieldMetaData.getType())) {
@@ -282,6 +384,16 @@ public class JSONDataWriter implements IDataWriter {
 					result = Double.valueOf(field.getValue().toString());
 				} else if (BigDecimal.class.isAssignableFrom(fieldMetaData.getType())) {
 					result = new BigDecimal(field.getValue().toString());
+				} else if (LocalTime.class.isAssignableFrom(fieldMetaData.getType())) {
+					result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) field.getValue());
+				} else if (LocalDateTime.class.isAssignableFrom(fieldMetaData.getType())) {
+					result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) field.getValue());
+				} else if (OffsetTime.class.isAssignableFrom(fieldMetaData.getType())) {
+					result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) field.getValue());
+				} else if (OffsetDateTime.class.isAssignableFrom(fieldMetaData.getType())) {
+					result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) field.getValue());
+				} else if (ZonedDateTime.class.isAssignableFrom(fieldMetaData.getType())) {
+					result = TIMESTAMP_FORMATTER_V2.format((TemporalAccessor) field.getValue());
 				} else {
 					result = field.getValue().toString();
 				}
@@ -313,7 +425,7 @@ public class JSONDataWriter implements IDataWriter {
 
 			Date cacheDate = dataStore.getCacheDate();
 			if (cacheDate != null) {
-				String date = CACHE_TIMESTAMP_FORMATTER.format(cacheDate);
+				String date = CACHE_TIMESTAMP_FORMATTER_V2.format(LocalDateTime.ofInstant(cacheDate.toInstant(), ZoneId.systemDefault()));
 				metadata.put("cacheDate", date);
 			}
 
@@ -324,14 +436,16 @@ public class JSONDataWriter implements IDataWriter {
 				propertyRawValue = new Integer(1);
 			}
 			Assert.assertNotNull(propertyRawValue, "DataStore property [resultNumber] cannot be null");
-			Assert.assertTrue(propertyRawValue instanceof Integer, "DataStore property [resultNumber] must be of type [Integer]");
+			Assert.assertTrue(propertyRawValue instanceof Integer,
+					"DataStore property [resultNumber] must be of type [Integer]");
 			resultNumber = ((Integer) propertyRawValue).intValue();
-			Assert.assertTrue(resultNumber >= 0,
-					"DataStore property [resultNumber] cannot be equal to [" + resultNumber + "]. It must be greater or equal to zero");
+			Assert.assertTrue(resultNumber >= 0, "DataStore property [resultNumber] cannot be equal to [" + resultNumber
+					+ "]. It must be greater or equal to zero");
 			result.put(TOTAL_PROPERTY, resultNumber);
 
 			recordsJSON = new JSONArray();
 			result.put(ROOT, recordsJSON);
+			result.put("stats", write(dataStore.getStats()));
 
 			// records
 			recNo = 0;
@@ -352,7 +466,8 @@ public class JSONDataWriter implements IDataWriter {
 					IFieldMetaData fieldMetaData = dataStore.getMetaData().getFieldMeta(i);
 
 					propertyRawValue = fieldMetaData.getProperty("visible");
-					if (propertyRawValue != null && (propertyRawValue instanceof Boolean) && ((Boolean) propertyRawValue).booleanValue() == false) {
+					if (propertyRawValue != null && (propertyRawValue instanceof Boolean)
+							&& !((Boolean) propertyRawValue).booleanValue()) {
 						continue;
 					}
 
@@ -376,7 +491,7 @@ public class JSONDataWriter implements IDataWriter {
 								|| oracle.sql.CLOB.class.isAssignableFrom(fieldMetaData.getType())) { // Can we add a limit?
 							if (field.getValue() != null) {
 								Reader r = ((Clob) field.getValue()).getCharacterStream();
-								StringBuffer buffer = new StringBuffer();
+								StringBuilder buffer = new StringBuilder();
 								int ch;
 								while ((ch = r.read()) != -1) {
 									buffer.append("" + (char) ch);
@@ -387,8 +502,12 @@ public class JSONDataWriter implements IDataWriter {
 					} catch (NoClassDefFoundError t) {
 						logger.debug("Class not found error", t);
 					} catch (Exception e) {
-						logger.error("An unpredicted error occurred at recno [" + recNo + "] while serializing dataStore", e);
-						throw new SpagoBIRuntimeException("An unpredicted error occurred at recno [" + recNo + "] while serializing dataStore", e);
+						logger.error(
+								"An unpredicted error occurred at recno [" + recNo + "] while serializing dataStore",
+								e);
+						throw new SpagoBIRuntimeException(
+								"An unpredicted error occurred at recno [" + recNo + "] while serializing dataStore",
+								e);
 					}
 
 					if (fieldValue == null) {
@@ -403,7 +522,8 @@ public class JSONDataWriter implements IDataWriter {
 			}
 
 		} catch (Throwable t) {
-			throw new RuntimeException("An unpredicted error occurred at recno [" + recNo + "] while serializing dataStore", t);
+			throw new RuntimeException(
+					"An unpredicted error occurred at recno [" + recNo + "] while serializing dataStore", t);
 		} finally {
 
 		}
@@ -440,13 +560,15 @@ public class JSONDataWriter implements IDataWriter {
 				IFieldMetaData fieldMetaData = metadata.getFieldMeta(i);
 
 				Object propertyRawValue = fieldMetaData.getProperty("visible");
-				if (propertyRawValue != null && (propertyRawValue instanceof Boolean) && ((Boolean) propertyRawValue).booleanValue() == false) {
+				if (propertyRawValue != null && (propertyRawValue instanceof Boolean)
+						&& !((Boolean) propertyRawValue).booleanValue()) {
 					continue;
 				}
 
 				String fieldHeader = getFieldHeader(fieldMetaData);
-				if ("sbicache_row_id".equalsIgnoreCase(fieldHeader))
+				if ("sbicache_row_id".equalsIgnoreCase(fieldHeader)) {
 					continue;
+				}
 
 				String fieldName = getFieldName(fieldMetaData, j++);
 
@@ -480,8 +602,9 @@ public class JSONDataWriter implements IDataWriter {
 
 				if (Number.class.isAssignableFrom(clazz)) {
 					// BigInteger, Integer, Long, Short, Byte
-					if (Integer.class.isAssignableFrom(clazz) || BigInteger.class.isAssignableFrom(clazz) || Long.class.isAssignableFrom(clazz)
-							|| Short.class.isAssignableFrom(clazz) || Byte.class.isAssignableFrom(clazz)) {
+					if (Integer.class.isAssignableFrom(clazz) || BigInteger.class.isAssignableFrom(clazz)
+							|| Long.class.isAssignableFrom(clazz) || Short.class.isAssignableFrom(clazz)
+							|| Byte.class.isAssignableFrom(clazz)) {
 						logger.debug("Column [" + (i + 1) + "] type is equal to [" + "INTEGER" + "]");
 						fieldMetaDataJSON.put("type", "int");
 					} else {
@@ -498,7 +621,8 @@ public class JSONDataWriter implements IDataWriter {
 					}
 					String decimalPrecision = (String) fieldMetaData.getProperty(IFieldMetaData.DECIMALPRECISION);
 					if (decimalPrecision != null) {
-						fieldMetaDataJSON.put("format", "{" + IFieldMetaData.DECIMALPRECISION + ": " + decimalPrecision + "}");
+						fieldMetaDataJSON.put("format",
+								"{" + IFieldMetaData.DECIMALPRECISION + ": " + decimalPrecision + "}");
 					}
 
 				} else if (String.class.isAssignableFrom(clazz)) {
@@ -512,23 +636,47 @@ public class JSONDataWriter implements IDataWriter {
 					}
 				} else if (Timestamp.class.isAssignableFrom(clazz) || "oracle.sql.TIMESTAMP".equals(clazz.getName())) {
 					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "TIMESTAMP" + "]");
-					fieldMetaDataJSON.put("type", "date");
-					fieldMetaDataJSON.put("subtype", "timestamp");
+					fieldMetaDataJSON.put("type", "timestamp");
 					fieldMetaDataJSON.put("dateFormat", "d/m/Y H:i:s.uuu");
-					fieldMetaDataJSON.put("dateFormatJava", "dd/MM/yyyy HH:mm:ss.SSS");
+					fieldMetaDataJSON.put("dateFormatJava", TIMESTAMP_FORMAT);
 				} else if (Time.class.isAssignableFrom(clazz)) {
 					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "DATE" + "]");
 					fieldMetaDataJSON.put("type", "time");
 					fieldMetaDataJSON.put("dateFormat", "H:i:s.uuu");
-					fieldMetaDataJSON.put("dateFormatJava", "HH:mm:ss.SSS");
+					fieldMetaDataJSON.put("dateFormatJava", TIME_FORMAT_WITH_MILLIS);
 				} else if (Date.class.isAssignableFrom(clazz)) {
 					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "DATE" + "]");
 					fieldMetaDataJSON.put("type", "date");
 					fieldMetaDataJSON.put("dateFormat", "d/m/Y");
-					fieldMetaDataJSON.put("dateFormatJava", "dd/MM/yyyy");
+					fieldMetaDataJSON.put("dateFormatJava", DATE_FORMAT);
 				} else if (Boolean.class.isAssignableFrom(clazz)) {
 					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "BOOLEAN" + "]");
 					fieldMetaDataJSON.put("type", "boolean");
+				} else if (LocalTime.class.isAssignableFrom(clazz)) {
+					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "LocalTime" + "]");
+					fieldMetaDataJSON.put("type", "time");
+					fieldMetaDataJSON.put("dateFormat", "HH:mm:ss.SSS");
+					fieldMetaDataJSON.put("dateFormatJava", TIME_FORMAT_WITH_MILLIS);
+				} else if (LocalDateTime.class.isAssignableFrom(clazz)) {
+					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "LocalDateTime" + "]");
+					fieldMetaDataJSON.put("type", "timestamp");
+					fieldMetaDataJSON.put("dateFormat", "dd/MM/yyyy HH:mm:ss.SSS");
+					fieldMetaDataJSON.put("dateFormatJava", TIMESTAMP_FORMAT);
+				} else if (OffsetTime.class.isAssignableFrom(clazz)) {
+					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "OffsetTime" + "]");
+					fieldMetaDataJSON.put("type", "time");
+					fieldMetaDataJSON.put("dateFormat", "H:i:sZZ");
+					fieldMetaDataJSON.put("dateFormatJava", OFFSET);
+				} else if (OffsetDateTime.class.isAssignableFrom(clazz)) {
+					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "OffsetDateTime" + "]");
+					fieldMetaDataJSON.put("type", "timestamp");
+					fieldMetaDataJSON.put("dateFormat", "d/m/YTH:i:sZZ");
+					fieldMetaDataJSON.put("dateFormatJava", OFFSET_DATE_TIME);
+				} else if (ZonedDateTime.class.isAssignableFrom(clazz)) {
+					logger.debug("Column [" + (i + 1) + "] type is equal to [" + "ZonedDateTime" + "]");
+					fieldMetaDataJSON.put("type", "timestamp");
+					fieldMetaDataJSON.put("dateFormat", "dd/MM/yyyy HH:mm:ss.SSSZZ");
+					fieldMetaDataJSON.put("dateFormatJava", ZONED_DATE_TIME);
 				} else {
 					logger.warn("Column [" + (i + 1) + "] type is equal to [" + "???" + "]");
 					fieldMetaDataJSON.put("type", "string");
@@ -536,7 +684,7 @@ public class JSONDataWriter implements IDataWriter {
 
 				Boolean calculated = (Boolean) fieldMetaData.getProperty("calculated");
 				calculated = calculated == null ? Boolean.FALSE : calculated;
-				if (calculated.booleanValue() == true) {
+				if (calculated.booleanValue()) {
 					DataSetVariable variable = (DataSetVariable) fieldMetaData.getProperty("variable");
 					if (variable.getType().equalsIgnoreCase(DataSetVariable.HTML)) {
 						fieldMetaDataJSON.put("type", "auto");

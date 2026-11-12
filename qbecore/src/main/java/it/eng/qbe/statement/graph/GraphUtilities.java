@@ -65,7 +65,7 @@ public class GraphUtilities {
 	public static final String IS_CONSIDERED = "isConsidered";
 	public static final String JOIN_TYPE = "joinType";
 	public static final int maxPathLength = 5;
-	static private Logger logger = Logger.getLogger(GraphUtilities.class);
+	private static Logger logger = Logger.getLogger(GraphUtilities.class);
 
 	/**
 	 * Removes the subpaths
@@ -79,7 +79,7 @@ public class GraphUtilities {
 		if (ambiguousModelField != null) {
 			Iterator<ModelFieldPaths> iter = ambiguousModelField.iterator();
 			while (iter.hasNext()) {
-				List<String> listRelations = new ArrayList<String>();
+				List<String> listRelations = new ArrayList<>();
 				ModelFieldPaths modelFieldPaths = iter.next();
 				Set<PathChoice> pathChoices = modelFieldPaths.getChoices();
 
@@ -90,7 +90,7 @@ public class GraphUtilities {
 						PathChoicePathTextLengthComparator pathChoiceComparator = new PathChoicePathTextLengthComparator(orderDirection);
 						pathChoicesFiltered = new TreeSet(pathChoiceComparator);
 					} else {
-						pathChoicesFiltered = new HashSet<PathChoice>();
+						pathChoicesFiltered = new HashSet<>();
 					}
 					Iterator<PathChoice> pathChoicesIter = pathChoices.iterator();
 
@@ -150,7 +150,7 @@ public class GraphUtilities {
 
 		String modelName = dataSource.getConfiguration().getModelName();
 		IModelStructure modelStructure = dataSource.getModelStructure();
-		Set<String> relationshipsNames = new HashSet<String>();
+		Set<String> relationshipsNames = new HashSet<>();
 		RootEntitiesGraph rootEntitiesGraph = modelStructure.getRootEntitiesGraph(modelName, true);
 		if (relationshipsJSON == null || relationshipsJSON.length() == 0) {
 			Set<Relationship> allRelationships = rootEntitiesGraph.getRelationships();
@@ -165,19 +165,19 @@ public class GraphUtilities {
 
 		Map<String, JoinType> joinTypeMapping = new HashMap<>();
 		Map<String, Boolean> isConsideredMapping = new HashMap<>();
-		Set<PathChoice> choices = new HashSet<PathChoice>();
+		Set<PathChoice> choices = new HashSet<>();
 		for (int i = 0; i < relationshipsJSON.length(); i++) {
 			JSONObject relationshipJSON = relationshipsJSON.getJSONObject(i);
 			String relationshipsName = relationshipJSON.getString(RELATIONSHIP_ID);
 
 			relationshipsNames.add(relationshipsName);
-			JoinType joinType = JoinType.valueOf(relationshipJSON.getString(JOIN_TYPE));
+			JoinType joinType = JoinType.valueOf(relationshipJSON.optString(JOIN_TYPE, JoinType.INNER.toString()));
 			joinTypeMapping.put(relationshipsName, joinType);
-			isConsideredMapping.put(relationshipsName, relationshipJSON.getBoolean(IS_CONSIDERED));
+			isConsideredMapping.put(relationshipsName, relationshipJSON.optBoolean(IS_CONSIDERED, true));
 
 		}
 
-		List<Relationship> queryRelationships = new ArrayList<Relationship>();
+		List<Relationship> queryRelationships = new ArrayList<>();
 		Set<Relationship> allRelationships = rootEntitiesGraph.getRelationships();
 		Iterator<String> it = relationshipsNames.iterator();
 		while (it.hasNext()) {
@@ -219,7 +219,7 @@ public class GraphUtilities {
 	}
 
 	private static Set<String> getRelationsSet(GraphPath<IModelEntity, Relationship> path1) {
-		Set<String> relations = new HashSet<String>();
+		Set<String> relations = new HashSet<>();
 		List<Relationship> edges = path1.getEdgeList();
 		for (int i = 0; i < edges.size(); i++) {
 			relations.add(edges.get(i).getId());
@@ -352,7 +352,7 @@ public class GraphUtilities {
 	 */
 	public static Map<IModelEntity, List<Relationship>> getEdgeMap(Graph G, IModelEntity vertex) {
 
-		Map<IModelEntity, List<Relationship>> vertexRelationsMap = new HashMap<IModelEntity, List<Relationship>>();
+		Map<IModelEntity, List<Relationship>> vertexRelationsMap = new HashMap<>();
 
 		Set<Relationship> vertexConnection = G.edgesOf(vertex);
 		if (vertexConnection != null) {
@@ -370,7 +370,7 @@ public class GraphUtilities {
 					List<Relationship> relationsWithOther = vertexRelationsMap.get(otherEntity);
 
 					if (relationsWithOther == null) {
-						relationsWithOther = new ArrayList<Relationship>();
+						relationsWithOther = new ArrayList<>();
 						vertexRelationsMap.put(otherEntity, relationsWithOther);
 					}
 					relationsWithOther.add(relationship);
@@ -407,6 +407,8 @@ public class GraphUtilities {
 		public void serialize(Relationship value, JsonGenerator jgen, SerializerProvider provider) throws IOException, JsonProcessingException {
 			jgen.writeStartObject();
 			jgen.writeStringField(GraphUtilities.RELATIONSHIP_ID, value.getId());
+			jgen.writeStringField(GraphUtilities.JOIN_TYPE, value.getJoinType().toString());
+			jgen.writeBooleanField(GraphUtilities.IS_CONSIDERED, value.isConsidered());
 			jgen.writeEndObject();
 
 		}

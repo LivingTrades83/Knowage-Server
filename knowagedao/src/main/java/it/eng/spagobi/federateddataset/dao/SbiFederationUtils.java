@@ -19,6 +19,7 @@
 package it.eng.spagobi.federateddataset.dao;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
@@ -33,7 +34,7 @@ import it.eng.spagobi.utilities.assertion.Assert;
 
 public class SbiFederationUtils {
 
-	static private Logger logger = Logger.getLogger(SbiFederationUtils.class);
+	private static Logger logger = Logger.getLogger(SbiFederationUtils.class);
 
 	public static FederationDefinition toDatasetFederationNoDataset(SbiFederationDefinition hibFd) {
 		return toDatasetFederationWithDataset(hibFd, null);
@@ -43,7 +44,7 @@ public class SbiFederationUtils {
 		FederationDefinition fd = toDatasetFederation(hibFd);
 		if (sourceDatasets == null) {
 			logger.debug("No dataset is added in the definition");
-			sourceDatasets = new HashSet<IDataSet>();
+			sourceDatasets = new HashSet<>();
 		} else {
 			logger.debug("Adding also the dataset to the federation definition");
 		}
@@ -95,14 +96,16 @@ public class SbiFederationUtils {
 		Assert.assertNotNull(sbiFederationDefinition, "The federation is null");
 		Assert.assertNotNull(federationDefinition, "The federation is null");
 
-		sbiFederationDefinition.setFederation_id(federationDefinition.getFederation_id());
+		sbiFederationDefinition.changeFederation_id(federationDefinition.getFederation_id());
 		sbiFederationDefinition.setLabel(federationDefinition.getLabel());
 		sbiFederationDefinition.setName(federationDefinition.getName());
 		sbiFederationDefinition.setDescription(federationDefinition.getDescription());
 		sbiFederationDefinition.setRelationships(federationDefinition.getRelationships());
 		sbiFederationDefinition.setSourceDatasets(toSbiDataSet(federationDefinition.getSourceDatasets()));
 		sbiFederationDefinition.setDegenerated(federationDefinition.isDegenerated());
-		sbiFederationDefinition.setOwner(federationDefinition.getOwner());
+		if (Objects.isNull(sbiFederationDefinition.getOwner())) {
+			sbiFederationDefinition.setOwner(federationDefinition.getOwner());
+		}
 
 		logger.debug("OUT");
 
@@ -110,7 +113,7 @@ public class SbiFederationUtils {
 
 	public static Set<SbiDataSet> toSbiDataSet(Set<IDataSet> dataSets) {
 
-		Set<SbiDataSet> ds = new java.util.HashSet<SbiDataSet>();
+		Set<SbiDataSet> ds = new java.util.HashSet<>();
 		for (IDataSet dataset : dataSets) {
 			int version = 1;
 			if (dataset instanceof VersionedDataSet) {

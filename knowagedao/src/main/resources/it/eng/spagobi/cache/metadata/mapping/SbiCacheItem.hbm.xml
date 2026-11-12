@@ -44,7 +44,7 @@
             <column name="TABLE_NAME" length="100" not-null="true" unique="true" />
         </property>
         <property name="name" type="string">
-            <column name="NAME" length="65535" not-null="true" />
+            <column name="NAME" length="50" not-null="true" />
         </property>
         <property name="dimension" type="java.lang.Long">
             <column name="DIMENSION" precision="10" scale="0" />
@@ -58,5 +58,8 @@
         <property name="properties" type="string">
             <column name="PROPERTIES" length="65535" />
         </property>
+		<property name="parameters" type="string">
+			<column name="PARAMETERS" length="65535" />
+		</property>
     </class>
 </hibernate-mapping>

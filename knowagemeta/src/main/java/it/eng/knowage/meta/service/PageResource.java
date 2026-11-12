@@ -17,21 +17,21 @@
  */
 package it.eng.knowage.meta.service;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.Response;
 
 import org.apache.log4j.Logger;
 import org.eclipse.emf.common.util.URI;
@@ -77,17 +77,7 @@ import it.eng.spagobi.utilities.engines.EngineStartServletIOManager;
 @Path("/1.0/pages")
 public class PageResource {
 
-	static private Map<String, String> urls;
-
-	static private Logger logger = Logger.getLogger(PageResource.class);
-
-	{
-		urls = new HashMap<String, String>();
-		urls.put("edit", "/WEB-INF/jsp/metaWeb.jsp");
-		urls.put("test", "/WEB-INF/jsp/test.jsp");
-		urls.put("error", "/WEB-INF/jsp/error.jsp");
-
-	}
+	private static Logger logger = Logger.getLogger(PageResource.class);
 
 	@Context
 	protected HttpServletRequest request;
@@ -96,10 +86,7 @@ public class PageResource {
 
 	@GET
 	@Path("/{pagename}")
-	@Produces("text/html")
-	public void getPage(@PathParam("pagename") String pageName, @QueryParam("bmName") String businessModelName) {
-		String dispatchUrl = urls.get(pageName);
-
+	public Response getPage(@PathParam("pagename") String pageName, @QueryParam("bmName") String businessModelName) throws Exception {
 		try {
 			EngineStartServletIOManager ioManager = new EngineStartServletIOManager(request, response);
 			UserProfile userProfile = ioManager.getUserProfile();
@@ -109,10 +96,7 @@ public class PageResource {
 				ioManager.setUserProfile(userProfile);
 			}
 
-			// To deploy into JBOSSEAP64 is needed a StandardWrapper, instead of RestEasy Wrapper
-			// HttpServletRequest request = ResteasyProviderFactory.getContextData(HttpServletRequest.class);
-			// HttpServletResponse response = ResteasyProviderFactory.getContextData(HttpServletResponse.class);
-			ioManager.getHttpSession().setAttribute("ioManager", ioManager);
+			// ioManager.getHttpSession().setAttribute("ioManager", ioManager);
 			ioManager.getHttpSession().setAttribute("userProfile", userProfile);
 
 			// load product types
@@ -175,7 +159,8 @@ public class PageResource {
 						logger.error("Business model file not found");
 					}
 					if (!modelFound) {
-						request.getRequestDispatcher(urls.get("error")).forward(request, response);
+						// return new View(urls.get("error"));
+						return Response.serverError().build();
 					}
 
 				}
@@ -209,13 +194,14 @@ public class PageResource {
 
 			// -------------------------------------------------------------------------------------------
 
-			response.setContentType("text/html");
-			response.setCharacterEncoding("UTF-8");
+			response.setContentType("application/json");
+			response.setCharacterEncoding(UTF_8.name());
 
-			request.getRequestDispatcher(dispatchUrl).forward(request, response);
+			return Response.ok().build();
 
 		} catch (Exception e) {
 			logger.error("Error during Metamodel initialization: ", e);
+			throw e;
 		} finally {
 			DbTypeThreadLocal.unset();
 			logger.debug("OUT");
@@ -279,6 +265,7 @@ public class PageResource {
 			propertyType.getAdmissibleValues().add("BIGINT");
 			propertyType.getAdmissibleValues().add("FLOAT");
 			propertyType.getAdmissibleValues().add("SMALLINT");
+			propertyType.getAdmissibleValues().add("NUMERIC");
 		}
 
 	}

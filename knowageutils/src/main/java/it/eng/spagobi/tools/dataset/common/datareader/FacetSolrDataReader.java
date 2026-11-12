@@ -18,23 +18,30 @@
  */
 package it.eng.spagobi.tools.dataset.common.datareader;
 
-import it.eng.spagobi.tools.dataset.common.datastore.*;
+
+import java.util.List;
+import java.util.Map;
+
+import org.apache.log4j.Logger;
+
+import it.eng.spagobi.tools.dataset.common.datastore.DataStore;
+import it.eng.spagobi.tools.dataset.common.datastore.Field;
+import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
+import it.eng.spagobi.tools.dataset.common.datastore.IField;
+import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
+
+import it.eng.spagobi.tools.dataset.common.datastore.Record;
 import it.eng.spagobi.tools.dataset.common.metadata.FieldMetadata;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.MetaData;
 import it.eng.spagobi.utilities.Helper;
-import org.apache.log4j.Logger;
-
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 
 public class FacetSolrDataReader extends SolrDataReader {
 
     private static final String KEY_HEADER = "key";
     private static final String VALUE_HEADER = "value";
-    static private Logger logger = Logger.getLogger(FacetSolrDataReader.class);
+    private static Logger logger = Logger.getLogger(FacetSolrDataReader.class);
     private boolean hasFacetQuery;
     private String facetField;
 
@@ -81,13 +88,13 @@ public class FacetSolrDataReader extends SolrDataReader {
 
             for (int j = 0; j < parsedData.size(); j++) {
                 if (maxResults <= 0 || rowFetched < maxResults) {
-                    IRecord record = new Record(dataStore);
+                    IRecord currRecord = new Record(dataStore);
                     Map<Object, Object> aMap = (Map<Object, Object>) parsedData.get(j);
                     for (Object key : aMap.keySet()) {
                         Object value = aMap.get(key);
-                        record.appendField(new Field(value));
+                        currRecord.appendField(new Field(value));
                     }
-                    dataStore.appendRecord(record);
+                    dataStore.appendRecord(currRecord);
                     rowFetched++;
                 }
             }
@@ -95,13 +102,13 @@ public class FacetSolrDataReader extends SolrDataReader {
 
             for (int j = 0; j < parsedData.size(); j++) {
                 if (maxResults <= 0 || rowFetched < maxResults) {
-                    IRecord record = new Record(dataStore);
+                    IRecord currRecord = new Record(dataStore);
                     IField field = new Field(parsedData.get(j));
-                    record.appendField(field);
+                    currRecord.appendField(field);
 
                     field = new Field(parsedData.get(j + 1));
-                    record.appendField(field);
-                    dataStore.appendRecord(record);
+                    currRecord.appendField(field);
+                    dataStore.appendRecord(currRecord);
                     rowFetched++;
                 }
                 j = j + 1;

@@ -27,45 +27,56 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import it.eng.knowage.security.ProductProfiler;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.bo.RoleMetaModelCategory;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.IRoleDAO;
+import it.eng.spagobi.commons.metadata.SbiAuthorizations;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 
 @Path("/2.0/authorizations")
 public class AuthorizationsResource extends AbstractSpagoBIResource {
+
+	private static final Logger LOGGER = LogManager.getLogger(AuthorizationsResource.class);
+
 	private final String charset = "; charset=UTF-8";
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
 	@Path("/")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getAuthorizations() {
 		IRoleDAO rolesDao = null;
-		List fullList = null;
+		List<SbiAuthorizations> fullList = null;
 
 		try {
 
 			rolesDao = DAOFactory.getRoleDAO();
 			rolesDao.setUserProfile(getUserProfile());
 			fullList = rolesDao.loadAllAuthorizations();
+            if (!ProductProfiler.canUseEngGPT()) {
+                fullList.removeIf(auth -> auth.getName().equals("ENG_GPT_INTEGRATION"));
+            }
 			return Response.ok(fullList).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 	}
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
 	@Path("/metaCategories/{id}")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getMetaModelCat(@PathParam("id") Integer id) {
 		IRoleDAO rolesDao = null;
-		List<RoleMetaModelCategory> categories = new ArrayList<RoleMetaModelCategory>();
+		List<RoleMetaModelCategory> categories = new ArrayList<>();
 
 		try {
 
@@ -74,8 +85,8 @@ public class AuthorizationsResource extends AbstractSpagoBIResource {
 			categories = rolesDao.getMetaModelCategoriesForRole(id);
 			return Response.ok(categories).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 	}
 }

@@ -28,7 +28,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
 import it.eng.spagobi.commons.bo.Domain;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.utilities.UserUtilities;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
@@ -44,7 +44,7 @@ public class DomainCRUDForFinalUser extends DomainCRUD {
 	@GET
 	@Path("/listValueDescriptionByType")
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public String getListDomainsByType(@Context HttpServletRequest req) {
 		return super.getListDomainsByType(req);
 	}
@@ -54,13 +54,27 @@ public class DomainCRUDForFinalUser extends DomainCRUD {
 	@Path("/ds-categories")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public String getDataSetCategoriesByUser(@Context HttpServletRequest req) {
-		Set<Domain> categories = new HashSet<Domain>();
+		Set<Domain> categories = new HashSet<>();
 		try {
 			categories = UserUtilities.getDataSetCategoriesByUser(getUserProfile());
 			return translate(categories, getLocale(req)).toString();
 		} catch (Exception e) {
 			logger.error("Impossible to get role dataset categories for user [" + getUserProfile() + "]", e);
-			throw new SpagoBIRestServiceException("Impossible to get role dataset categories for user [" + getUserProfile() + "]", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Impossible to get role dataset categories for user [" + getUserProfile() + "]", getLocale(), e);
+		}
+	}
+
+	@GET
+	@Path("/bm-categories")
+	@Produces(MediaType.APPLICATION_JSON + charset)
+	public String getBusinessModelsCategoriesByUser(@Context HttpServletRequest req) {
+		Set<Domain> categories = new HashSet<>();
+		try {
+			categories = UserUtilities.getBusinessModelsCategoriesByUser(getUserProfile());
+			return translate(categories, getLocale(req)).toString();
+		} catch (Exception e) {
+			logger.error("Impossible to get role models categories for user [" + getUserProfile() + "]", e);
+			throw new SpagoBIRestServiceException("Impossible to get role models categories for user [" + getUserProfile() + "]", getLocale(), e);
 		}
 	}
 }

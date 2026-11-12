@@ -20,19 +20,18 @@ package it.eng.spagobi.engines.georeport.utils;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.jamonapi.KnowageMonitorFactory;
+import it.eng.knowage.monitor.KnowageMonitorFactory;
 
 /**
  * @author Andrea Gioia (andrea.gioia@eng.it)
- * @deprecated Use {@link KnowageMonitorFactory} to create monitors
- * TODO ML-DATASOURCE-V3 Delete
+ * @deprecated Use {@link KnowageMonitorFactory} to create monitors TODO ML-DATASOURCE-V3 Delete
  */
 @Deprecated
 public class Monitor {
 	static Map<String, Long> activities;
 
 	static {
-		activities = new HashMap<String, Long>();
+		activities = new HashMap<>();
 	}
 
 	public static void start(String activityName) {

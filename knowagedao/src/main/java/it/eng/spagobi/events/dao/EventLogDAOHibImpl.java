@@ -20,11 +20,10 @@ package it.eng.spagobi.events.dao;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.hibernate.Criteria;
 import org.hibernate.HibernateException;
@@ -39,8 +38,6 @@ import it.eng.spago.error.EMFInternalError;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
-import it.eng.spagobi.commons.metadata.SbiExtRoles;
-import it.eng.spagobi.commons.utilities.StringUtilities;
 import it.eng.spagobi.dao.PagedList;
 import it.eng.spagobi.events.bo.EventLog;
 import it.eng.spagobi.events.bo.EventType;
@@ -53,18 +50,16 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLogDAO {
 
-	static private Logger logger = Logger.getLogger(EventLogDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(EventLogDAOHibImpl.class);
 
 	/**
 	 * Load event log by id.
 	 *
-	 * @param id
-	 *            the id
+	 * @param id the id
 	 *
 	 * @return the event log
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.events.dao.IEventLogDAO#loadEventLogById(Integer)
 	 */
@@ -80,33 +75,27 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 			tx = aSession.beginTransaction();
 			SbiEventsLog aSbiEventsLog = (SbiEventsLog) aSession.get(SbiEventsLog.class, id);
 
-			if (aSbiEventsLog == null)
+			if (aSbiEventsLog == null) {
 				return null;
+			}
 
 			realResult = toEventsLog(aSbiEventsLog);
 
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return realResult;
 
 	}
 
-	public PagedList<EventLog> loadAllEventsLog(int offset, int fetchsize, Date startDate, Date endDate, String creationUser, String type, String sortingColumn,
-			boolean sortingAscending) {
+	public PagedList<EventLog> loadAllEventsLog(int offset, int fetchsize, Date startDate, Date endDate,
+			String creationUser, String type, String sortingColumn, boolean sortingAscending) {
 		logger.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
@@ -126,28 +115,25 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 			List hibList = criteria.list();
 
 			Iterator it = hibList.iterator();
-			List<EventLog> results = new ArrayList<EventLog>();
+			List<EventLog> results = new ArrayList<>();
 			while (it.hasNext()) {
 				results.add(toEventsLog((SbiEventsLog) it.next()));
 			}
 			int start = offset + 1;
-			toReturn = new PagedList<EventLog>(results, total, start);
+			toReturn = new PagedList<>(results, total, start);
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new SpagoBIRuntimeException("Error loading events", he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 			logger.debug("OUT");
 		}
 		return toReturn;
 	}
 
-	private Criteria getBaseFilteringCriteria(Date startDate, Date endDate, String creationUser, String type, Session aSession) {
+	private Criteria getBaseFilteringCriteria(Date startDate, Date endDate, String creationUser, String type,
+			Session aSession) {
 		Criteria criteria = aSession.createCriteria(SbiEventsLog.class);
 		if (startDate != null) {
 			criteria.add(Restrictions.ge("date", startDate));
@@ -155,10 +141,10 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 		if (endDate != null) {
 			criteria.add(Restrictions.le("date", endDate));
 		}
-		if (!StringUtilities.isEmpty(creationUser)) {
+		if (!StringUtils.isEmpty(creationUser)) {
 			criteria.add(Restrictions.eq("user", creationUser));
 		}
-		if (!StringUtilities.isEmpty(type)) {
+		if (!StringUtils.isEmpty(type)) {
 			EventType eventType = EventType.valueOf(type);
 			criteria.add(Restrictions.eq("eventType", eventType));
 		}
@@ -166,7 +152,7 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 	}
 
 	private void addOrderingCriteria(Criteria criteria, String sortingColumn, boolean sortingAscending) {
-		if (!StringUtilities.isEmpty(sortingColumn)) {
+		if (!StringUtils.isEmpty(sortingColumn)) {
 			if (sortingAscending) {
 				criteria.addOrder(Order.asc(sortingColumn));
 			} else {
@@ -184,8 +170,8 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 	 * @see it.eng.spagobi.events.dao.IEventLogDAO#loadEventsLogByUser(it.eng.spago.security.IEngUserProfile)
 	 */
 	@Override
-	public PagedList<EventLog> loadEventsLogByUser(UserProfile profile, int offset, int fetchsize, Date startDate, Date endDate, String creationUser,
-			String type, String sortingColumn, boolean sortingAscending) {
+	public PagedList<EventLog> loadEventsLogByUser(UserProfile profile, int offset, int fetchsize, Date startDate,
+			Date endDate, String creationUser, String type, String sortingColumn, boolean sortingAscending) {
 		logger.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
@@ -217,26 +203,19 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 			List hibList = criteria.list();
 
 			Iterator it = hibList.iterator();
-			List<EventLog> results = new ArrayList<EventLog>();
+			List<EventLog> results = new ArrayList<>();
 			while (it.hasNext()) {
 				results.add(toEventsLog((SbiEventsLog) it.next()));
 			}
 			int start = offset + 1;
-			toReturn = new PagedList<EventLog>(results, total, start);
+			toReturn = new PagedList<>(results, total, start);
 
 		} catch (HibernateException he) {
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
 			throw new SpagoBIRuntimeException("Error while loading events for user " + profile.getUserId(), he);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return toReturn;
@@ -252,12 +231,13 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 		}
 
 		// TODO : do we really need the following code????
-		List<String> roleNames = new ArrayList<String>();
+		List<String> roleNames = new ArrayList<>();
 		Iterator<String> rolesIt = roles.iterator();
 		while (rolesIt.hasNext()) {
 			String roleName = rolesIt.next();
-			if (!roleNames.contains(roleName))
+			if (!roleNames.contains(roleName)) {
 				roleNames.add(roleName);
+			}
 		}
 
 		return roleNames;
@@ -266,13 +246,11 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 	/**
 	 * Insert event log.
 	 *
-	 * @param eventLog
-	 *            the event log
+	 * @param eventLog the event log
 	 *
 	 * @return the integer
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.events.dao.IEventLogDAO#insertEventLog(it.eng.spagobi.events.bo.EventLog)
 	 */
@@ -292,23 +270,6 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 			hibEventLog.setParams(eventLog.getParams());
 			hibEventLog.setEventType(eventLog.getType());
 			this.updateSbiCommonInfo4Insert(hibEventLog);
-			Set hibEventRoles = new HashSet();
-			List roles = eventLog.getRoles();
-			Iterator rolesIt = roles.iterator();
-			while (rolesIt.hasNext()) {
-				String roleName = (String) rolesIt.next();
-				String hql = "from SbiExtRoles as roles where roles.name = ?";
-
-				Query hqlQuery = session.createQuery(hql);
-				hqlQuery.setString(0, roleName);
-				SbiExtRoles aHibRole = (SbiExtRoles) hqlQuery.uniqueResult();
-				if (aHibRole == null) {
-					logger.error("Role with name = '" + roleName + "' does not exist!!");
-					continue;
-				}
-				hibEventRoles.add(aHibRole);
-			}
-			hibEventLog.setRoles(hibEventRoles);
 			session.save(hibEventLog);
 			tx.commit();
 			return hibEventLog.getId();
@@ -318,10 +279,7 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (session != null) {
-				if (session.isOpen())
-					session.close();
-			}
+			closeSessionIfOpen(session);
 			logger.debug("OUT");
 		}
 	}
@@ -329,11 +287,9 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 	/**
 	 * Erase event log.
 	 *
-	 * @param eventLog
-	 *            the event log
+	 * @param eventLog the event log
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.events.dao.IEventLogDAO#eraseEventLog(it.eng.spagobi.events.bo.EventLog)
 	 */
@@ -357,19 +313,14 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} catch (Exception ex) {
 			logException(ex);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 	}
@@ -377,11 +328,9 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 	/**
 	 * Erase events log by user.
 	 *
-	 * @param user
-	 *            the user
+	 * @param user the user
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.events.dao.IEventLogDAO#eraseEventsLogByUser(String)
 	 */
@@ -421,19 +370,14 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} catch (Exception ex) {
 			logException(ex);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 	}
@@ -447,14 +391,6 @@ public class EventLogDAOHibImpl extends AbstractHibernateDAO implements IEventLo
 		eventLog.setDesc(hibEventLog.getDesc());
 		eventLog.setParams(hibEventLog.getParams());
 		eventLog.setType(hibEventLog.getEventType());
-		List roles = new ArrayList();
-		Set rolesSet = hibEventLog.getRoles();
-		Iterator rolesIt = rolesSet.iterator();
-		while (rolesIt.hasNext()) {
-			SbiExtRoles hibRole = (SbiExtRoles) rolesIt.next();
-			roles.add(hibRole.getName());
-		}
-		eventLog.setRoles(roles);
 		logger.debug("OUT");
 		return eventLog;
 	}

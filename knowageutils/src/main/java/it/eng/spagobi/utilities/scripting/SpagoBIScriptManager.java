@@ -22,13 +22,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.security.AccessControlContext;
-import java.security.AccessController;
-import java.security.CodeSource;
-import java.security.PermissionCollection;
-import java.security.Permissions;
-import java.security.PrivilegedExceptionAction;
-import java.security.ProtectionDomain;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,9 +32,7 @@ import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineFactory;
 import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
 import javax.script.SimpleBindings;
-import javax.script.SimpleScriptContext;
 
 import org.apache.log4j.LogMF;
 import org.apache.log4j.Logger;
@@ -51,7 +42,7 @@ import it.eng.spagobi.utilities.groovy.GroovySandbox;
 
 public class SpagoBIScriptManager {
 
-	static private Logger logger = Logger.getLogger(SpagoBIScriptManager.class);
+	private static Logger logger = Logger.getLogger(SpagoBIScriptManager.class);
 
 	public Object runScript(String script, String language) {
 		return runScript(script, language, null, null);
@@ -71,7 +62,7 @@ public class SpagoBIScriptManager {
 		try {
 
 			if (imports != null) {
-				StringBuffer importsBuffer = new StringBuffer();
+				StringBuilder importsBuffer = new StringBuilder();
 				for (Object importedScriptReference : imports) {
 					if (importedScriptReference instanceof File) {
 						importsBuffer.append(this.getImportedScript((File) importedScriptReference) + "\n");
@@ -97,29 +88,21 @@ public class SpagoBIScriptManager {
 				logger.debug("Found engine [" + scriptEngine.NAME + "]");
 			}
 
-			ScriptContext scriptContext = new SimpleScriptContext();
+			Bindings bindingContext = scriptEngine.getContext().getBindings(ScriptContext.ENGINE_SCOPE);
+			bindingContext.put("polyglot.js.allowHostAccess", true);
+
 			if (bindings != null) {
 				Bindings scriptBindings = new SimpleBindings(bindings);
-				scriptContext.setBindings(scriptBindings, ScriptContext.ENGINE_SCOPE);
+
+				scriptBindings.forEach(scriptEngine::put);
 			}
-			scriptEngine.setContext(scriptContext);
 
-			PermissionCollection pc = new Permissions(); // This means no permissions at all
-			CodeSource codeSource = scriptEngine.getClass().getProtectionDomain().getCodeSource();
-			ProtectionDomain protectionDomain = new ProtectionDomain(codeSource, pc);
-			ProtectionDomain[] context = new ProtectionDomain[] { protectionDomain };
-			AccessControlContext accessControlContext = new AccessControlContext(context);
-
-			final String _script = script;
-
-			results = AccessController.doPrivileged(new PrivilegedExceptionAction<Object>() {
-
-				@Override
-				public Object run() throws ScriptException {
-					return scriptEngine.eval(_script);
-				}
-			}, accessControlContext);
-
+			results = scriptEngine.eval(script);
+			// the keyword "query" is used because it is useful in datasets when changing the query entered
+			// this is a commonly used variable name.
+			if (scriptEngine.get("query") != null) {
+				results = scriptEngine.get("query");
+			}
 		} catch (Throwable t) {
 			logger.error("Error while executing Javascript:\n" + script, t);
 			throw new SpagoBIRuntimeException("An unexpected error occured while executing script", t);
@@ -187,7 +170,7 @@ public class SpagoBIScriptManager {
 		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 		List<ScriptEngineFactory> scriptEngineFactories = scriptEngineManager.getEngineFactories();
 
-		Set<String> languages = new HashSet<String>();
+		Set<String> languages = new HashSet<>();
 		for (ScriptEngineFactory scriptEngineFactory : scriptEngineFactories) {
 			languages.add(scriptEngineFactory.getLanguageName());
 		}
@@ -202,7 +185,7 @@ public class SpagoBIScriptManager {
 		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 		List<ScriptEngineFactory> scriptEngineFactories = scriptEngineManager.getEngineFactories();
 
-		Set<String> engineNames = new HashSet<String>();
+		Set<String> engineNames = new HashSet<>();
 		for (ScriptEngineFactory scriptEngineFactory : scriptEngineFactories) {
 			engineNames.addAll(scriptEngineFactory.getNames());
 		}
@@ -271,7 +254,7 @@ public class SpagoBIScriptManager {
 		importedScript = null;
 
 		try {
-			StringBuffer buffer = new StringBuffer();
+			StringBuilder buffer = new StringBuilder();
 			int arrayLength = 1024;
 			byte[] bufferbyte = new byte[arrayLength];
 			char[] bufferchar = new char[arrayLength];
@@ -300,12 +283,12 @@ public class SpagoBIScriptManager {
 			String engVersion = factory.getEngineVersion();
 			String langName = factory.getLanguageName();
 			String langVersion = factory.getLanguageVersion();
-			System.out.printf("\tScript Engine: %s (%s)\n", engName, engVersion);
+			System.out.printf("\tScript Engine: %s (%s)%n", engName, engVersion);
 			List<String> engNames = factory.getNames();
 			for (String name : engNames) {
-				System.out.printf("\tEngine Alias: %s\n", name);
+				System.out.printf("\tEngine Alias: %s%n", name);
 			}
-			System.out.printf("\tLanguage: %s (%s)\n", langName, langVersion);
+			System.out.printf("\tLanguage: %s (%s)%n", langName, langVersion);
 		}
 	}
 }

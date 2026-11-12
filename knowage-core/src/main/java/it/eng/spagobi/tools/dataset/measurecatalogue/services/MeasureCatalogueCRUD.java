@@ -38,7 +38,7 @@ import org.json.JSONObject;
 
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.utilities.UserUtilities;
 import it.eng.spagobi.services.exceptions.ExceptionUtilities;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
@@ -64,12 +64,12 @@ import it.eng.spagobi.tools.dataset.measurecatalogue.materializer.exception.NoCo
 @Path("/measures")
 public class MeasureCatalogueCRUD {
 	public static transient Logger logger = Logger.getLogger(MeasureCatalogueCRUD.class);
-	static private String noCommonDimensionsRuntimeException = "error.mesage.description.measure.join.no.common.dimension";
-	static private String noCompleteCommonDimensionsRuntimeException = "error.mesage.description.measure.join.no.complete.common.dimension";
+	private static String noCommonDimensionsRuntimeException = "error.mesage.description.measure.join.no.common.dimension";
+	private static String noCompleteCommonDimensionsRuntimeException = "error.mesage.description.measure.join.no.complete.common.dimension";
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.MEASURES_CATALOGUE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MEASURES_CATALOGUE_MANAGEMENT })
 	public String getAllMeasures(@Context HttpServletRequest req) {
 		IEngUserProfile profile = (IEngUserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
 		String measures = MeasureCatalogueSingleton.getMeasureCatologue().toString(((UserProfile) profile).getUserId().toString(),
@@ -81,7 +81,7 @@ public class MeasureCatalogueCRUD {
 	@Path("/join")
 	@Consumes("application/x-www-form-urlencoded")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.MEASURES_CATALOGUE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.MEASURES_CATALOGUE_MANAGEMENT })
 	public String join(@Context HttpServletRequest req, MultivaluedMap<String, String> form) {
 
 		logger.debug("IN");
@@ -93,7 +93,7 @@ public class MeasureCatalogueCRUD {
 
 		IEngUserProfile profile = (IEngUserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
 		List<String> labels = form.get("labels");
-		List<MeasureCatalogueMeasure> measures = new ArrayList<MeasureCatalogueMeasure>();
+		List<MeasureCatalogueMeasure> measures = new ArrayList<>();
 		for (int i = 0; i < labels.size(); i++) {
 			MeasureCatalogueMeasure aMeasure = catalogue.getMeasureByLabel(labels.get(i));
 			if (aMeasure != null) {
@@ -137,7 +137,7 @@ public class MeasureCatalogueCRUD {
 		try {
 			metaData = dataStroreJSON.getJSONObject("metaData");
 			JSONArray fieldsMetaJSON = metaData.getJSONArray("fields");
-			List<IFieldMetaData> geoRefFieldMeta = new ArrayList<IFieldMetaData>();
+			List<IFieldMetaData> geoRefFieldMeta = new ArrayList<>();
 			for (int i = 0; i < dataStore.getMetaData().getFieldCount(); i++) {
 				IFieldMetaData fieldMeta = dataStore.getMetaData().getFieldMeta(i);
 				JSONObject fieldMetaJSON = fieldsMetaJSON.getJSONObject(i + 1);
@@ -172,8 +172,7 @@ public class MeasureCatalogueCRUD {
 			metaData.put("geoIdHierarchyLevel", geoRefFieldMeta.get(0).getProperty("hierarchy_level"));
 			// TODO bisogna strippare la label del datset dal prefisso dell'header di colonna
 		} catch (JSONException t) {
-			// TODO Auto-generated catch block
-			t.printStackTrace();
+			logger.error("JSONException",t);
 		}
 
 		logger.debug("Joined dataset succesfully serialized");

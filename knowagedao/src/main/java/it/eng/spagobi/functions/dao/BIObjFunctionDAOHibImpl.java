@@ -20,22 +20,22 @@ import it.eng.spagobi.utilities.assertion.Assert;
 
 public class BIObjFunctionDAOHibImpl extends AbstractHibernateDAO implements IBIObjFunctionDAO {
 
-	static private Logger logger = Logger.getLogger(BIObjFunctionDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(BIObjFunctionDAOHibImpl.class);
 
 	@Override
 	public ArrayList<BIObject> getBIObjectsUsingFunction(String uuid, Session currSession) throws EMFUserError {
 		logger.debug("IN");
 
-		ArrayList<BIObject> toReturn = new ArrayList<BIObject>();
+		ArrayList<BIObject> toReturn = new ArrayList<>();
 
-		String hql = "from SbiObjFunction s where s.functionUuid = '" + uuid + "'";
+		String hql = "from SbiObjFunction s where s.functionUuid = :uuid";
 		Query hqlQuery = currSession.createQuery(hql);
-		List hibObjectPars = hqlQuery.list();
+		hqlQuery.setParameter("uuid", uuid);
+		List<SbiObjFunction> hibObjectPars = hqlQuery.list();
 
-		Iterator it = hibObjectPars.iterator();
-		int count = 1;
+		Iterator<SbiObjFunction> it = hibObjectPars.iterator();
 		while (it.hasNext()) {
-			BIObjFunction aBIObjFunction = toBIObjFunction((SbiObjFunction) it.next());
+			BIObjFunction aBIObjFunction = toBIObjFunction(it.next());
 			BIObject obj = aBIObjFunction.getBiObject();
 			toReturn.add(obj);
 		}
@@ -75,14 +75,10 @@ public class BIObjFunctionDAOHibImpl extends AbstractHibernateDAO implements IBI
 
 			transaction.commit();
 		} catch (Throwable t) {
-			if (transaction != null && transaction.isActive()) {
-				transaction.rollback();
-			}
+			rollbackIfActive(transaction);
 			throw new SpagoBIDAOException("Error while deleting the objDataset associated with object" + biObjId, t);
 		} finally {
-			if (session != null && session.isOpen()) {
-				session.close();
-			}
+			closeSessionIfOpen(session);
 		}
 		logger.debug("OUT");
 	}
@@ -92,12 +88,13 @@ public class BIObjFunctionDAOHibImpl extends AbstractHibernateDAO implements IBI
 
 		logger.debug("IN");
 
-		String hql = "from SbiObjFunction s where s.sbiObject.biobjId = " + biObjId + "";
+		String hql = "from SbiObjFunction s where s.sbiObject.biobjId = :biObjId";
 		Query hqlQuery = currSession.createQuery(hql);
-		List hibObjectPars = hqlQuery.list();
+		hqlQuery.setParameter("biObjId", biObjId);
+		List<SbiObjFunction> hibObjectPars = hqlQuery.list();
 
-		for (Iterator iterator = hibObjectPars.iterator(); iterator.hasNext();) {
-			SbiObjFunction sbiObjFunction = (SbiObjFunction) iterator.next();
+		for (Iterator<SbiObjFunction> iterator = hibObjectPars.iterator(); iterator.hasNext();) {
+			SbiObjFunction sbiObjFunction = iterator.next();
 			currSession.delete(sbiObjFunction);
 
 		}
@@ -105,19 +102,20 @@ public class BIObjFunctionDAOHibImpl extends AbstractHibernateDAO implements IBI
 	}
 
 	@Override
-	public void updateObjectFunctions(BIObject biObj, List<String> functionsToInsert, Session currSession) throws EMFUserError {
+	public void updateObjectFunctions(BIObject biObj, List<String> functionsToInsert, Session currSession)
+			throws EMFUserError {
 		logger.debug("IN");
 		logger.debug("update catalog functions associations for biObj " + biObj.getId());
 
 		ArrayList<BIObjFunction> functionsAlreadyAssociated = getBiObjFunctions(biObj.getId(), currSession);
-		ArrayList<String> idsAlreadyAssociated = new ArrayList<String>();
+		ArrayList<String> idsAlreadyAssociated = new ArrayList<>();
 		for (BIObjFunction f : functionsAlreadyAssociated) {
 			idsAlreadyAssociated.add(f.getFunctionUuid());
 		}
 
 		logger.debug("Insert new dataset associations");
-		for (Iterator iterator = functionsToInsert.iterator(); iterator.hasNext();) {
-			String funcToInsert = (String) iterator.next();
+		for (Iterator<String> iterator = functionsToInsert.iterator(); iterator.hasNext();) {
+			String funcToInsert = iterator.next();
 			// don't insert if it is already present
 			if (!idsAlreadyAssociated.contains(funcToInsert)) {
 				logger.debug("Insert association with function " + funcToInsert);
@@ -130,7 +128,7 @@ public class BIObjFunctionDAOHibImpl extends AbstractHibernateDAO implements IBI
 		logger.debug("OUT");
 	}
 
-	public void insertBiObjFunction(Integer biObjId, String funcUuid, Session currSession) throws EMFUserError {
+	public void insertBiObjFunction(Integer biObjId, String funcUuid, Session currSession) {
 		logger.debug("IN");
 
 		SbiObjFunction toInsert = new SbiObjFunction();
@@ -155,17 +153,16 @@ public class BIObjFunctionDAOHibImpl extends AbstractHibernateDAO implements IBI
 	public ArrayList<BIObjFunction> getBiObjFunctions(Integer biObjId, Session currSession) throws EMFUserError {
 		logger.debug("IN");
 
-		ArrayList<BIObjFunction> toReturn = new ArrayList<BIObjFunction>();
+		ArrayList<BIObjFunction> toReturn = new ArrayList<>();
 
 		String query = "from SbiObjFunction s where s.sbiObject.biobjId = ?";
 		Query hqlQuery = currSession.createQuery(query);
 		hqlQuery.setInteger(0, biObjId);
-		List hibObjectPars = hqlQuery.list();
+		List<SbiObjFunction> hibObjectPars = hqlQuery.list();
 
-		Iterator it = hibObjectPars.iterator();
-		int count = 1;
+		Iterator<SbiObjFunction> it = hibObjectPars.iterator();
 		while (it.hasNext()) {
-			BIObjFunction aBIObjectFunction = toBIObjFunction((SbiObjFunction) it.next());
+			BIObjFunction aBIObjectFunction = toBIObjFunction(it.next());
 			toReturn.add(aBIObjectFunction);
 		}
 

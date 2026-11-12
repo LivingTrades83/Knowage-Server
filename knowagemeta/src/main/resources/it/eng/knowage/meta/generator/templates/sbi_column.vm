@@ -13,12 +13,18 @@
 #end
 #if ( $jpaColumn.isDataTypeGeometry() )
 @Type(type = "org.hibernatespatial.GeometryUserType")
+#elseif ( $jpaColumn.isDecryptable() )
+@Type(type="${jpaTable.encryptedColTypeName}")
 #end
 #if ($jpaColumn.needMapTemporalType())
 @Temporal( TemporalType.$jpaColumn.getMapTemporalType())
 #end
 #set ($members = "")
 #append($members "name=$jpaColumn.quotedMappingColumnName" )
+## The association owns writes to visible relationship columns mapped as scalar fields.
+#if ($jpaColumn.isColumnInRelationship() && !$jpaColumn.isIdentifier() && !$jpaTable.hasFakePrimaryKey() && $jpaColumn.getAttribute("structural.visible") == "true")
+#append($members "insertable = false, updatable = false")
+#end
 #####    ADD THE LINE TO THE SOURCE CODE
 #if( $members !="" )
 @Column($members)

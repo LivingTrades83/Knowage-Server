@@ -142,13 +142,10 @@ angular.module('chartInitializer')
 					var finalMax = Math.max.apply(Math, [mapAxis.max[i], plotBands && plotBands[0].to != plotBands[0].from ? plotBands[0].to : mapAxis.max[i],  plotLines && plotLines[0].width > 0 ? plotLines[0].value : mapAxis.max[i]].map(function(o) { return o; }));
 
 					if(chartConf.yAxis[i].min===undefined || chartConf.yAxis[i].min=='auto'){
-						chartConf.yAxis[i].min = finalMin>=0 ? finalMin * 0.5 : finalMin * 1.5;
+						chartConf.yAxis[i].min = finalMin > 0 ? finalMin * 0.5 : (finalMin < 0 ? finalMin * 1.5 : null);
 					}
-					finalMin = chartConf.yAxis[i].min;
-					if(chartConf.yAxis[i].min=="") chartConf.yAxis[i].min = null;
 					if(chartConf.yAxis[i].max===undefined || chartConf.yAxis[i].max=='auto') {
-						chartConf.yAxis[i].max = finalMax>=0 ? finalMax * 1.1 : finalMax * 0.9;
-
+						chartConf.yAxis[i].max = finalMax > 0 ? finalMax * 1.1 : (finalMax < 0 ? finalMax * 0.9 : null);
 					}
 					finalMax = chartConf.yAxis[i].max
 					if(chartConf.yAxis[i].max=="") chartConf.yAxis[i].max = null;
@@ -206,6 +203,12 @@ angular.module('chartInitializer')
             }
 
 			this.chart =  new Highcharts.Chart(chartConf);
+			// Bind render event to keep underline in sync, then set initial state
+			if (chartConf.chart.additionalData && chartConf.chart.additionalData.drillable) {
+				this.chart._knowageDrillable = true;
+				bindDrillableLabelRender(this.chart);
+				applyUnderlineToChartLabels(this.chart, true);
+			}
 			if(isBasic){
 				this.chart.extremes = infoFroDrill;
 			}
@@ -463,6 +466,52 @@ angular.module('chartInitializer')
 		})
 	}
 
+	/**
+	 * Applies or removes text-decoration:underline + cursor:pointer directly on
+	 * the SVG/HTML label DOM elements of the chart.
+	 * Called from the Highcharts 'render' event so it runs after every redraw.
+	 */
+	var applyUnderlineToChartLabels = function(chart, isDrillable) {
+		if (!chart || !chart.container) return;
+		var container = chart.container;
+		var decoration = isDrillable ? 'underline' : '';
+		var cursor     = isDrillable ? 'pointer'   : '';
+
+		// xAxis labels (SVG <text> and tspan inside .highcharts-xaxis-labels)
+		var xAxisLabelGroup = container.querySelector('.highcharts-xaxis-labels');
+		if (xAxisLabelGroup) {
+			var textNodes = xAxisLabelGroup.querySelectorAll('text');
+			for (var i = 0; i < textNodes.length; i++) {
+				textNodes[i].style.textDecoration = decoration;
+				textNodes[i].style.cursor = cursor;
+				textNodes[i].setAttribute('text-decoration', decoration);
+			}
+		}
+
+		// pie / data labels (SVG <text> inside .highcharts-data-label)
+		var dataLabelGroups = container.querySelectorAll('.highcharts-data-label');
+		for (var d = 0; d < dataLabelGroups.length; d++) {
+			var dlTexts = dataLabelGroups[d].querySelectorAll('text');
+			for (var t = 0; t < dlTexts.length; t++) {
+				dlTexts[t].style.textDecoration = decoration;
+				dlTexts[t].style.cursor = cursor;
+				dlTexts[t].setAttribute('text-decoration', decoration);
+			}
+		}
+	};
+
+	/**
+	 * Attaches a persistent 'render' event listener on the chart that re-applies
+	 * the underline state after every Highcharts redraw/drill animation.
+	 * isDrillable is stored on chart._knowageDrillable so the listener can
+	 * always read the latest value.
+	 */
+	var bindDrillableLabelRender = function(chart) {
+		Highcharts.addEvent(chart, 'render', function() {
+			applyUnderlineToChartLabels(this, !!this._knowageDrillable);
+		});
+	};
+
 	this.handleCrossNavigationTo =function(e) {
 		var date = new Date(e.point.x);
 		var char =  "-" ;
@@ -619,9 +668,13 @@ angular.module('chartInitializer')
 								}
 							}
                                
-								var maxData = Math.max.apply(Math, series.data.map(function(o) { if(o.y){return o.y;}else{return null} }));
-								if (maxData < 0) maxData = 0;
-								var minData = Math.min.apply(Math, series.data.map(function(o) { if(o.y){return o.y;}else{return null} }));
+							var maxData = Math.max.apply(Math, series.data.map(function(o) {
+								return (o.y !== undefined && o.y !== null) ? o.y : null;
+							}));
+							if (maxData < 0) maxData = 0;
+							var minData = Math.min.apply(Math, series.data.map(function(o) {
+								return (o.y !== undefined && o.y !== null) ? o.y : null;
+							}));
 
 							var minDrill = Math.min.apply(Math, [minData, chart.extremes[indexOfAxis].plotBands && chart.extremes[indexOfAxis].plotBands[0].from != chart.extremes[indexOfAxis].plotBands[0].to ? chart.extremes[indexOfAxis].plotBands[0].from : minData, chart.extremes[indexOfAxis].plotLines && chart.extremes[indexOfAxis].plotLines[0].width > 0 ? chart.extremes[indexOfAxis].plotLines[0].value : minData].map(function(o) { return o; }));
 							var maxDrill = Math.max.apply(Math, [maxData, chart.extremes[indexOfAxis].plotBands && chart.extremes[indexOfAxis].plotBands[0].to != chart.extremes[indexOfAxis].plotBands[0].from ? chart.extremes[indexOfAxis].plotBands[0].to : maxData,  chart.extremes[indexOfAxis].plotLines && chart.extremes[indexOfAxis].plotLines[0].width > 0 ? chart.extremes[indexOfAxis].plotLines[0].value : maxData].map(function(o) { return o; }));
@@ -664,11 +717,22 @@ angular.module('chartInitializer')
 			            	chart.yAxis[0].setTitle(yAxisTitle);
 			            }
 
+						if (chart.widgetData && chart.widgetData.chartTemplate && chart.widgetData.chartTemplate.CHART && chart.widgetData.chartTemplate.CHART.CUSTOMCOLORS && chart.widgetData.chartTemplate.CHART.CUSTOMCOLORS.COLOR ) {
+						for (var i = 0; i<chart.widgetData.chartTemplate.CHART.CUSTOMCOLORS.COLOR.length; i++){
+								for (var j = 0; j<series.data.length; j++){
+									
+									if (chart.widgetData.chartTemplate.CHART.CUSTOMCOLORS.COLOR[i].customName == series.data[j].name) {
+										series.data[j].color = chart.widgetData.chartTemplate.CHART.CUSTOMCOLORS.COLOR[i].customValue;
+									}
+								}
+						}
+						}
+						// Update _knowageDrillable: render event will apply/remove underline after addSeriesAsDrilldown
+						var isNextLevelAvailable = !!(series.data && series.data.length > 0 && series.data[0].drilldown === true);
+						chart._knowageDrillable = isNextLevelAvailable;
 			            chart.addSeriesAsDrilldown(e.point, series);
 
 			            if(series.firstLevelCategory){
-			            	var backText="Back to: <b>"+series.firstLevelCategory+"</b>";
-			            } else {
 			            	var backText="Back to: <b>"+ chart.options.drilledCategories[chart.options.drilledCategories.length-2]+"</b>";
 			            }
 
@@ -687,6 +751,8 @@ angular.module('chartInitializer')
 	this.handleDrillup = function(){
 
 		var chart=this;
+		// Restore underline: parent level is always drillable; render event will re-apply it
+		chart._knowageDrillable = true;
 		var axisTitle = chart.options.drilledCategories[chart.options.drilledCategories.length-2]
 		chart.options.drilledCategories.pop();
 		titleText=chart.options.drilledCategories[chart.options.drilledCategories.length-2] ? chart.options.drilledCategories[chart.options.drilledCategories.length-2] : chart.options.drilledCategories[0];
@@ -736,21 +802,21 @@ angular.module('chartInitializer')
 
 	}
 	this.setExtremes = function (chartConf){
-		var mapAxis=  {min:{},max:{}};
-		for (var i =0; i < chartConf.series.length; i++){
-			var max = Math.max.apply(Math, chartConf.series[i].data.map(function(o) {  if(o.y){return o.y;}else{return null} }));
-			var min = Math.min.apply(Math, chartConf.series[i].data.map(function(o) {  if(o.y){return o.y;}else{return null} }));
-			if(mapAxis.min[chartConf.series[i].yAxis]!=undefined){
-				if(mapAxis.min[chartConf.series[i].yAxis] > min)
-				mapAxis.min[chartConf.series[i].yAxis] = min;
+		var mapAxis = {min: {}, max: {}};
+		for (var i = 0; i < chartConf.series.length; i++) {
+			var serie = chartConf.series[i];
+			var axisIndex = serie.yAxis !== undefined ? serie.yAxis : 0;
+			var max = Math.max.apply(Math, serie.data.map(function(o) { return (o.y !== undefined && o.y !== null) ? o.y : null; }));
+			var min = Math.min.apply(Math, serie.data.map(function(o) { return (o.y !== undefined && o.y !== null) ? o.y : null; }));
+			if (mapAxis.min[axisIndex] !== undefined) {
+				if (mapAxis.min[axisIndex] > min) mapAxis.min[axisIndex] = min;
 			} else {
-				mapAxis.min[chartConf.series[i].yAxis] = min;
+				mapAxis.min[axisIndex] = min;
 			}
-			if(mapAxis.max[chartConf.series[i].yAxis]!=undefined){
-				if(mapAxis.max[chartConf.series[i].yAxis] < max)
-				mapAxis.max[chartConf.series[i].yAxis] = max;
+			if (mapAxis.max[axisIndex] !== undefined) {
+				if (mapAxis.max[axisIndex] < max) mapAxis.max[axisIndex] = max;
 			} else {
-				mapAxis.max[chartConf.series[i].yAxis] = max;
+				mapAxis.max[axisIndex] = max;
 			}
 		}
 		return mapAxis;
@@ -865,7 +931,9 @@ angular.module('chartInitializer')
 					}
 					else{
 						pointOptions = [];
-						pointOptions.push(Date.parse(data[j][column]));
+						var format = widgetData.jsonData.metaData.fields.filter((i)=>i.name === column)[0].dateFormatJava.replaceAll('y','Y').replaceAll('d','D');
+						pointOptions.push(moment(data[j][column], format).valueOf());
+
 
 						if(widgetData.chartTemplate.CHART.VALUES.SERIE[i].type == "arearangelow"){
 
@@ -893,15 +961,14 @@ angular.module('chartInitializer')
 
 		if(this.chart.options.chart.type == "pie"){
 			for (var i = 0; i<newData.length; i++){
+				counter = 0;  // ← reset qui
 				for (var j = 0; j<newData[i].length; j++){
-
 					if(newData[i][j].y==0){
 						counter ++
 					}
 				}
 				if (counter==newData[i].length){
 					newData[i]=[];
-					counter = 0;
 				}
 			}
 		}

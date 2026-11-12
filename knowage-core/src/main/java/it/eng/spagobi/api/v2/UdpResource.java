@@ -17,19 +17,7 @@
  */
 package it.eng.spagobi.api.v2;
 
-import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.commons.deserializer.JSONDeserializer;
-import it.eng.spagobi.commons.serializer.SerializerFactory;
-import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
-import it.eng.spagobi.services.rest.annotations.UserConstraint;
-import it.eng.spagobi.tools.udp.dao.IUdpDAO;
-import it.eng.spagobi.tools.udp.metadata.SbiUdp;
-import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
-
 import java.net.URI;
-import java.net.URLEncoder;
 import java.util.List;
 import java.util.Locale;
 
@@ -50,6 +38,19 @@ import javax.ws.rs.core.Response.Status;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.owasp.esapi.Encoder;
+
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
+import it.eng.spagobi.api.AbstractSpagoBIResource;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.commons.deserializer.JSONDeserializer;
+import it.eng.spagobi.commons.serializer.SerializerFactory;
+import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
+import it.eng.spagobi.services.rest.annotations.UserConstraint;
+import it.eng.spagobi.tools.udp.dao.IUdpDAO;
+import it.eng.spagobi.tools.udp.metadata.SbiUdp;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 @Path("/2.0/udp")
 @ManageAuthorization
@@ -60,7 +61,7 @@ public class UdpResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.USER_DATA_PROPERTIES_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.USER_DATA_PROPERTIES_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response getSbiUdps(@Context HttpServletRequest request) {
 		logger.debug("IN");
@@ -73,7 +74,8 @@ public class UdpResource extends AbstractSpagoBIResource {
 			sbiUdpDao.setUserProfile(getUserProfile());
 			allObjects = sbiUdpDao.findAll();
 			Integer totalNum = sbiUdpDao.countUdp();
-			JSONArray udpJSON = (JSONArray) SerializerFactory.getSerializer("application/json").serialize(allObjects, locale);
+			JSONArray udpJSON = (JSONArray) SerializerFactory.getSerializer("application/json").serialize(allObjects,
+					locale);
 
 			if (udpJSON != null && udpJSON.length() > 0) {
 				String toBeReturned = udpJSON.toString(); // JsonConverter.objectToJson(udpJSON, udpJSON.getClass());
@@ -93,7 +95,7 @@ public class UdpResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.USER_DATA_PROPERTIES_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.USER_DATA_PROPERTIES_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response getSingleSbiUdp(@Context HttpServletRequest request, @PathParam("id") Integer id) {
 		logger.debug("IN");
@@ -109,7 +111,8 @@ public class UdpResource extends AbstractSpagoBIResource {
 			if (allObjects != null && !allObjects.isEmpty()) {
 				for (SbiUdp udp : allObjects) {
 					if (udp.getUdpId() == id) {
-						JSONObject udpJSON = (JSONObject) SerializerFactory.getSerializer("application/json").serialize(udp, locale);
+						JSONObject udpJSON = (JSONObject) SerializerFactory.getSerializer("application/json")
+								.serialize(udp, locale);
 						String toBeReturned = udpJSON.toString();
 						return Response.ok(toBeReturned).build();
 					}
@@ -130,7 +133,7 @@ public class UdpResource extends AbstractSpagoBIResource {
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.USER_DATA_PROPERTIES_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.USER_DATA_PROPERTIES_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response insertSbiUdp(String body) {
 
@@ -150,14 +153,16 @@ public class UdpResource extends AbstractSpagoBIResource {
 		}
 
 		if (sbiUdp.getUdpId() != null) {
-			return Response.status(Status.BAD_REQUEST).entity("Error paramters. New User Data Property should not have ID value").build();
+			return Response.status(Status.BAD_REQUEST)
+					.entity("Error paramters. New User Data Property should not have ID value").build();
 		}
 
 		try {
 			sbiUdpsDao = DAOFactory.getUdpDAO();
 			sbiUdpsDao.setUserProfile(getUserProfile());
 			sbiUdpsDao.insert(sbiUdp);
-			String encodedSbiUdp = URLEncoder.encode("" + sbiUdp.getUdpId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedSbiUdp = encoder.encodeForURL("" + sbiUdp.getUdpId());
 			return Response.created(new URI("1.0/userdataproperties/" + encodedSbiUdp)).entity(encodedSbiUdp).build();
 		} catch (Exception e) {
 			Response.notModified().build();
@@ -168,7 +173,7 @@ public class UdpResource extends AbstractSpagoBIResource {
 
 	@PUT
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.USER_DATA_PROPERTIES_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.USER_DATA_PROPERTIES_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateSbiUdp(@PathParam("id") Integer id, String body) {
 
@@ -197,7 +202,8 @@ public class UdpResource extends AbstractSpagoBIResource {
 			sbiUdpsDao = DAOFactory.getUdpDAO();
 			sbiUdpsDao.setUserProfile(getUserProfile());
 			sbiUdpsDao.update(sbiUdp);
-			String encodedSbiUdp = URLEncoder.encode("" + sbiUdp.getUdpId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedSbiUdp = encoder.encodeForURL("" + sbiUdp.getUdpId());
 			return Response.created(new URI("1.0/userdataproperties/" + encodedSbiUdp)).entity(encodedSbiUdp).build();
 		} catch (Exception e) {
 			logger.error("Error while updating url of the new resource", e);
@@ -207,7 +213,7 @@ public class UdpResource extends AbstractSpagoBIResource {
 
 	@DELETE
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.USER_DATA_PROPERTIES_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.USER_DATA_PROPERTIES_MANAGEMENT })
 	public Response deleteUdp(@PathParam("id") Integer id) {
 		IUdpDAO sbiUdpsDao = null;
 		try {

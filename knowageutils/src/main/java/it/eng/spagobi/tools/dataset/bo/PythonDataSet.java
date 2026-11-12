@@ -25,6 +25,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
+import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -103,21 +105,7 @@ public class PythonDataSet extends ConfigurableDataSet {
 
 	public void initConf(JSONObject jsonConf) {
 		initDataProxy(jsonConf);
-		initDataReader(jsonConf);
-	}
-
-	private void initDataReader(JSONObject jsonConf) {
-		// json data reader attributes
-		String jsonPathItems = getProp(PythonDataSetConstants.REST_JSON_PATH_ITEMS, jsonConf, true);
-		List<JSONPathAttribute> jsonPathAttributes;
-		try {
-			jsonPathAttributes = getJsonPathAttributes(PythonDataSetConstants.REST_JSON_PATH_ATTRIBUTES, jsonConf);
-		} catch (JSONException e) {
-			throw new ConfigurationException("Problems in configuration of data reader", e);
-		}
-
-		String directlyAttributes = getProp(PythonDataSetConstants.REST_JSON_DIRECTLY_ATTRIBUTES, jsonConf, true);
-		setDataReader(new JSONPathDataReader(jsonPathItems, jsonPathAttributes, Boolean.parseBoolean(directlyAttributes), false));
+		setDataReader(new JSONPathDataReader("$[*]", new ArrayList<>(), true, false));
 	}
 
 	private void initDataProxy(JSONObject jsonConf) {
@@ -154,7 +142,7 @@ public class PythonDataSet extends ConfigurableDataSet {
 			} else {
 				throw new IllegalStateException("Invalid Python Dataset Type: " + pythonDatasetType);
 			}
-			toReturn = pythonAddress.replaceAll("/+$", "") + "/dataset";
+			toReturn = pythonAddress.replace("/+$", "") + "/dataset";
 		} catch (Exception e) {
 			logger.error("Cannot retrieve python address from configuration.", e);
 			return "";
@@ -163,8 +151,7 @@ public class PythonDataSet extends ConfigurableDataSet {
 	}
 
 	private JSONObject getJSONConfig() {
-		JSONObject jsonConf = ObjectUtils.toJSONObject(getConfiguration());
-		return jsonConf;
+		return ObjectUtils.toJSONObject(getConfiguration());
 	}
 
 	protected List<JSONPathAttribute> getJsonPathAttributes(String propName, JSONObject conf) throws JSONException {
@@ -176,7 +163,7 @@ public class PythonDataSet extends ConfigurableDataSet {
 		}
 		Assert.assertNotNull(sub, "property is null");
 		JSONArray subs = (JSONArray) sub;
-		List<JSONPathAttribute> res = new ArrayList<JSONPathDataReader.JSONPathAttribute>(subs.length());
+		List<JSONPathAttribute> res = new ArrayList<>(subs.length());
 		for (int i = 0; i < subs.length(); i++) {
 			Object o = subs.get(i);
 			if (!(o instanceof JSONObject)) {
@@ -203,7 +190,7 @@ public class PythonDataSet extends ConfigurableDataSet {
 		}
 		Assert.assertNotNull(c, "property is null");
 		JSONObject r = (JSONObject) c;
-		Map<String, String> res = new HashMap<String, String>(r.length());
+		Map<String, String> res = new HashMap<>(r.length());
 		Iterator<String> it = r.keys();
 		while (it.hasNext()) {
 			String key = it.next();
@@ -260,6 +247,11 @@ public class PythonDataSet extends ConfigurableDataSet {
 	}
 
 	@Override
+	public DataIterator iterator(IMetaData dsMetadata) {
+		return null;
+	}
+
+	@Override
 	public void setDataSource(IDataSource dataSource) {
 		throw new IllegalStateException(RESTDataSet.class.getSimpleName() + " doesn't need the dataSource");
 	}
@@ -270,8 +262,7 @@ public class PythonDataSet extends ConfigurableDataSet {
 			return null;
 		}
 
-		String uuid = (String) up.getUserId();
-		return uuid;
+		return (String) up.getUserId();
 	}
 
 	private UserProfile getCurrentUserProfile() {
@@ -326,7 +317,7 @@ public class PythonDataSet extends ConfigurableDataSet {
 		String paramValue = paramValues.get(paramName);
 		String[] values = null;
 		if (isMultiValue) {
-			List<String> list = new ArrayList<String>();
+			List<String> list = new ArrayList<>();
 			boolean paramValueConsumed = false;
 			try {
 				JSONArray jsonArray = new JSONArray(paramValue);

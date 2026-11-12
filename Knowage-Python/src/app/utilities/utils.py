@@ -19,6 +19,7 @@
 import pandas as pd
 import json
 import pkg_resources
+from app.utilities import configs
 
 def get_widget_config(data):
     script = data.get("script")
@@ -62,16 +63,6 @@ def datastore_to_dataframe(metadata, rows):
         #cast types
         df = df.astype(column_types)
     return df
-
-def dataframe_to_datastore(df):
-    knowage_json = []
-    n_rows, n_cols = df.shape
-    for i in range(0, n_rows):
-        element = {}
-        for j in range(0, n_cols):
-            element.update({df.columns[j]: df.loc[i][df.columns[j]]})
-        knowage_json.append(element)
-    return knowage_json
 
 def get_environment_libraries():
     to_return = []

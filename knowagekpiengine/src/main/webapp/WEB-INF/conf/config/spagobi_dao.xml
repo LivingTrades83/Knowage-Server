@@ -2,7 +2,7 @@
 <SPAGOBI>
 
 	<DAO-CONF>
-		<!-- HIBERNATE DAO (DEFAULT) IMPLEMENTATION -->
+		<!-- HIBERNATE DAO (DEFAULT) IMPLEMENTATION   -->
 		<DAO name="TenantsDAO" implementation="it.eng.spagobi.commons.dao.TenantsDAOHibImpl" />
 		<DAO name="BIObjectDAO"
 			implementation="it.eng.spagobi.analiticalmodel.document.dao.BIObjectDAOHibImpl" />
@@ -41,11 +41,6 @@
 			implementation="it.eng.spagobi.analiticalmodel.document.dao.SubObjectDAOHibImpl" />
 		<DAO name="SnapshotDAO"
 			implementation="it.eng.spagobi.analiticalmodel.document.dao.SnapshotDAOHibImpl" />
-		<DAO name="GeoFeatureDAO"
-			implementation="it.eng.spagobi.mapcatalogue.dao.SbiGeoFeaturesDAOHibImpl" />
-		<DAO name="GeoMapDAO" implementation="it.eng.spagobi.mapcatalogue.dao.SbiGeoMapsDAOHibImpl" />
-		<DAO name="GeoMapFeatureDAO"
-			implementation="it.eng.spagobi.mapcatalogue.dao.SbiGeoMapFeaturesDAOHibImpl" />
 		<DAO name="UserFunctionalityDAO" implementation="it.eng.spagobi.commons.dao.UserFunctionalityDAO" />
 		<DAO name="DistributionListDAO"
 			implementation="it.eng.spagobi.tools.distributionlist.dao.DistributionListDaoImpl" />
@@ -97,12 +92,12 @@
 			implementation="it.eng.spagobi.tools.scheduler.dao.quartz.QuarzSchedulerDAOImpl" />
 		<DAO name="MetaModelsDAO" implementation="it.eng.spagobi.tools.catalogue.dao.MetaModelsDAOImpl" />
 		<DAO name="ArtifactsDAO" implementation="it.eng.spagobi.tools.catalogue.dao.ArtifactsDAOImpl" />
-		<DAO name="CommunityDAO" implementation="it.eng.spagobi.community.dao.SbiCommunityDAOImpl" />
 
 		<DAO name="GeoLayersDAO" implementation="it.eng.spagobi.mapcatalogue.dao.SbiGeoLayersDAOHibImpl" />
 
 		<DAO name="CacheDAO" implementation="it.eng.spagobi.cache.dao.CacheDAOHibImpl" />
 		<DAO name="BIObjDataSetDAO" implementation="it.eng.spagobi.tools.dataset.dao.BIObjDataSetDAOHibImpl" />
+		<DAO name="DashboardThemeDAO" implementation="it.eng.spagobi.commons.dao.DashboardThemeDAOHibImpl"/>
 
 	</DAO-CONF>
 

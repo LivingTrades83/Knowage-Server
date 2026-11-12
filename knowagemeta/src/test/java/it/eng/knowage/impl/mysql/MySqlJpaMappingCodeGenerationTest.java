@@ -26,6 +26,9 @@ import it.eng.knowage.meta.generator.jpamapping.wrappers.IJpaTable;
 import it.eng.knowage.meta.generator.jpamapping.wrappers.impl.JpaModel;
 import it.eng.knowage.meta.generator.utils.StringUtils;
 import it.eng.knowage.meta.initializer.descriptor.BusinessViewInnerJoinRelationshipDescriptor;
+import it.eng.knowage.meta.model.Model;
+import it.eng.knowage.meta.model.business.BusinessDomain;
+import it.eng.knowage.meta.model.business.BusinessModelFactory;
 import it.eng.knowage.meta.model.business.BusinessTable;
 import it.eng.knowage.meta.model.business.BusinessView;
 import it.eng.knowage.meta.model.physical.PhysicalColumn;
@@ -35,11 +38,14 @@ import it.eng.knowage.utils.ModelManager;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
 import org.junit.Assert;
+import org.json.JSONObject;
 
 public class MySqlJpaMappingCodeGenerationTest extends AbstractKnowageMetaTest {
 
@@ -126,6 +132,11 @@ public class MySqlJpaMappingCodeGenerationTest extends AbstractKnowageMetaTest {
 		assertTrue("Impossible to find view.json file in folder [" + jpaMappingCodeGenerator.getSrcDir() + "]", viewFile.exists());
 	}
 
+	public void testGroupsFileExistence() {
+		File groupsFile = new File(jpaMappingCodeGenerator.getSrcDir(), "groups.json");
+		assertTrue("Impossible to find groups.json file in folder [" + jpaMappingCodeGenerator.getSrcDir() + "]", groupsFile.exists());
+	}
+
 	public void testJavaFilesExistence() {
 		for (IJpaTable jpaTable : jpaModel.getTables()) {
 			File outputDir = new File(jpaMappingCodeGenerator.getSrcDir(), StringUtils.strReplaceAll(jpaTable.getPackage(), ".", "/"));
@@ -179,6 +190,39 @@ public class MySqlJpaMappingCodeGenerationTest extends AbstractKnowageMetaTest {
 		}
 	}
 
+	public void testGroupsFileContent() throws Exception {
+		Model localRootModel = TestModelFactory.createModel(dbType);
+		PhysicalTable classTable = localRootModel.getPhysicalModels().get(0).getTable("class");
+		PhysicalTable productClassTable = localRootModel.getPhysicalModels().get(0).getTable("product_class");
+		BusinessTable classBusinessTable = localRootModel.getBusinessModels().get(0).getBusinessTableByPhysicalTable(classTable).get(0);
+		BusinessTable productClassBusinessTable = localRootModel.getBusinessModels().get(0).getBusinessTableByPhysicalTable(productClassTable).get(0);
+
+		BusinessDomain businessDomain = BusinessModelFactory.eINSTANCE.createBusinessDomain();
+		String domainName = "Merchandising \"Vendit\u00e8\"";
+		String description = "First line\nSecond line \\ details";
+		businessDomain.setName(domainName);
+		businessDomain.setUniqueName("Merchandising");
+		businessDomain.setDescription(description);
+		businessDomain.getTables().add(classBusinessTable);
+		businessDomain.getTables().add(productClassBusinessTable);
+		localRootModel.getBusinessModels().get(0).getDomains().add(businessDomain);
+
+		JpaMappingCodeGenerator localGenerator = new JpaMappingCodeGenerator();
+		File outputDir = Files.createTempDirectory("knowage-groups-codegen").toFile();
+		localGenerator.generate(localRootModel.getBusinessModels().get(0), outputDir.getAbsolutePath());
+
+		String fileContents = new String(Files.readAllBytes(new File(localGenerator.getSrcDir(), "groups.json").toPath()),
+				StandardCharsets.UTF_8);
+
+		JSONObject group = new JSONObject(fileContents).getJSONArray("groups").getJSONObject(0);
+		assertEquals(domainName, group.getString("name"));
+		assertEquals(description, group.getString("description"));
+		assertEquals("Merchandising", group.getString("uniqueName"));
+		assertEquals(2, group.getJSONArray("entities").length());
+		assertEquals("it.eng.knowage.meta.Class_Object", group.getJSONArray("entities").getString(0));
+		assertEquals("it.eng.knowage.meta.Product_class", group.getJSONArray("entities").getString(1));
+	}
+
 	// =============================================
 	// TESTS ON VIEW MODEL
 	// =============================================
@@ -192,9 +236,9 @@ public class MySqlJpaMappingCodeGenerationTest extends AbstractKnowageMetaTest {
 		PhysicalTable destination = filteredPhysicalModel.getTable("product_class");
 		BusinessTable businessTable = filteredBusinessModel.getBusinessTableByPhysicalTable(source).get(0);
 
-		List<PhysicalColumn> sourceCol = new ArrayList<PhysicalColumn>();
+		List<PhysicalColumn> sourceCol = new ArrayList<>();
 		sourceCol.add(source.getColumn("product_class_id"));
-		List<PhysicalColumn> destinationCol = new ArrayList<PhysicalColumn>();
+		List<PhysicalColumn> destinationCol = new ArrayList<>();
 		destinationCol.add(destination.getColumn("product_class_id"));
 		int cardinality = 0;
 		String relationshipName = "inner_join_test";

@@ -44,7 +44,7 @@ public class AzureSecurityServiceSupplier implements ISecurityServiceSupplier {
 
 	private static int USER_JWT_TOKEN_EXPIRE_HOURS = 10; // JWT token for regular users will expire in 10 HOURS
 
-	static private Logger logger = Logger.getLogger(AzureSecurityServiceSupplier.class);
+	private static Logger logger = Logger.getLogger(AzureSecurityServiceSupplier.class);
 
 	@Override
 	public SpagoBIUserProfile checkAuthentication(String userId, String psw) {
@@ -79,7 +79,7 @@ public class AzureSecurityServiceSupplier implements ISecurityServiceSupplier {
 			algorithm.verify(jwt);
 			logger.debug("JWT token verified properly");
 		} catch (SignatureVerificationException e) {
-			throw new SpagoBIRuntimeException("Invalid JWT token signature");
+			throw new SpagoBIRuntimeException("Invalid JWT token signature", e);
 		} catch (Exception e) {
 			throw new SpagoBIRuntimeException("Error validating JWT token", e);
 		}
@@ -88,10 +88,16 @@ public class AzureSecurityServiceSupplier implements ISecurityServiceSupplier {
 		String tenant_id = jwt.getClaim("tid").asString();
 		String client_id = jwt.getClaim("aud").asString();
 
-		if (!tenant_id.equals(AzureSignInConfig.getTenantId()))
-			throw new SpagoBIRuntimeException("Tenant id not matching!");
-		if (!client_id.equals(AzureSignInConfig.getClientId()))
+		if (!tenant_id.equals(AzureSignInConfig.getTenantId())) {
+			logger.error(
+					"Was expecting tenant id {" + AzureSignInConfig.getTenantId() + "} from configuration, but got tenant id {" + tenant_id + "} in token.");
+			throw new SpagoBIRuntimeException("Tenant id  not matching!");
+		}
+		if (!client_id.equals(AzureSignInConfig.getClientId())) {
+			logger.error(
+					"Was expecting client id {" + AzureSignInConfig.getClientId() + "} from configuration, but got client id {" + client_id + "} in token.");
 			throw new SpagoBIRuntimeException("Client id not matching!");
+		}
 
 		SpagoBIUserProfile profile = createUserProfileObject(email);
 		return profile;

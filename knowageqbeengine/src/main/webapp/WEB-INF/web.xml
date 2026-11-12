@@ -4,15 +4,31 @@
 		xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
-		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-		version="3.1" >
+		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+		version="4.0" >
 
-	<display-name>QBE</display-name>
+	<distributable/>
+
+	<display-name>knowageqbeengine</display-name>
 	<description>Knowage QBE Engine</description>
+	<distributable/>
 
-	<!--  ============================================================================ -->
-	<!--  FILTERS                                                                      -->
-	<!--  ============================================================================ -->
+	<!-- 
+		Logger Setup Filter.
+		
+		Set the logger according the HTTP request data.
+	 -->
+	<filter>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<filter-class>it.eng.knowage.utils.filters.LoggerSetupFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+	</filter-mapping>
+
+
 
 	<filter>
 		<filter-name>EncodingFilter</filter-name>
@@ -23,6 +39,7 @@
 		</init-param>
 	</filter>
 
+
 	<filter-mapping>
 		<filter-name>EncodingFilter</filter-name>
 		<url-pattern>/servlet/AdapterHTTP</url-pattern>
@@ -32,6 +49,7 @@
 		<filter-name>EncodingFilter</filter-name>
 		<url-pattern>/servlet/AdapterHTTPBackEnd</url-pattern>
 	</filter-mapping>
+
 
 	<filter>
 		<filter-name>EngineCheckSessionFilter</filter-name>
@@ -136,6 +154,36 @@
 		<filter-name>AntiInjectionFilter</filter-name>
 		<url-pattern>/servlet/AdapterHTTP</url-pattern>
 	</filter-mapping>
+	
+	<!--  ANTI CSRF FILTER -->
+	<filter>
+      <filter-name>KnowageAntiCsrfFilter</filter-name> 
+      <filter-class>it.eng.spagobi.security.utils.AntiCsrfFilter</filter-class> 
+     </filter>
+     
+     <filter-mapping>
+		<filter-name>KnowageAntiCsrfFilter</filter-name>
+		<url-pattern>/restful-services/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
+
+	<!--  CSP FILTER  	-->
+	<filter>
+		<filter-name>CspFilter</filter-name>
+		<filter-class>it.eng.spagobi.security.utils.CspFilter</filter-class>
+	</filter>
+
+	<filter-mapping>
+		<filter-name>CspFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
+
+
+
+
 
 	<!--  ============================================================================ -->
 	<!--  START LISTENERS                                                              -->
@@ -239,5 +287,15 @@
 		<env-entry-value>it.eng.spagobi.services.common.FakeSsoService</env-entry-value>
 	</env-entry>
 	WEBLOGIC CONFS END -->
+
+	<!-- 
+		This servlet comes from resteasy-jaxrs and is enabled by default mapped to "" URL. The empty string has
+		greater priority than "/": that is a big problem for us because our WARs have mixed resources, REST
+		services, JSPs, HTMLs, etc... The following disables this servlet.
+	 -->
+	<servlet-mapping>
+		<servlet-name>org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher</servlet-name>
+		<url-pattern>/restful-services-default</url-pattern>
+	</servlet-mapping>
 
 </web-app>

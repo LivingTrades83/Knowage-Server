@@ -1,9 +1,12 @@
 package it.eng.spagobi.api.v2.documentdetails.subresources;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 
 import javax.ws.rs.Consumes;
@@ -24,8 +27,8 @@ import org.apache.clerezza.jaxrs.utils.form.ParameterValue;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileItemFactory;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
-
-import com.hazelcast.util.Base64;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import it.eng.spago.error.EMFErrorSeverity;
 import it.eng.spago.error.EMFInternalError;
@@ -36,7 +39,7 @@ import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectDAO;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.SingletonConfig;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
 import it.eng.spagobi.commons.utilities.ObjectsAccessVerifier;
@@ -47,21 +50,24 @@ import it.eng.spagobi.utilities.file.FileUtils;
 
 @Path("")
 public class DocumentImageResource extends AbstractSpagoBIResource {
+
+	private static final Logger LOGGER = LogManager.getLogger(DocumentImageResource.class);
+
 	private static final List<String> VALID_FILE_EXTENSIONS = Arrays.asList("BMP", "JPG", "JPEG", "PNG", "GIF");
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Produces({ "image/jpeg,image/png" })
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public Response getDocumentImage(@PathParam("id") Integer id) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		AnalyticalModelDocumentManagementAPI documentManager = new AnalyticalModelDocumentManagementAPI(getUserProfile());
 		BIObject document = documentManager.getDocument(id);
 
 		ResponseBuilder rb;
 
 		if (document == null) {
-			logger.error("Document with id [" + id + "] doesn't exist");
+			LOGGER.error("Document with id [{}] doesn't exist", id);
 			rb = Response.status(Status.NOT_FOUND);
 			return rb.build();
 		}
@@ -71,7 +77,7 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 				String previewFileName = document.getPreviewFile();
 
 				if (previewFileName == null || previewFileName.equalsIgnoreCase("")) {
-					logger.debug("No preview file associated to document " + document.getLabel());
+					LOGGER.debug("No preview file associated to document {}", document.getLabel());
 					// rb = Response.ok();
 					rb = Response.status(Status.NOT_FOUND);
 					return rb.build();
@@ -84,7 +90,7 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 				File previewFile = new File(previewFilePath);
 
 				if (!previewFile.exists()) {
-					logger.error("Preview file " + previewFileName + " does not exist");
+					LOGGER.error("Preview file {} does not exist", previewFileName);
 					rb = Response.status(Status.NOT_FOUND);
 					return rb.build();
 				}
@@ -94,17 +100,17 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 				String parentPath = previewFile.getParentFile().getAbsolutePath();
 				String directoryPath = previewDirectory.getAbsolutePath();
 				if (!parentPath.equals(directoryPath)) {
-					logger.error("Path Traversal Attack security check failed: file parent path: " + parentPath + " is different" + " from directory path: "
-							+ directoryPath);
+					LOGGER.error("Path Traversal Attack security check failed: file parent path: {} is different" + " from directory path: {}",
+							parentPath, directoryPath);
 					throw new SpagoBIRuntimeException("Path Traversal Attack security check failed");
 				}
 
 				byte[] previewBytes = Files.readAllBytes(previewFile.toPath());
-				String encodedfile = new String(Base64.encode(previewBytes), "UTF-8");
+				String encodedfile = new String(Base64.getEncoder().encode(previewBytes), UTF_8);
 				try {
 					rb = Response.ok(encodedfile);
 				} catch (Exception e) {
-					logger.error("Error while getting preview file", e);
+					LOGGER.error("Error while getting preview file", e);
 					throw new SpagoBIRuntimeException("Error while getting preview file", e);
 				}
 
@@ -112,7 +118,7 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 				return rb.build();
 
 			} else {
-				logger.error("User [" + getUserProfile().getUserName() + "] has no rights to see document with  [" + id + "]");
+				LOGGER.error("User [{}] has no rights to see document with  [{}]", getUserProfile().getUserName(), id);
 
 				rb = Response.status(Status.UNAUTHORIZED);
 				return rb.build();
@@ -120,7 +126,7 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 		} catch (SpagoBIRuntimeException e) {
 			throw e;
 		} catch (Exception e) {
-			logger.error("Error while converting document in Json", e);
+			LOGGER.error("Error while converting document in Json", e);
 			throw new SpagoBIRuntimeException("Error while converting document in Json", e);
 		}
 
@@ -129,7 +135,7 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 	@POST
 	@Path("/")
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void postDocumentImage(@PathParam("id") Integer id, MultiPartBody uploadedImage) {
 		final String fileContentType = "multipart/form-data";
 		String previewFileName = "";
@@ -165,9 +171,9 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 	}
 
 	@DELETE
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void deleteDocumentImage(@PathParam("id") Integer id) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		AnalyticalModelDocumentManagementAPI documentManager = new AnalyticalModelDocumentManagementAPI(getUserProfile());
 		BIObject document = documentManager.getDocument(id);
@@ -187,8 +193,8 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 		} catch (EMFInternalError e) {
 			throw new SpagoBIRuntimeException("User is not allowed to preview document", e);
 		} catch (EMFUserError e) {
-			logger.error("Preview file cannot be deleted", e);
-			throw new SpagoBIRestServiceException("Preview file cannot be deleted", buildLocaleFromSession(), e);
+			LOGGER.error("Preview file cannot be deleted", e);
+			throw new SpagoBIRestServiceException("Preview file cannot be deleted", getLocale(), e);
 		}
 	}
 
@@ -199,7 +205,7 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 			return null;
 		}
 
-		logger.info("User [id : " + getUserProfile().getUserId() + ", name : " + getUserProfile().getUserName() + "] " + "is uploading file [" + ime + "]");
+		LOGGER.info("User [id : {}, name : {}] " + "is uploading file [{}]", getUserProfile().getUserId(), getUserProfile().getUserName(), ime);
 
 		int maxSize = Integer.parseInt(SingletonConfig.getInstance().getConfigValue("SPAGOBI.DOCUMENTS.MAX_PREVIEW_IMAGE_SIZE"));
 		if (uploaded.getSize() > maxSize) {
@@ -226,9 +232,9 @@ public class DocumentImageResource extends AbstractSpagoBIResource {
 			return null;
 		}
 
-		logger.debug("Saving file...");
+		LOGGER.debug("Saving file...");
 		File saved = FileUtils.saveFileIntoDirectory(uploaded, targetDirectory);
-		logger.debug("File saved");
+		LOGGER.debug("File saved");
 
 		return saved.getName();
 

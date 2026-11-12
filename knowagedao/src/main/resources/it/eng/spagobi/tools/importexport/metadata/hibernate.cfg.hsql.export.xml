@@ -14,9 +14,11 @@
 
 
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiMenu.hbm.xml" />
+		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiHomepage.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiEvents.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiEventsLog.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiDomains.hbm.xml" />
+		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiCategory.hbm.xml" />
 
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiExtRoles.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiMenuRole.hbm.xml" />
@@ -52,12 +54,9 @@
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiObjNotes.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiSubObjects.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiSnapshots.hbm.xml" />
-		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiGeoMapFeatures.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiGeoLayers.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiGeoLayersRoles.hbm.xml" />
 
-		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiGeoFeatures.hbm.xml" />
-		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiGeoMaps.hbm.xml" />
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiDataSet.hbm.xml" />
 
 		<mapping resource="it/eng/spagobi/tools/importexport/metadata/SbiGlContents.hbm.xml" />

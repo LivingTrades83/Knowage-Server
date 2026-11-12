@@ -20,16 +20,21 @@ package it.eng.knowage.meta.generator.jpamapping;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.velocity.Template;
 import org.apache.velocity.VelocityContext;
 import org.apache.velocity.app.Velocity;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
-import org.junit.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +43,7 @@ import it.eng.knowage.meta.generator.IGenerator;
 import it.eng.knowage.meta.generator.jpamapping.wrappers.IJpaTable;
 import it.eng.knowage.meta.generator.jpamapping.wrappers.IJpaView;
 import it.eng.knowage.meta.generator.jpamapping.wrappers.impl.JpaModel;
+import it.eng.knowage.meta.generator.jpamapping.wrappers.impl.JpaGroup;
 import it.eng.knowage.meta.generator.mondrianschema.wrappers.IMondrianDimension;
 import it.eng.knowage.meta.generator.mondrianschema.wrappers.MondrianModel;
 import it.eng.knowage.meta.generator.utils.StringUtils;
@@ -46,6 +52,7 @@ import it.eng.knowage.meta.model.ModelObject;
 import it.eng.knowage.meta.model.business.BusinessModel;
 import it.eng.knowage.meta.model.olap.OlapModel;
 import it.eng.spagobi.engines.documentcomposition.configuration.Constants;
+import it.eng.spagobi.utilities.assertion.Assert;
 
 /**
  * @author Andrea Gioia (andrea.gioia@eng.it)
@@ -81,6 +88,11 @@ public class JpaMappingCodeGenerator implements IGenerator {
 	 * The template used to map business view to json mapping file
 	 */
 	private File viewTemplate;
+
+	/**
+	 * The template used to map business domains to json group file
+	 */
+	private File groupsTemplate;
 
 	/**
 	 * The template used to map business table's composed key to a java class
@@ -144,46 +156,57 @@ public class JpaMappingCodeGenerator implements IGenerator {
 			templatesDirRelativePath = "/it/eng/knowage/meta/generator/templates";
 
 			// templateDir = RL.getFile(templatesDirRelativePath);
-			templateDir = new File(getClass().getResource("/it/eng/knowage/meta/generator/templates").toURI().getPath());
+			templateDir = new File(
+					getClass().getResource("/it/eng/knowage/meta/generator/templates").toURI().getPath());
 
 			logger.debug("Template dir is equal to [{}]", templateDir);
-			Assert.assertTrue("Template dir [" + templateDir + "] does not exist", templateDir.exists());
+			Assert.assertTrue(templateDir.exists(), "Template dir [" + templateDir + "] does not exist");
 
 			tableTemplate = new File(templateDir, "sbi_table.vm");
 			logger.trace("[Table] template file is equal to [{}]", tableTemplate);
-			Assert.assertTrue("[Table] template file [" + tableTemplate + "] does not exist", tableTemplate.exists());
+			Assert.assertTrue(tableTemplate.exists(), "[Table] template file [" + tableTemplate + "] does not exist");
 
 			viewTemplate = new File(templateDir, "sbi_view.vm");
 			logger.trace("[View] template file is equal to [{}]", viewTemplate);
-			Assert.assertTrue("[View] template file [" + viewTemplate + "] does not exist", viewTemplate.exists());
+			Assert.assertTrue(viewTemplate.exists(), "[View] template file [" + viewTemplate + "] does not exist");
+
+			groupsTemplate = new File(templateDir, "sbi_groups.vm");
+			logger.trace("[Groups] template file is equal to [{}]", groupsTemplate);
+			Assert.assertTrue(groupsTemplate.exists(), "[Groups] template file [" + groupsTemplate + "] does not exist");
 
 			keyTemplate = new File(templateDir, "sbi_pk.vm");
 			logger.trace("[Key] template file is equal to [{}]", keyTemplate);
-			Assert.assertTrue("[Key] template file [" + keyTemplate + "] does not exist", keyTemplate.exists());
+			Assert.assertTrue(keyTemplate.exists(), "[Key] template file [" + keyTemplate + "] does not exist");
 
 			persistenceUnitTemplate = new File(templateDir, "sbi_persistence_unit.vm");
 			logger.trace("[PersistenceUnit] template file is equal to [{}]", persistenceUnitTemplate);
-			Assert.assertTrue("[PersistenceUnit] template file [" + persistenceUnitTemplate + "] does not exist", persistenceUnitTemplate.exists());
+			Assert.assertTrue(persistenceUnitTemplate.exists(),
+					"[PersistenceUnit] template file [" + persistenceUnitTemplate + "] does not exist");
 
 			labelsTemplate = new File(templateDir, "sbi_labels.vm");
 			logger.trace("[Labels] template file is equal to [{}]", labelsTemplate);
-			Assert.assertTrue("[Labels] template file [" + labelsTemplate + "] does not exist", labelsTemplate.exists());
+			Assert.assertTrue(labelsTemplate.exists(),
+					"[Labels] template file [" + labelsTemplate + "] does not exist");
 
 			propertiesTemplate = new File(templateDir, "sbi_properties.vm");
 			logger.trace("[Properties] template file is equal to [{}]", propertiesTemplate);
-			Assert.assertTrue("[Properties] template file [" + propertiesTemplate + "] does not exist", propertiesTemplate.exists());
+			Assert.assertTrue(propertiesTemplate.exists(),
+					"[Properties] template file [" + propertiesTemplate + "] does not exist");
 
 			cfieldsTemplate = new File(templateDir, "sbi_cfields.vm");
 			logger.trace("[Calculated Fields] template file is equal to [{}]", cfieldsTemplate);
-			Assert.assertTrue("[Calculated Fields] template file [" + cfieldsTemplate + "] does not exist", cfieldsTemplate.exists());
+			Assert.assertTrue(cfieldsTemplate.exists(),
+					"[Calculated Fields] template file [" + cfieldsTemplate + "] does not exist");
 
 			relationshipsTemplate = new File(templateDir, "sbi_relationships.vm");
 			logger.trace("[Relationships] template file is equal to [{}]", relationshipsTemplate);
-			Assert.assertTrue("[Relationships] template file [" + relationshipsTemplate + "] does not exist", relationshipsTemplate.exists());
+			Assert.assertTrue(relationshipsTemplate.exists(),
+					"[Relationships] template file [" + relationshipsTemplate + "] does not exist");
 
 			hierarchiesTemplate = new File(templateDir, "hierarchies.vm");
 			logger.trace("[Hierarchies] template file is equal to [{}]", relationshipsTemplate);
-			Assert.assertTrue("[Relationships] template file [" + relationshipsTemplate + "] does not exist", relationshipsTemplate.exists());
+			Assert.assertTrue(relationshipsTemplate.exists(),
+					"[Relationships] template file [" + relationshipsTemplate + "] does not exist");
 
 		} catch (Throwable t) {
 			logger.error("Impossible to resolve folder [" + templatesDirRelativePath + "]", t);
@@ -199,7 +222,8 @@ public class JpaMappingCodeGenerator implements IGenerator {
 	}
 
 	@Override
-	public void generate(ModelObject o, String outputDir, boolean isUpdatableMapping, boolean includeSources, File libDir, byte[] fileModel) {
+	public void generate(ModelObject o, String outputDir, boolean isUpdatableMapping, boolean includeSources,
+			File libDir, byte[] fileModel) {
 
 		BusinessModel model;
 
@@ -233,7 +257,8 @@ public class JpaMappingCodeGenerator implements IGenerator {
 			// throw new GenerationException("An error occur while generating JPA mapping", e);
 			// }
 		} else {
-			throw new GenerationException("Impossible to generate JPA mapping from an object of type [" + o.getClass().getName() + "]");
+			throw new GenerationException(
+					"Impossible to generate JPA mapping from an object of type [" + o.getClass().getName() + "]");
 		}
 
 		logger.trace("OUT");
@@ -286,6 +311,9 @@ public class JpaMappingCodeGenerator implements IGenerator {
 		generateBusinessViewMappings(jpaModel.getViews(), isUpdatableMapping);
 		logger.info("Java files for views of model [{}] succesfully created", model.getName());
 
+		createGroupsFile(jpaModel);
+		logger.info("Groups file for model [{}] succesfully created", model.getName());
+
 		createLabelsFile(labelsTemplate, jpaModel);
 		logger.info("Labels file for model [{}] succesfully created", model.getName());
 
@@ -321,7 +349,8 @@ public class JpaMappingCodeGenerator implements IGenerator {
 				try {
 					createJavaFile(keyTemplate, jpaTable, jpaTable.getCompositeKeyClassName(), isUpdatableMapping);
 				} catch (IOException e) {
-					throw new GenerationException("Impossible to create java file for " + jpaTable.getCompositeKeyClassName());
+					throw new GenerationException(
+							"Impossible to create java file for " + jpaTable.getCompositeKeyClassName());
 				}
 				logger.debug("Mapping for composite PK of business table [{}] succesfully", jpaTable.getName());
 			}
@@ -350,7 +379,8 @@ public class JpaMappingCodeGenerator implements IGenerator {
 	 * @param jpaTable
 	 * @throws IOException
 	 */
-	private void createJavaFile(File templateFile, IJpaTable jpaTable, String className, boolean isUpdatableMapping) throws IOException {
+	private void createJavaFile(File templateFile, IJpaTable jpaTable, String className, boolean isUpdatableMapping)
+			throws IOException {
 
 		VelocityContext velocityContext;
 
@@ -394,7 +424,37 @@ public class JpaMappingCodeGenerator implements IGenerator {
 		} finally {
 			logger.trace("OUT");
 		}
+	}
 
+	private void createGroupsFile(JpaModel model) {
+
+		VelocityContext context;
+
+		logger.trace("IN");
+
+		try {
+			context = new VelocityContext();
+			JSONArray groups = new JSONArray();
+			for (JpaGroup group : model.getGroups()) {
+				JSONObject jsonGroup = new JSONObject();
+				jsonGroup.put("model", group.getModelName());
+				jsonGroup.put("name", group.getName());
+				jsonGroup.put("uniqueName", group.getUniqueName());
+				jsonGroup.put("description", group.getDescription());
+				jsonGroup.put("entities", new JSONArray(group.getEntityTypes()));
+				groups.put(jsonGroup);
+			}
+			context.put("groupsJson", new JSONObject().put("groups", groups).toString(2));
+
+			File outputFile = new File(srcDir, "groups.json");
+
+			createFile(groupsTemplate, outputFile, context, StandardCharsets.UTF_8);
+		} catch (IOException | JSONException t) {
+			logger.error("Impossible to create groups mapping", t);
+			throw new GenerationException("Impossible to create groups mapping", t);
+		} finally {
+			logger.trace("OUT");
+		}
 	}
 
 	/**
@@ -411,7 +471,7 @@ public class JpaMappingCodeGenerator implements IGenerator {
 		logger.trace("IN");
 
 		context = new VelocityContext();
-		List<IJpaTable> jpaTables = new ArrayList<IJpaTable>();
+		List<IJpaTable> jpaTables = new ArrayList<>();
 		jpaTables.addAll(model.getTables());
 		List<IJpaView> jpaViews = model.getViews();
 		for (IJpaView jpaView : jpaViews) {
@@ -444,7 +504,7 @@ public class JpaMappingCodeGenerator implements IGenerator {
 			logger.debug("Create labels.properties");
 
 			context = new VelocityContext();
-			List<IJpaTable> tables = new ArrayList<IJpaTable>();
+			List<IJpaTable> tables = new ArrayList<>();
 			tables.addAll(model.getTables());
 			for (IJpaView jpaView : model.getViews()) {
 				tables.addAll(jpaView.getInnerTables());
@@ -474,7 +534,7 @@ public class JpaMappingCodeGenerator implements IGenerator {
 
 			context = new VelocityContext();
 
-			List<IJpaTable> tables = new ArrayList<IJpaTable>();
+			List<IJpaTable> tables = new ArrayList<>();
 			tables.addAll(model.getTables());
 			// old implementation
 			// for (IJpaView jpaView : model.getViews()) {
@@ -547,6 +607,10 @@ public class JpaMappingCodeGenerator implements IGenerator {
 	}
 
 	private void createFile(File templateFile, File outputFile, VelocityContext context) throws IOException {
+		createFile(templateFile, outputFile, context, Charset.defaultCharset());
+	}
+
+	private void createFile(File templateFile, File outputFile, VelocityContext context, Charset charset) throws IOException {
 		Template template;
 
 		try {
@@ -555,14 +619,9 @@ public class JpaMappingCodeGenerator implements IGenerator {
 			throw new GenerationException("Impossible to load template file [" + templateFile + "]", t);
 		}
 
-		FileWriter fileWriter = null;
-
-		fileWriter = new FileWriter(outputFile);
-
-		template.merge(context, fileWriter);
-
-		fileWriter.flush();
-		fileWriter.close();
+		try (Writer writer = new OutputStreamWriter(new FileOutputStream(outputFile), charset)) {
+			template.merge(context, writer);
+		}
 	}
 
 	private void generateHierarchiesFile(File templateFile, BusinessModel businessModel) {
@@ -577,7 +636,7 @@ public class JpaMappingCodeGenerator implements IGenerator {
 				logger.debug("Create hierarchies.xml");
 				MondrianModel mondrianModel = new MondrianModel(olapModel);
 
-				List<IMondrianDimension> dimensions = new ArrayList<IMondrianDimension>();
+				List<IMondrianDimension> dimensions = new ArrayList<>();
 				dimensions.addAll(mondrianModel.getDimensions());
 
 				context = new VelocityContext();
@@ -601,15 +660,15 @@ public class JpaMappingCodeGenerator implements IGenerator {
 
 	@Override
 	public void hideTechnicalResources() {
-		throw new UnsupportedOperationException("If you need this method uncomment it, but you'll have problems with libraries");
+		throw new UnsupportedOperationException(
+				"If you need this method uncomment it, but you'll have problems with libraries");
 		/*
-		 * logger.debug("IN"); IWorkspace workspace = ResourcesPlugin.getWorkspace(); try { if (baseOutputDir != null && baseOutputDir.exists()) { IProject proj
-		 * = workspace.getRoot().getProject(baseOutputDir.getParentFile().getParentFile().getName()); workspace.getRoot().refreshLocal(IResource.DEPTH_INFINITE,
-		 * null); IFolder iFolder = proj.getFolder(baseOutputDir.getParentFile().getName() + "\\" + baseOutputDir.getName()); if (iFolder.exists()) {
-		 * iFolder.setHidden(true); iFolder.setTeamPrivateMember(true); iFolder.setDerived(true, null);
-		 * iFolder.getParent().refreshLocal(IResource.DEPTH_INFINITE, null); proj.refreshLocal(IResource.DEPTH_INFINITE, null); } } else {
-		 * logger.warn("Exception occurred before creating baseoutputDir: no resource to hide"); } } catch (Exception e) {
-		 * logger.error("Error in hiding technical model folders ", e); throw new GenerationException("Error in hiding technical model folders", e); }
+		 * logger.debug("IN"); IWorkspace workspace = ResourcesPlugin.getWorkspace(); try { if (baseOutputDir != null && baseOutputDir.exists()) { IProject proj =
+		 * workspace.getRoot().getProject(baseOutputDir.getParentFile().getParentFile().getName()); workspace.getRoot().refreshLocal(IResource.DEPTH_INFINITE, null);
+		 * IFolder iFolder = proj.getFolder(baseOutputDir.getParentFile().getName() + "\\" + baseOutputDir.getName()); if (iFolder.exists()) { iFolder.setHidden(true);
+		 * iFolder.setTeamPrivateMember(true); iFolder.setDerived(true, null); iFolder.getParent().refreshLocal(IResource.DEPTH_INFINITE, null);
+		 * proj.refreshLocal(IResource.DEPTH_INFINITE, null); } } else { logger.warn("Exception occurred before creating baseoutputDir: no resource to hide"); } } catch
+		 * (Exception e) { logger.error("Error in hiding technical model folders ", e); throw new GenerationException("Error in hiding technical model folders", e); }
 		 * logger.debug("OUT");
 		 */
 

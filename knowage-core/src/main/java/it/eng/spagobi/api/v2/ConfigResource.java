@@ -18,7 +18,6 @@
 package it.eng.spagobi.api.v2;
 
 import java.net.URI;
-import java.net.URLEncoder;
 import java.util.Iterator;
 import java.util.List;
 
@@ -39,12 +38,13 @@ import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.owasp.esapi.Encoder;
 
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.commons.bo.Config;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.IConfigDAO;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
@@ -66,7 +66,7 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON)
 	public List<Config> getConfigs() {
 		logger.debug("IN");
@@ -104,7 +104,7 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Config getSingleConfig(@PathParam("id") Integer id) {
 		logger.debug("IN");
@@ -126,7 +126,7 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/label/{label}")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Config getSingleConfigByLabel(@PathParam("label") String label) {
 		logger.debug("IN");
@@ -152,7 +152,8 @@ public class ConfigResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/KNOWAGE.CUSTOMIZED_DATABASE_FUNCTIONS/{dataSourceId}")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public String getKnowageCalculatedFunctionConfig(@PathParam("dataSourceId") Integer dataSourceId) throws JSONException {
+	public String getKnowageCalculatedFunctionConfig(@PathParam("dataSourceId") Integer dataSourceId)
+			throws JSONException {
 		logger.debug("IN");
 		IConfigDAO configsDao = null;
 		JSONObject toReturn = new JSONObject();
@@ -178,13 +179,15 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 		if (dm != null) {
 			String valueCheck = dm.getValueCheck();
-			logger.debug("content of KNOWAGE.CUSTOMIZED_DATABASE_FUNCTIONS variable to be cponverted in JSON " + valueCheck);
+			logger.debug(
+					"content of KNOWAGE.CUSTOMIZED_DATABASE_FUNCTIONS variable to be cponverted in JSON " + valueCheck);
 			if (valueCheck != null && !valueCheck.equals("")) {
 				try {
 					configJSON = new JSONObject(valueCheck);
 				} catch (JSONException e) {
 					logger.error("Error in converting " + valueCheck
-							+ " to JSON, correct the KNOWAGE.CUSTOMIZED_DATABASE_FUNCTIONS variable, meanwhile ignore custom functions", e);
+							+ " to JSON, correct the KNOWAGE.CUSTOMIZED_DATABASE_FUNCTIONS variable, meanwhile ignore custom functions",
+							e);
 				}
 
 				if (dataSourceId != null && dataSourceId != -1) {
@@ -235,17 +238,9 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 	}
 
-	@GET
-	@Path("/EXPORT.LIMITATION")
-	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public String getExportLimit() {
-		String limitExport = SingletonConfig.getInstance().getConfigValue("dataset.export.xls.resultsLimit");
-		return limitExport;
-	}
-
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Consumes("application/json")
 	public Response insertConfig(@Valid Config body) {
 
@@ -256,14 +251,16 @@ public class ConfigResource extends AbstractSpagoBIResource {
 		}
 
 		if (config.getId() != null) {
-			return Response.status(Status.BAD_REQUEST).entity("Error paramters. New config should not have ID value").build();
+			return Response.status(Status.BAD_REQUEST).entity("Error paramters. New config should not have ID value")
+					.build();
 		}
 
 		try {
 			configsDao = DAOFactory.getSbiConfigDAO();
 			configsDao.setUserProfile(getUserProfile());
 			configsDao.saveConfig(config);
-			String encodedConfig = URLEncoder.encode("" + config.getId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedConfig = encoder.encodeForURL("" + config.getId());
 			return Response.created(new URI("1.0/configs/" + encodedConfig)).entity(encodedConfig).build();
 		} catch (Exception e) {
 			Response.notModified().build();
@@ -274,7 +271,7 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 	@PUT
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateConfig(@PathParam("id") Integer id, @Valid Config body) {
 
@@ -293,7 +290,8 @@ public class ConfigResource extends AbstractSpagoBIResource {
 			configsDao = DAOFactory.getSbiConfigDAO();
 			configsDao.setUserProfile(getUserProfile());
 			configsDao.saveConfig(config);
-			String encodedConfig = URLEncoder.encode("" + config.getId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedConfig = encoder.encodeForURL("" + config.getId());
 			return Response.created(new URI("1.0/configs/" + encodedConfig)).entity(encodedConfig).build();
 		} catch (Exception e) {
 			logger.error("Error while updating url of the new resource", e);
@@ -303,7 +301,7 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 	@PUT
 	@Path("/conf")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateConfig(String body) { // JSON obj
 
@@ -317,13 +315,16 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 			for (int i = 0; i < jsonArray.length(); i++) {
 				JSONObject configObject = jsonArray.getJSONObject(i);
-				saveReceivedConfig(configObject);
+				try {
+					saveReceivedConfig(configObject);
 
-				if (configObject.get("label").equals(SimpleCacheConfiguration.CACHE_SCHEDULING_FULL_CLEAN)) {
-
-					CacheTriggerManagementAPI cacheTriggerManagementAPI = new CacheTriggerManagementAPI();
-					String confValue = configObject.getString("id");
-					cacheTriggerManagementAPI.updateCronExpression(confValue);
+					if (configObject.get("label").equals(SimpleCacheConfiguration.CACHE_SCHEDULING_FULL_CLEAN)) {
+						CacheTriggerManagementAPI cacheTriggerManagementAPI = new CacheTriggerManagementAPI();
+						String confValue = configObject.getString("id");
+						cacheTriggerManagementAPI.updateCronExpression(confValue);
+					}
+				} catch (Exception e) {
+					logger.error("Couldn't save config: " + configObject.getString("label"), e);
 				}
 			}
 
@@ -332,7 +333,7 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 		} catch (Exception e) {
 			logger.error("Error updating config", e);
-			return Response.notModified(e.getMessage()).build();
+			throw new SpagoBIRuntimeException("Error updating config", e);
 		}
 
 	}
@@ -358,7 +359,7 @@ public class ConfigResource extends AbstractSpagoBIResource {
 
 	@DELETE
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.CONFIG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CONFIG_MANAGEMENT })
 	public Response deleteConfig(@PathParam("id") Integer id) {
 		try {
 			IConfigDAO configsDao = DAOFactory.getSbiConfigDAO();

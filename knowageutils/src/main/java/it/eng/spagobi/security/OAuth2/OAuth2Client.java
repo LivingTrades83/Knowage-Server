@@ -8,7 +8,6 @@ package it.eng.spagobi.security.OAuth2;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.Base64;
-import java.util.Properties;
 
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.HttpException;
@@ -21,27 +20,28 @@ import org.apache.log4j.Logger;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import it.eng.spagobi.security.OAuth2.OAuth2Config.ClientAuthenticationMethod;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 public class OAuth2Client {
 	private static Logger logger = Logger.getLogger(OAuth2Client.class);
-	private static Properties config;
+	private static OAuth2Config config;
 
 	public OAuth2Client() {
-		config = OAuth2Config.getInstance().getConfig();
+		config = OAuth2Config.getInstance();
 	}
 
 	public String getToken(String id, String password) {
 		logger.debug("IN");
 		try {
 			HttpClient client = getHttpClient();
-			String url = config.getProperty("REST_BASE_URL") + config.getProperty("TOKEN_PATH");
+			String url = config.getRestAPIBaseUrl() + config.getTokenPath();
 			PostMethod httppost = new PostMethod(url);
 			httppost.setRequestHeader("Content-Type", "application/json");
 
-			logger.debug("Configured TOKEN_BODY is " + config.getProperty("TOKEN_BODY"));
+			logger.debug("Configured TOKEN_BODY is " + config.getTokenBody());
 
-			String body = MessageFormat.format(config.getProperty("TOKEN_BODY"), id, password);
+			String body = MessageFormat.format(config.getTokenBody(), id, password);
 
 			logger.debug("==>\n" + body + "\n<==");
 
@@ -68,8 +68,8 @@ public class OAuth2Client {
 
 	// Returns the X-Auth-Token of the application's administrator
 	public String getAdminToken() {
-		String adminId = config.getProperty("ADMIN_ID");
-		String adminPassword = config.getProperty("ADMIN_PASSWORD");
+		String adminId = config.getAdminId();
+		String adminPassword = config.getAdminPassword();
 
 		return getToken(adminId, adminPassword);
 	}
@@ -105,9 +105,9 @@ public class OAuth2Client {
 			PostMethod httppost = createPostMethodForAccessToken();
 			httppost.setParameter("grant_type", "authorization_code");
 			httppost.setParameter("code", code);
-			httppost.setParameter("redirect_uri", config.getProperty("REDIRECT_URI"));
+			httppost.setParameter("redirect_uri", config.getRedirectUrl());
 
-			return sendHttpPost(httppost);
+			return getAccessTokenFullResponse(httppost);
 		} catch (Exception e) {
 			throw new SpagoBIRuntimeException("Error while trying to get access token from OAuth2 provider", e);
 		} finally {
@@ -123,7 +123,7 @@ public class OAuth2Client {
 			httppost.setParameter("grant_type", "password");
 			httppost.setParameter("username", username);
 			httppost.setParameter("password", password);
-			httppost.setParameter("client_id", config.getProperty("CLIENT_ID"));
+			httppost.setParameter("client_id", config.getClientId());
 
 			return sendHttpPost(httppost);
 		} catch (Exception e) {
@@ -135,15 +135,24 @@ public class OAuth2Client {
 
 	// The generated PostMethod object is used to retrieve access token (OAuth2)
 	private PostMethod createPostMethodForAccessToken() {
-		String authorizationCredentials = config.getProperty("CLIENT_ID") + ":" + config.getProperty("SECRET");
-		String encoded = new String(Base64.getEncoder().encode(authorizationCredentials.getBytes()));
-		encoded = encoded.replaceAll("\n", "");
-		encoded = encoded.replaceAll("\r", "");
 
-		HttpClient httpClient = getHttpClient();
-		PostMethod httppost = new PostMethod(config.getProperty("ACCESS_TOKEN_URL"));
-		httppost.setRequestHeader("Authorization", "Basic " + encoded);
+		PostMethod httppost = new PostMethod(config.getAccessTokenUrl());
 		httppost.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+
+		ClientAuthenticationMethod clientAuthenticationMethod = config.getClientAuthenticationMethod();
+		switch (clientAuthenticationMethod) {
+		case CLIENT_SECRET_BASIC:
+			String authorizationCredentials = config.getClientId() + ":" + config.getClientSecret();
+			String encoded = new String(Base64.getEncoder().encode(authorizationCredentials.getBytes()));
+			encoded = encoded.replaceAll("\n", "");
+			encoded = encoded.replaceAll("\r", "");
+			httppost.setRequestHeader("Authorization", "Basic " + encoded);
+			break;
+		case CLIENT_SECRET_POST:
+			httppost.setParameter("client_id", config.getClientId());
+			httppost.setParameter("client_secret", config.getClientSecret());
+			break;
+		}
 
 		return httppost;
 	}
@@ -167,4 +176,19 @@ public class OAuth2Client {
 
 		return accessToken;
 	}
+
+	private String getAccessTokenFullResponse(PostMethod httppost) throws HttpException, IOException, JSONException {
+		HttpClient httpClient = getHttpClient();
+		int statusCode = httpClient.executeMethod(httppost);
+		byte[] response = httppost.getResponseBody();
+		if (statusCode != 200) {
+			logger.error("Error while getting access token from OAuth2 provider: server returned statusCode = " + statusCode);
+			LogMF.error(logger, "Server response is:\n{0}", new Object[] { new String(response) });
+			throw new SpagoBIRuntimeException("Error while getting access token from OAuth2 provider: server returned statusCode = " + statusCode);
+		}
+
+		String responseStr = new String(response);
+		return responseStr;
+	}
+
 }

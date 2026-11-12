@@ -1,22 +1,25 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	
 	<modelVersion>4.0.0</modelVersion>
+	
 	<parent>
 		<groupId>it.eng.knowage</groupId>
 		<artifactId>knowage-ce-parent</artifactId>
-		<version>8.1.0-SNAPSHOT</version>
+		<version>9.2.0-SNAPSHOT</version>
 		<relativePath>../knowage-ce-parent/pom.xml</relativePath>
 	</parent>
-
+	
+	<artifactId>knowage-vue</artifactId>
 	<packaging>war</packaging>
 	<name>knowage-vue</name>
-	<artifactId>knowage-vue</artifactId>
-
+	
+	<properties>
+		<vue.build.dir>${project.build.directory}/vue</vue.build.dir>
+	</properties>
+	
 	<dependencyManagement>
-
 		<dependencies>
-
 			<!-- 
 				Duplicated in:
 				  - knowage-api
@@ -31,69 +34,203 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
-
 		</dependencies>
-
 	</dependencyManagement>
 	
 	<dependencies>
-
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+			<exclusions>
+				<exclusion>
+					<artifactId>spring-boot-starter-logging</artifactId>
+					<groupId>org.springframework.boot</groupId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.yaml</groupId>
+					<artifactId>snakeyaml</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
-
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-log4j2</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-tomcat</artifactId>
+			<scope>provided</scope>
 		</dependency>
-
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-slf4j-impl</artifactId>
+		</dependency>
+		<!-- Provides support for Graylog in log4j2 -->
+		<dependency>
+			<groupId>biz.paluch.logging</groupId>
+			<artifactId>logstash-gelf</artifactId>
+		</dependency>
 	</dependencies>
-
+	
 	<build>
 		<finalName>knowage-vue</finalName>
 		<plugins>
-
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<version>${spring.boot}</version>
 			</plugin>
-
 			<plugin>
 				<artifactId>maven-war-plugin</artifactId>
 				<configuration>
 					<failOnMissingWebXml>false</failOnMissingWebXml>
 					<attachClasses>true</attachClasses>
 					<classesClassifier>classes</classesClassifier>
+					<packagingExcludes>**/*.map</packagingExcludes>
+					<webResources>
+						<resource>
+							<directory>${vue.build.dir}/target/knowage-vue</directory>
+							<includes>
+								<include>**/*</include>
+							</includes>
+							<excludes>
+								<exclude>**/*.map</exclude>
+							</excludes>
+						</resource>
+					</webResources>
 				</configuration>
 			</plugin>
-
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>vue-sourcemaps</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<descriptors>
+								<descriptor>src/assembly/sourcemaps.xml</descriptor>
+							</descriptors>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<artifactId>maven-resources-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>copy-vue-resources</id>
+						<phase>generate-sources</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<includeEmptyDirs>true</includeEmptyDirs>
+							<outputDirectory>${vue.build.dir}</outputDirectory>
+							<overwrite>true</overwrite>
+							<resources>
+								<resource>
+									<directory>${basedir}/src/vue</directory>
+									<excludes>
+										<exclude>node_modules</exclude>
+										<exclude>dist</exclude>
+									</excludes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>exec-maven-plugin</artifactId>
 				<version>1.6.0</version>
 				<executions>
 					<execution>
-						<id>npm-install</id>
+						<id>npm-set-version</id>
+						<phase>process-resources</phase>
 						<goals>
 							<goal>exec</goal>
 						</goals>
-						<phase>compile</phase>
 						<configuration>
+							<workingDirectory>${vue.build.dir}</workingDirectory>
+							<executable>npm</executable>
+							<arguments>
+								<argument>version</argument>
+								<argument>--allow-same-version</argument>
+								<argument>${project.version}</argument>
+							</arguments>
+						</configuration>
+					</execution>
+					<execution>
+						<id>npm-clean</id>
+						<phase>compile</phase>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+						<configuration>
+							<workingDirectory>${vue.build.dir}</workingDirectory>
+							<executable>npm</executable>
+							<arguments>
+								<argument>cache</argument>
+								<argument>clean</argument>
+								<argument>--force</argument>
+							</arguments>
+						</configuration>
+					</execution>
+					<execution>
+						<id>npm-install</id>
+						<phase>compile</phase>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+						<configuration>
+							<workingDirectory>${vue.build.dir}</workingDirectory>
 							<executable>npm</executable>
 							<arguments>
 								<argument>install</argument>
+								<argument>--legacy-peer-deps</argument>
+							</arguments>
+						</configuration>
+					</execution>
+					<execution>
+						<id>npm-install-workspaces</id>
+						<phase>compile</phase>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+						<configuration>
+							<workingDirectory>${vue.build.dir}</workingDirectory>
+							<executable>npm</executable>
+							<arguments>
+								<argument>install</argument>
+								<argument>--workspaces</argument>
+								<argument>--legacy-peer-deps</argument>
 							</arguments>
 						</configuration>
 					</execution>
 					<execution>
 						<id>npm-build</id>
+						<phase>compile</phase>
 						<goals>
 							<goal>exec</goal>
 						</goals>
-						<phase>compile</phase>
 						<configuration>
+							<workingDirectory>${vue.build.dir}</workingDirectory>
 							<executable>npm</executable>
 							<arguments>
 								<argument>run</argument>
@@ -103,7 +240,22 @@
 					</execution>
 				</executions>
 			</plugin>
-
+			<plugin>
+				<artifactId>maven-clean-plugin</artifactId>
+				<version>3.2.0</version>
+				<configuration>
+					<filesets>
+						<fileset>
+							<directory>${vue.build.dir}</directory>
+							<includes>
+								<include>**/*</include>
+							</includes>
+							<followSymlinks>false</followSymlinks>
+						</fileset>
+					</filesets>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
+	
 </project>

@@ -38,9 +38,14 @@ import it.eng.spagobi.workspace.metadata.SbiFunctionsOrganizer;
 import it.eng.spagobi.workspace.metadata.SbiObjFuncOrganizer;
 import it.eng.spagobi.workspace.metadata.SbiObjFuncOrganizerId;
 
+/**
+ * @deprecated Replaced by KNOWAGE_TM-513
+ * TODO : Delete
+ */
+@Deprecated
 public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements IObjFuncOrganizerDAO {
 
-	private static transient Logger logger = Logger.getLogger(ObjFuncOrganizerHIBDAOImpl.class);
+	private static final Logger LOGGER = Logger.getLogger(ObjFuncOrganizerHIBDAOImpl.class);
 
 	/**
 	 * The method that collects all Organizer documents available for current user. It does not look for a particular folder, but rather for all documents that
@@ -49,14 +54,14 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 	 * @author Danilo Ristovski (danristo, danilo.ristovski@mht.net)
 	 */
 	@Override
-	public List loadAllOrganizerDocuments() {
+	public List<DocumentOrganizer> loadAllOrganizerDocuments() {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 
-		List listOfDocuments = null;
-		List toReturn = new ArrayList();
+		List<SbiObjFuncOrganizer> listOfDocuments = null;
+		List<DocumentOrganizer> toReturn = new ArrayList<>();
 
 		try {
 
@@ -82,7 +87,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 		catch (HibernateException he) {
 
 			logException(he);
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 
 			if (tx != null)
 				tx.rollback();
@@ -101,18 +106,18 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 				if (aSession.isOpen())
 					aSession.close();
 			}
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 		return toReturn;
 	}
 
 	@Override
-	public List loadDocumentsByFolder(Integer folderId) {
-		logger.debug("IN");
+	public List<DocumentOrganizer> loadDocumentsByFolder(Integer folderId) {
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
-		List listOfDocuments = null;
-		List toReturn = new ArrayList();
+		List<SbiObjFuncOrganizer> listOfDocuments = null;
+		List<DocumentOrganizer> toReturn = new ArrayList<>();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
@@ -129,7 +134,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 			return toReturn;
 		} catch (HibernateException he) {
 			logException(he);
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 			if (tx != null)
 				tx.rollback();
 		} finally {
@@ -137,14 +142,14 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 				if (aSession.isOpen())
 					aSession.close();
 			}
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 		return toReturn;
 	}
 
 	@Override
 	public SbiObjFuncOrganizer addDocumentToOrganizer(Integer documentId) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		IEngUserProfile user = getUserProfile();
 		String userId = ((UserProfile) user).getUserId().toString();
 		Session aSession = null;
@@ -156,12 +161,13 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 
 			hibDoc = new SbiObjFuncOrganizer();
 
-			SbiFunctionsOrganizer sfo = new SbiFunctionsOrganizer();
+			
 			Integer funcId = findRootFolder(userId);
-			sfo.setFunctId(funcId);
+			SbiFunctionsOrganizer sfo = new SbiFunctionsOrganizer(funcId);
+			
 
-			SbiObjects so = new SbiObjects();
-			so.setBiobjId(documentId);
+			SbiObjects so = new SbiObjects(documentId);
+			
 
 			SbiObjFuncOrganizerId compId = new SbiObjFuncOrganizerId();
 			compId.setSbiFunctionsOrganizer(sfo);
@@ -178,7 +184,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 
 			logException(he);
 
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 
 			if (tx != null)
 				tx.rollback();
@@ -196,7 +202,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 				if (aSession.isOpen()) {
 					aSession.close();
 				}
-				logger.debug("OUT");
+				LOGGER.debug("OUT");
 			}
 		}
 		return hibDoc;
@@ -204,7 +210,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 
 	@Override
 	public void removeDocumentFromOrganizer(Integer folderId, Integer docId) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -213,13 +219,13 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 			try {
 				deleteOrganizerDocumentById(folderId, docId, aSession);
 			} catch (Exception e) {
-				logger.error("Document was not deleted from the organizer!", e);
+				LOGGER.error("Document was not deleted from the organizer!", e);
 			}
 			tx.commit();
-			logger.debug("Document was deleted from the organizer!");
+			LOGGER.debug("Document was deleted from the organizer!");
 		} catch (HibernateException he) {
 			logException(he);
-			logger.error("Error while deleting the document from organizer.", he);
+			LOGGER.error("Error while deleting the document from organizer.", he);
 			if (tx != null)
 				tx.rollback();
 		} finally {
@@ -227,18 +233,17 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 				if (aSession.isOpen())
 					aSession.close();
 			}
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
 	public void deleteOrganizerDocumentById(Integer folderId, Integer docId, Session aSession) throws Exception {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
-		SbiFunctionsOrganizer sfo = new SbiFunctionsOrganizer();
-		sfo.setFunctId(folderId);
+		SbiFunctionsOrganizer sfo = new SbiFunctionsOrganizer(folderId);
 
-		SbiObjects so = new SbiObjects();
-		so.setBiobjId(docId);
+		SbiObjects so = new SbiObjects(docId);
+		
 
 		SbiObjFuncOrganizerId compId = new SbiObjFuncOrganizerId();
 		compId.setSbiFunctionsOrganizer(sfo);
@@ -247,13 +252,13 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 		SbiObjFuncOrganizer documentToDelete = (SbiObjFuncOrganizer) aSession.load(SbiObjFuncOrganizer.class, compId);
 		aSession.delete(documentToDelete);
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 	@Override
 	public void moveDocumentToDifferentFolder(Integer documentId, Integer sourceFolderId, Integer destinationFolderId) {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -271,7 +276,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 			 * @modifiedBy Danilo Ristovski (danristo, danilo.ristovski@mht.net)
 			 */
 			// logger.error("Error while deleting the document from organizer.", he);
-			logger.error("Error while moving the document to another (different) folder.", he);
+			LOGGER.error("Error while moving the document to another (different) folder.", he);
 
 			if (tx != null)
 				tx.rollback();
@@ -289,7 +294,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 				if (aSession.isOpen())
 					aSession.close();
 			}
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 
 	}
@@ -323,7 +328,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 	}
 
 	private Integer findRootFolder(String user) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		SbiFunctionsOrganizer toReturn = null;
@@ -340,7 +345,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			logger.error("Error while getting the root folder of the current user.", he);
+			LOGGER.error("Error while getting the root folder of the current user.", he);
 			if (tx != null)
 				tx.rollback();
 
@@ -350,7 +355,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 					aSession.close();
 			}
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return toReturn.getFunctId();
 	}
 
@@ -359,21 +364,21 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 		try {
 			deleteOrganizerDocumentById(folId, docId, aSession);
 		} catch (Exception e) {
-			logger.error("Document was not removed from source folder!", e);
+			LOGGER.error("Document was not removed from source folder!", e);
 		}
 	}
 
 	private SbiObjFuncOrganizer addToNewFolder(Integer documentId, Integer destId, Session aSession) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		SbiObjFuncOrganizer hibDoc = null;
 		try {
 			hibDoc = new SbiObjFuncOrganizer();
 
-			SbiFunctionsOrganizer sfo = new SbiFunctionsOrganizer();
-			sfo.setFunctId(destId);
+			SbiFunctionsOrganizer sfo = new SbiFunctionsOrganizer(destId);
+			
 
-			SbiObjects so = new SbiObjects();
-			so.setBiobjId(documentId);
+			SbiObjects so = new SbiObjects(documentId);
+			
 
 			SbiObjFuncOrganizerId compId = new SbiObjFuncOrganizerId();
 			compId.setSbiFunctionsOrganizer(sfo);
@@ -387,15 +392,15 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 
 		} catch (HibernateException he) {
 			logException(he);
-			logger.error("Error while adding document to new folder.", he);
+			LOGGER.error("Error while adding document to new folder.", he);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 		return hibDoc;
 	}
 
 	public SbiFunctionsOrganizer createRootFolder(String user) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		SbiFunctionsOrganizer hibFunct = null;
@@ -415,7 +420,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 
 			if (tx != null)
 				tx.rollback();
@@ -425,7 +430,7 @@ public class ObjFuncOrganizerHIBDAOImpl extends AbstractHibernateDAO implements 
 				if (aSession.isOpen()) {
 					aSession.close();
 				}
-				logger.debug("OUT");
+				LOGGER.debug("OUT");
 			}
 		}
 		return hibFunct;

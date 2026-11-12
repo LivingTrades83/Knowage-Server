@@ -57,18 +57,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/services/cockpitModule_helperDescriptors.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/services/cockpitModule_variableService.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/services/cockpitModule_catalogFunctionService.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "/js/src/angular_1.4/tools/commons/services/knModule.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "/js/src/angular_1.4/tools/commons/services/knModule_fontIconsService.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "/js/src/angular_1.4/tools/commons/services/knModule_aggridLabels.js")%>"></script>
+<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/commons/services/knModule.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/commons/services/knModule_fontIconsService.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/commons/services/knModule_aggridLabels.js")%>"></script>
 	
 	<!-- Drivers -->
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "js/src/angular_1.4/tools/driversexecution/driversExecutionModule.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "js/src/angular_1.4/tools/driversexecution/driversExecutionService.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "js/src/angular_1.4/tools/driversexecution/driversDependencyService.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "js/src/angular_1.4/tools/documentexecution/documentParamenterElement/documentParamenterElementController.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "js/src/angular_1.4/tools/businessmodelopening/businessModelOpeningModule.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "js/src/angular_1.4/tools/businessmodelopening/businessModelOpeningServices.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(spagoBiContext, "js/src/angular_1.4/tools/driversexecution/renderparameters/renderParameters.js")%>"></script>
+<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/driversexecution/driversExecutionModule.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/driversexecution/driversExecutionService.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/driversexecution/driversDependencyService.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/documentexecution/documentParamenterElement/documentParamenterElementController.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/businessmodelopening/businessModelOpeningModule.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/businessmodelopening/businessModelOpeningServices.js")%>"></script>
+		<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/tools/driversexecution/renderparameters/renderParameters.js")%>"></script>
 	
 	<!-- Factory -->
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/factory/cockpitModule_gridsterOptions.js")%>"></script>
@@ -76,6 +76,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/factory/cockpitModule_widgetSelectionUtils.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/factory/cockpitModule_defaultTheme.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/factory/cockpitModule_highchartsLocales.js")%>"></script>
+	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/factory/cockpitModule_userPalette.js")%>"></script>
+	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/factory/knModule_chartOptions.js")%>"></script>
 		
 	<!-- Widgets -->
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/imageWidget/imageWidget.js")%>"></script>
@@ -92,8 +94,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/pythonWidget/pythonMode.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/pythonWidget/pythonWidgetEdit.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/pythonWidget/pythonWidget.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/RWidget/RWidgetEdit.js")%>"></script>
-	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/RWidget/RWidget.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/selectorWidget/selectorWidget.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/documentWidget/documentWidget.js")%>"></script>
 	<script type="text/javascript" src="<%=urlBuilder.getResourcePath(cockpitEngineContext, "/js/src/angular_1.4/cockpit/directives/cockpit-widget/widget/staticPivotTableWidget/staticPivotTableWidget.js")%>"></script>

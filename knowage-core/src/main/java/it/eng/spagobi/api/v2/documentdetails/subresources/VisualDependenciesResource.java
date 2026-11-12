@@ -35,7 +35,7 @@ import org.hibernate.HibernateException;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ObjParview;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IObjParviewDAO;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.assertion.Assert;
@@ -44,12 +44,12 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 @Path("/")
 public class VisualDependenciesResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(VisualDependenciesResource.class);
+	protected static Logger logger = Logger.getLogger(VisualDependenciesResource.class);
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public List<ObjParview> getVisualDependencies(@PathParam("id") Integer id, @QueryParam("driverId") Integer driverId) {
 		logger.debug("IN");
 		List<ObjParview> parameterViewObjects = null;
@@ -60,7 +60,7 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 			Assert.assertNotNull(parameterViewObjects, "Visual Dependencies can not be null");
 		} catch (HibernateException e) {
 			logger.error("Visual dependencies could not be loaded", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
 		}
 		logger.debug("OUT");
 		return parameterViewObjects;
@@ -69,7 +69,7 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 	@POST
 	@Consumes("application/json")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public ObjParview addVisualDependeciesForDocumentDriver(@PathParam("id") Integer id, ObjParview parameterViewObject) {
 		logger.debug("IN");
 		IObjParviewDAO parameterViewDAO;
@@ -80,7 +80,7 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 			parameterViewObject.setId(parameterViewDAO.insertObjParview(parameterViewObject));
 		} catch (HibernateException e) {
 			logger.error("Visual Dependencies can not be created", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage() + "in Visual Dependencsies", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage() + "in Visual Dependencsies", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return parameterViewObject;
@@ -90,7 +90,7 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 	@POST
 	@Path("delete")
 	@Consumes("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void deleteVisualDependeciesForDocumentDriverByPost(@PathParam("id") Integer id, ObjParview parameterViewObject) {
 		logger.debug("IN");
 		IObjParviewDAO parameterViewDAO;
@@ -99,7 +99,7 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 			parameterViewDAO.eraseObjParview(parameterViewObject);
 		} catch (HibernateException e) {
 			logger.error("Visual Dependencies can not be removed", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
 		}
 		logger.debug("OUT");
 	}
@@ -107,7 +107,7 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 	@PUT
 	@Consumes("application/json")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void setVisualDependeciesForDocumentDriver(@PathParam("id") Integer id, ObjParview parameterViewObject) {
 		logger.debug("IN");
 		IObjParviewDAO parameterViewDAO;
@@ -118,14 +118,14 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 			parameterViewDAO.modifyObjParview(parameterViewObject);
 		} catch (HibernateException e) {
 			logger.error("Visual Dependencies can not be modified", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
 		}
 		logger.debug("OUT");
 	}
 
 	@DELETE
 	@Consumes("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public void deleteVisualDependeciesForDocumentDriver(ObjParview parameterViewObject) {
 		logger.debug("IN");
 		IObjParviewDAO parameterViewDAO;
@@ -134,7 +134,7 @@ public class VisualDependenciesResource extends AbstractSpagoBIResource {
 			parameterViewDAO.eraseObjParview(parameterViewObject);
 		} catch (HibernateException e) {
 			logger.error("Visual Dependencies can not be removed", e);
-			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException(e.getCause().getCause().getLocalizedMessage(), getLocale(), e);
 		}
 		logger.debug("OUT");
 	}

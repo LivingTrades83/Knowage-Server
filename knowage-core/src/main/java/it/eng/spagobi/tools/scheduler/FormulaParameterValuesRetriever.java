@@ -34,14 +34,14 @@ import org.apache.log4j.Logger;
 public class FormulaParameterValuesRetriever extends
 		ParameterValuesRetriever {
 	
-	static private Logger logger = Logger.getLogger(FormulaParameterValuesRetriever.class);	
+	private static Logger logger = Logger.getLogger(FormulaParameterValuesRetriever.class);	
 
 	private Formula formula;
 	
 	@Override
 	public List<String> retrieveValues(BIObjectParameter parameter) throws Exception {
 		logger.debug("IN");
-		List<String> toReturn = new ArrayList<String>();
+		List<String> toReturn = new ArrayList<>();
 		String result = formula.execute();
 		logger.debug("Result obtained from formula is [" + result + "]");
 		if (result != null) {

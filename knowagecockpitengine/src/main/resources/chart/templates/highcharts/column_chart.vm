@@ -117,6 +117,10 @@
 		
 	#end
 #end
+
+#set($range = $datasettransformer.getRange($rows, $dataColumnsMapper, $seriesMap))
+#set($categoriesCardinality = $datasettransformer.getCategoriesCardinality($rows, $chart.VALUES.CATEGORY, $dataColumnsMapper))
+
 #set($seriesMapGroupingFunction = {}) 
 #foreach($serie in $series)
 	
@@ -179,6 +183,9 @@
 			#if($orderColumnDataValues && $orderColumnDataValuesEscaped)
 			orderColumnDataValues: '$orderColumnDataValuesEscaped',
 			#end
+			
+			categoriesCardinality: $categoriesCardinality,
+			range: $range
 			 
 		},
     
@@ -1084,6 +1091,24 @@
 			 	#end
 				
 				#end
+
+			#set($enableValues = $chart.VALUES.SERIE.get(0).showValue)
+			#end
+
+			#if($chart.VALUES.SERIE.get(0))
+			#set($relatedSerie = $chart.VALUES.SERIE.get(0))
+				#if($chart.type.toUpperCase() == 'LINE' && $chart.groupSeriesCateg && $chart.groupSeriesCateg =='true')
+		 
+				#if($chart.VALUES.SERIE.get(0).serieTypeRadar && $chart.VALUES.SERIE.get(0).serieTypeRadar!="")
+				#set($relatedSerieTypes = $chart.VALUES.SERIE.get(0).serieTypeRadar.split(", "))
+				#set($count = $chart.VALUES.SERIE.get(0).serieTypeRadar.length() - $chart.VALUES.SERIE.get(0).serieTypeRadar.replace(",", "").length())
+			 	#else
+			 	#set($relatedSerieTypes = $chart.VALUES.SERIE.get(0).type.split(", "))
+			 	#set($count = $chart.VALUES.SERIE.get(0).type.length() - $chart.VALUES.SERIE.get(0).type.replace(",", "").length())
+			 	#end
+				
+				#end
+
 			#set($enableValues = $chart.VALUES.SERIE.get(0).showValue)
 			#end
 
@@ -1497,7 +1522,7 @@
 		    
 		    #if($chartType == 'radar')
 			    #if($relatedSerieType == '')
-			    	#if($relatedSerie.serieTypeRadar!='')
+			    	#if($relatedSerie.serieTypeRadar && $relatedSerie.serieTypeRadar!='')
 				    	#set($relatedSerieType = $relatedSerie.serieTypeRadar)
 				    	type: '$relatedSerieType',
 			    	#end
@@ -1515,7 +1540,6 @@
 	    	#set ($countXvalues = 0)
 	    	connectNulls:true,
 	   
-	    	legendIndex: $velocityCount,
 	    	data: [
 	    		#set($relatedSerieColName = "$relatedSerie.name"+"_#if($relatedSerie.groupingFunction)$relatedSerie.groupingFunction.toLowerCase()#{else}sum#end")
 	    	  	#if($chart.isCockpitEngine != 'true')
@@ -1526,15 +1550,15 @@
 	    	    #set($serieColumnsMapped = $dataColumnsMapper.get($relatedSerieColName.toLowerCase())) ## "Vendite_AVG" -> "column_5" ## "Ricavi_sum" -> "column_6"
 
 	    		#foreach($row in $rows)
-					#if( $row.get($serieColumnsMapped))
-						#set ($serieValue = $row.get($serieColumnsMapped))
+					#set ($serieValue = $row.get($serieColumnsMapped))
+					#if("$!serieValue" != "")
 						#set ($serieCategoryName =  $row.get($categorieColumnsMapped))
 				
 						#set( $serieCategoryName = $escapeTool.javascript($serieCategoryName))
 
 						{
 							##drilldown: $enableDrilldown,
-							drilldown: $drilldownEnabledFlag,
+							drilldown: $enableDrilldown,
 							#if($relatedSerieType == 'arearange')
 								#if($chart.isCockpitEngine != 'false')
 									low: $row.get($serieColumnsMappedLow),
@@ -1556,7 +1580,10 @@
 							datetype:"$datetype",
 							#if($isDateTime==true)
 							#if($datetype=="string")
-							x: Date.parse("$serieCategoryName"),
+							x: (function() {
+								var str = "$serieCategoryName";
+								return moment(str, "DD/MM/YYYY hh:mm:ss.SSS").valueOf();
+							})(),
 							#end
 							#end
            					#foreach($customColor in $customColors)
@@ -1637,7 +1664,8 @@
 		                      	
 		                      	var precision = '${relatedSerie.precision}';
 		                      	var showPercentage = ${relatedSerie.showPercentage};
-		                      	
+		                      	var showValue = ${relatedSerie.showValue};
+		                      		
 		                      	switch(scaleFactor.toUpperCase()) {
 		                      	
 		                      		case "EMPTY":
@@ -1676,7 +1704,9 @@
 		                 				   percentage = 100 * value/groupTotal;	
 		                 				     
 		                 				   var precisePercentage = percentage.toFixed(precision);		
-		                 				   
+		                 				    if (showPercentage && showValue) {
+		                 				   		 return prefixValue + ' ' + newValue + sufixValue +  ' ( ' + prefixValue + precisePercentage + '%' + sufixValue + ' ) ' ;
+		                 				    }
 		                 					if(showPercentage){
 												return prefixValue + ' ' + precisePercentage + '%' + sufixValue;										
 											} else {
@@ -1760,9 +1790,6 @@
 		
 		
 
-    	
-    	
-    	
 		{	
 			 label: {
 			      enabled: false
@@ -1791,9 +1818,12 @@
     			#end
 			#end
 			
+
 			#if($relatedSerieTypes && $count!=$counter && $relatedSerieTypes[$counter])
-		    	type: '$relatedSerieTypes[$counter]',
+		    	type: "$relatedSerieTypes[$counter]",
 		    	 #set ($counter = $counter+1)
+		    #elseif($chartType == 'line')
+		    	type: "$relatedSerieTypes[0]",
 		    #end
 				 #* #set ($counter = $counter+1) *#
 				#foreach($customColor in $customColors)
@@ -2201,7 +2231,7 @@
 			return result;
 		}
     },
-    
+       
     #if($enableDrilldown)
     drilldown: {
         series: [],
@@ -2414,7 +2444,7 @@
             	
             	@author: danristo (danilo.ristovski@mht.net)
             *#
-            turboThreshold: 200000
+            turboThreshold: 0
         }
        
     }

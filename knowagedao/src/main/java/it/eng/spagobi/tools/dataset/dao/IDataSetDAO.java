@@ -40,128 +40,117 @@ public interface IDataSetDAO extends ISpagoBIDao {
 	// READ operations (cRud)
 	// ========================================================================================
 
-	public IDataSet loadDataSetByLabel(String label);
+	IDataSet loadDataSetByLabel(String label);
 
-	public IDataSet loadDataSetByName(String label);
+	IDataSet loadDataSetByName(String label);
 
-	public IDataSet loadDataSetById(Integer id);
+	IDataSet loadDataSetById(Integer id);
 
-	public SbiDataSet loadSbiDataSetById(Integer id, Session session);
+	SbiDataSet loadSbiDataSetById(Integer id, Session session);
 
-	public List<IDataSet> loadDataSetsByOwner(UserProfile user, Boolean includeOwned, Boolean includePublic, Boolean showDerivedDatasets);
-
-	/**
-	 * @deprecated Use {@link ISbiDataSetDAO#loadEnterpriseDataSets(int, int, UserProfile)}
-	 * TODO ML-DATASOURCE-V3 Delete
-	 */
-	@Deprecated
-	public List<IDataSet> loadEnterpriseDataSets(UserProfile user);
-
-	public List<IDataSet> loadUserDataSets(String user);
-
-	public List<IDataSet> loadNotDerivedUserDataSets(UserProfile user);
-
-	public List<IDataSet> loadNotDerivedDataSets(UserProfile user);
-
-	public List<IDataSet> loadFlatDatasets();
+	List<IDataSet> loadDataSetsByOwner(UserProfile user, Boolean includeOwned, Boolean includePublic,
+			Boolean showDerivedDatasets);
 
 	/**
-	 * @deprecated Use {@link ISbiDataSetDAO#loadDataSetsOwnedByUser(int, int, UserProfile, boolean)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Use {@link ISbiDataSetDAO#loadEnterpriseDataSets(int, int, UserProfile)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<IDataSet> loadDataSetsOwnedByUser(UserProfile user, Boolean showDerivedDatasets);
+	List<IDataSet> loadEnterpriseDataSets(UserProfile user);
+
+	List<IDataSet> loadUserDataSets(String user);
+
+	List<IDataSet> loadNotDerivedUserDataSets(UserProfile user);
+
+	List<IDataSet> loadNotDerivedDataSets(UserProfile user);
+
+	List<IDataSet> loadFlatDatasets();
 
 	/**
-	 * @deprecated Use {@link ISbiDataSetDAO#loadDatasetsSharedWithUser(int, int, UserProfile, boolean)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Use {@link ISbiDataSetDAO#loadDataSetsOwnedByUser(int, int, UserProfile, boolean)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<IDataSet> loadDatasetsSharedWithUser(UserProfile user, Boolean showDerivedDatasets);
+	List<IDataSet> loadDataSetsOwnedByUser(UserProfile user, Boolean showDerivedDatasets);
 
 	/**
-	 * @deprecated Use {@link ISbiDataSetDAO#loadDatasetOwnedAndShared(int, int, UserProfile)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Use {@link ISbiDataSetDAO#loadDatasetsSharedWithUser(int, int, UserProfile, boolean)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<IDataSet> loadDatasetOwnedAndShared(UserProfile user);
-
-	public List<IDataSet> loadNotDerivedDatasetOwnedAndShared(UserProfile user);
-
-	public List<IDataSet> loadCkanDataSets(UserProfile user);
+	List<IDataSet> loadDatasetsSharedWithUser(UserProfile user, Boolean showDerivedDatasets);
 
 	/**
-	 * @deprecated Use {@link ISbiDataSetDAO#loadMyDataSets(int, int, UserProfile)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Use {@link ISbiDataSetDAO#loadDatasetOwnedAndShared(int, int, UserProfile)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<IDataSet> loadMyDataDataSets(UserProfile owner);
+	List<IDataSet> loadDatasetOwnedAndShared(UserProfile user);
 
-	public List<DataSetBasicInfo> loadFederatedDataSetsByFederatoinId(Integer id);
+	List<IDataSet> loadNotDerivedDatasetOwnedAndShared(UserProfile user);
 
-	public List<DataSetBasicInfo> loadDatasetsBasicInfoForLov();
+	/**
+	 * @deprecated Use {@link ISbiDataSetDAO#loadMyDataSets(int, int, UserProfile)} TODO ML-DATASOURCE-V3 Delete
+	 */
+	@Deprecated
+	List<IDataSet> loadMyDataDataSets(UserProfile owner);
 
-	public List<IDataSet> loadDataSets(String owner, Boolean includeOwned, Boolean includePublic, String scope, String type, Set<Domain> categoryList,
-			String implementation, Boolean showDerivedDatasets);
+	List<DataSetBasicInfo> loadFederatedDataSetsByFederatoinId(Integer id);
 
-	public List<IDataSet> loadDataSets();
+	List<DataSetBasicInfo> loadDatasetsBasicInfoForLov();
 
-	public List<IDataSet> loadDataSetOlderVersions(Integer dsId);
+	List<DataSetBasicInfo> loadDatasetsBasicInfoForAI(List<Integer> idsObject);
 
-	public List<IDataSet> loadDatasetsByTags(UserProfile user, List<Integer> tagIds, String type);
+	List<IDataSet> loadDataSets(String owner, Boolean includeOwned, Boolean includePublic, String scope, String type,
+			Set<Domain> categoryList, String implementation, Boolean showDerivedDatasets);
+
+	List<IDataSet> loadDataSets();
+
+	List<IDataSet> loadDataSetOlderVersions(Integer dsId);
+
+	List<IDataSet> loadDatasetsByTags(UserProfile user, List<Integer> tagIds, String type);
 
 	// ========================================================================================
 	// CEATE operations (Crud)
 	// ========================================================================================
-	public Integer insertDataSet(IDataSet dataSet);
+	Integer insertDataSet(IDataSet dataSet);
 
-	public Integer insertDataSet(IDataSet dataSet, Session optionalSession);
+	Integer insertDataSet(IDataSet dataSet, Session optionalSession);
 
 	// ========================================================================================
 	// ???
 	// ========================================================================================
 
-	public List<DataSetBasicInfo> loadDatasetsBasicInfo();
+	List<IDataSet> loadFilteredDatasetList(String hsql, Integer offset, Integer fetchSize);
 
-	public List<IDataSet> loadFilteredDatasetList(String hsql, Integer offset, Integer fetchSize);
-
-	public List<IDataSet> loadPagedDatasetList(Integer offset, Integer fetchSize);
+	List<IDataSet> loadPagedDatasetList(Integer offset, Integer fetchSize);
 
 	/**
-	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<IDataSet> loadFilteredDatasetList(String hsql, Integer offset, Integer fetchSize, String owner);
+	List<IDataSet> loadFilteredDatasetList(String hsql, Integer offset, Integer fetchSize, String owner);
 
 	/**
-	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<IDataSet> loadPagedDatasetList(Integer offset, Integer fetchSize, String owner);
+	List<IDataSet> loadPagedDatasetList(Integer offset, Integer fetchSize, String owner);
 
 	/**
-	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<IDataSet> loadFilteredDatasetList(Integer offset, Integer fetchSize, String owner, JSONObject filters, JSONObject ordering,
-			List<Integer> tagIds);
+	List<IDataSet> loadFilteredDatasetList(Integer offset, Integer fetchSize, String owner, JSONObject filters,
+			JSONObject ordering, List<Integer> tagIds);
 
 	/**
-	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)}
-	 * TODO ML-DATASOURCE-V3 Delete
+	 * @deprecated Replaced by {@link #loadFilteredDatasetList(int, int, String, String, boolean, List)} TODO ML-DATASOURCE-V3 Delete
 	 */
 	@Deprecated
-	public List<SbiDataSet> loadPagedSbiDatasetConfigList(Integer offset, Integer fetchSize);
+	List<SbiDataSet> loadPagedSbiDatasetConfigList(Integer offset, Integer fetchSize);
 
-
-	public default List<IDataSet> loadFilteredDatasetList() {
+	default List<IDataSet> loadFilteredDatasetList() {
 		return loadFilteredDatasetList(0, 15);
 	}
 
-	public default List<IDataSet> loadFilteredDatasetList(int offset, int fetchSize) {
+	default List<IDataSet> loadFilteredDatasetList(int offset, int fetchSize) {
 		return loadFilteredDatasetList(offset, fetchSize, null, null, false, Collections.EMPTY_LIST);
 	}
 
@@ -175,48 +164,41 @@ public interface IDataSetDAO extends ISpagoBIDao {
 	 * @param tagIds
 	 * @return
 	 */
-	public List<IDataSet> loadFilteredDatasetList(int offset, int fetchSize, String owner, String sortByColumn, boolean reverse, List<Integer> tagIds);
+	List<IDataSet> loadFilteredDatasetList(int offset, int fetchSize, String owner, String sortByColumn,
+			boolean reverse, List<Integer> tagIds);
 
+	Integer countBIObjAssociated(Integer dsId);
 
+	Integer countDatasets();
 
+	boolean hasBIObjAssociated(String dsId);
 
-
-
-
-	public Integer countBIObjAssociated(Integer dsId);
-
-	public Integer countDatasets();
-
-	public Integer countDatasetsSearch(String search, List<Integer> tagIds);
-
-	public boolean hasBIObjAssociated(String dsId);
-
-	public boolean hasBILovAssociated(String dsId);
+	boolean hasBILovAssociated(String dsId);
 
 	// ========================================================================================
 	// UPDATE operations (crUd)
 	// ========================================================================================
 
-	public void modifyDataSet(IDataSet dataSet);
+	void modifyDataSet(IDataSet dataSet);
 
-	public void modifyDataSet(IDataSet dataSet, Session optionalSession);
+	void modifyDataSet(IDataSet dataSet, Session optionalSession);
 
-	public IDataSet restoreOlderDataSetVersion(Integer dsId, Integer dsVersion);
+	IDataSet restoreOlderDataSetVersion(Integer dsId, Integer dsVersion);
 
-	public Integer getHigherVersionNumForDS(Integer dsId);
+	Integer getHigherVersionNumForDS(Integer dsId);
 
-	public void updateDatasetOlderVersion(IDataSet dataSet);
+	void updateDatasetOlderVersion(IDataSet dataSet);
 
 	// ========================================================================================
 	// DELETE operations (cruD)
 	// ========================================================================================
-	public void deleteDataSet(Integer dsID);
+	void deleteDataSet(Integer dsID);
 
-	public boolean deleteInactiveDataSetVersion(Integer dsVerdionID, Integer dsId);
+	boolean deleteInactiveDataSetVersion(Integer dsVerdionID, Integer dsId);
 
-	public boolean deleteAllInactiveDataSetVersions(Integer dsID);
+	boolean deleteAllInactiveDataSetVersions(Integer dsID);
 
-	public void deleteDataSetNoChecks(Integer dsID);
+	void deleteDataSetNoChecks(Integer dsID);
 
 	// ========================================================================================
 	// UTILITY methods
@@ -225,13 +207,23 @@ public interface IDataSetDAO extends ISpagoBIDao {
 	 * @deprecated
 	 */
 	@Deprecated
-	public IDataSet toGuiGenericDataSet(IDataSet iDataSet);
+	IDataSet toGuiGenericDataSet(IDataSet iDataSet);
 
 	/**
 	 * @deprecated
 	 */
 	@Deprecated
-	public SbiDataSet copyDataSet(SbiDataSet hibDataSet);
+	SbiDataSet copyDataSet(SbiDataSet hibDataSet);
 
-	public List<IDataSet> loadFilteredDatasetByTypeList(String string, String qbeDsType);
+	List<IDataSet> loadFilteredDatasetByTypeList(String string, String qbeDsType);
+
+	IDataSet loadDataSetByLabelAndUserCategories(String label);
+
+	List<IDataSet> loadDerivedDataSetByLabel(String label);
+
+	Integer countCategories(Integer catId);
+
+	List<IDataSet> loadDataSetByCategoryId(Integer catId);
+
+	List<String> loadPersistenceTableNames(Integer dsId);
 }

@@ -23,9 +23,41 @@
 	function exportWidgetService ($q, $httpParamSerializer, $mdToast, sbiModule_config, cockpitModule_analyticalDrivers, sbiModule_user, sbiModule_download, sbiModule_translate, sbiModule_restServices, sbiModule_messaging, sbiModule_cockpitDocument, cockpitModule_datasetServices, cockpitModule_widgetSelection, cockpitModule_properties) {
 		var objToReturn = {};
 
+		objToReturn.exportWidgetToPdf = function (widget, options) {
+
+
+			/**
+			 * Last parameter is set to TRUE for exporting only one widget, rather than whole document (all table and chart widgets in cockpit)
+			 */
+			createRequestForPdf(widget, options)
+				.then(function(requestConfig){
+					var config = {"responseType": "arraybuffer"};
+					var exportingToast = sbiModule_messaging.showInfoMessage(sbiModule_translate.load("sbi.cockpit.widgets.exporting"), 'Success!', 0);
+					var documentLabel = requestConfig.DOCUMENT_LABEL;
+
+					sbiModule_restServices.promisePost('1.0/cockpit/export', 'pdf', requestConfig, config)
+						.then(function(response){
+							var mimeType = response.headers("Content-type");
+							var fileName = 'exported_widget';
+							if (documentLabel != undefined) {
+								fileName = documentLabel;
+							}
+							$mdToast.hide(exportingToast);
+							sbiModule_download.getBlob(response.data, fileName,"application/pdf", "pdf");
+						}, function(error){
+							$mdToast.cancel(exportingToast);
+							sbiModule_messaging.showErrorMessage(sbiModule_translate.load("sbi.cockpit.widgets.exporting.error"), 'Error');
+						});
+				});
+		}
+
+	
+
 		objToReturn.exportWidgetToExcel = function (type, widget, options) {
-
-
+	
+		if (widget.type == "chart") {
+			widget = replaceStringVariables(widget);
+		}
 			/**
 			 * Last parameter is set to TRUE for exporting only one widget, rather than whole document (all table and chart widgets in cockpit)
 			 */
@@ -50,6 +82,16 @@
 						});
 				});
 		}
+		
+	var replaceStringVariables = function (obj){
+		var objString = angular.copy(obj);
+		objString = JSON.stringify(objString);
+  		  objString = objString.replace(/\$V\{([a-zA-Z0-9\-\_]{1,255})(?:.([a-zA-Z0-9\-\_]{1,255}))?\}/,function(match,p1,p2){
+					return p2 ? cockpitModule_properties.VARIABLES[p1][p2] : cockpitModule_properties.VARIABLES[p1];
+				})
+				
+	return JSON.parse(objString);
+	}
 
 
 		var createRequest = function (type, widget, exportWidget, options) {
@@ -60,6 +102,7 @@
 					document: sbiModule_cockpitDocument.docId,
 					widget: widget.id,
 					DOCUMENT_LABEL: sbiModule_cockpitDocument.docLabel,
+					DOCUMENT_NAME: sbiModule_cockpitDocument.docName,
 					SBI_COUNTRY: sbiModule_config.curr_country,
 					SBI_LANGUAGE: sbiModule_config.curr_language,
 					SBI_SCRIPT: sbiModule_config.curr_script,
@@ -69,8 +112,14 @@
 			if (exportWidget) {
 				requestUrl.exportWidget = exportWidget;
 			}
-
-			if (!angular.equals(cockpitModule_properties.VARIABLES,{})) {
+		var regex = new RegExp("^_(SUM|AVG|COUNT|COUNT_DISTINCT|NONE|MAX|MIN)$");
+		for (var k in widget.content.columnSelectedOfDataset) {
+			if (regex.test(widget.content.columnSelectedOfDataset[k].alias)){
+				widget.content.columnSelectedOfDataset[k].alias = widget.content.columnSelectedOfDataset[k].name + widget.content.columnSelectedOfDataset[k].alias;
+				widget.content.columnSelectedOfDataset[k].aliasToShow = widget.content.columnSelectedOfDataset[k].name + widget.content.columnSelectedOfDataset[k].aliasToShow;
+			}
+		}
+			/*if (!angular.equals(cockpitModule_properties.VARIABLES,{})) {
 				for (var k in widget.content.columnSelectedOfDataset) {
 					if(Array.isArray(widget.content.columnSelectedOfDataset[k].variables) && widget.content.columnSelectedOfDataset[k].variables.length) {
 						if (widget.type == "table" && widget.content.columnSelectedOfDataset[k].variables[0].action == 'header') {
@@ -83,7 +132,7 @@
 
 					}
 				}
-			}
+			}*/
 
 			var drivers = formatDrivers(cockpitModule_analyticalDrivers);
 			if (widget.type == "map") {
@@ -123,19 +172,80 @@
 				else {
 					aggregation = cockpitModule_widgetSelection.getAggregation(widget, dataset)
 				}
+				var userSelections = cockpitModule_widgetSelection.getAllUserSelections();
 				var loadDomainValues = widget.type == "selector" ? true : false;
 				var selections = cockpitModule_datasetServices.getWidgetSelectionsAndFilters(widget, dataset, loadDomainValues);
 				var parameters = cockpitModule_datasetServices.getDatasetParameters(dsId);
 				var parametersString = cockpitModule_datasetServices.getParametersAsString(parameters);
 				var paramsToSend = angular.fromJson(parametersString);
+				
 				requestUrl.COCKPIT_SELECTIONS = {};
 				requestUrl.COCKPIT_SELECTIONS.aggregations = aggregation;
 				requestUrl.COCKPIT_SELECTIONS.parameters = paramsToSend;
 				requestUrl.COCKPIT_SELECTIONS.drivers = drivers;
 				requestUrl.COCKPIT_SELECTIONS.selections = selections;
+				requestUrl.COCKPIT_SELECTIONS.userSelections = (userSelections.length >0) ? userSelections[0] : selections;
 				requestUrl.COCKPIT_VARIABLES = cockpitModule_properties.VARIABLES;
 				requestUrl.options = options;
 			}
+
+			deferred.resolve(requestUrl);
+			return deferred.promise;
+		}
+
+		var createRequestForPdf = function (widget, options) {
+			var deferred = $q.defer();
+			var requestUrl = {
+					user_id: sbiModule_user.userUniqueIdentifier,
+					document: sbiModule_cockpitDocument.docId,
+					widget: widget.id,
+					DOCUMENT_LABEL: sbiModule_cockpitDocument.docLabel,
+					SBI_COUNTRY: sbiModule_config.curr_country,
+					SBI_LANGUAGE: sbiModule_config.curr_language,
+					SBI_SCRIPT: sbiModule_config.curr_script,
+					options : options
+			}
+
+			/*if (!angular.equals(cockpitModule_properties.VARIABLES,{})) {
+				for (var k in widget.content.columnSelectedOfDataset) {
+					if(Array.isArray(widget.content.columnSelectedOfDataset[k].variables) && widget.content.columnSelectedOfDataset[k].variables.length) {
+						if (widget.type == "table" && widget.content.columnSelectedOfDataset[k].variables[0].action == 'header') {
+							for (var j in cockpitModule_properties.VARIABLES) {
+								if (j == widget.content.columnSelectedOfDataset[k].variables[0].variable){
+									widget.content.columnSelectedOfDataset[k].aliasToShow = cockpitModule_properties.VARIABLES[j];
+								}
+							}
+						}
+
+					}
+				}
+			}*/
+
+			var drivers = formatDrivers(cockpitModule_analyticalDrivers);
+
+			var dsId = widget.dataset.dsId;
+			var dataset = cockpitModule_datasetServices.getDatasetById(dsId);
+			var aggregation;
+			if (widget.settings) {
+			 aggregation = cockpitModule_widgetSelection.getAggregation(widget, dataset, widget.settings.sortingColumn,widget.settings.sortingOrder);
+			}
+			else {
+				aggregation = cockpitModule_widgetSelection.getAggregation(widget, dataset)
+			}
+
+			var selections = cockpitModule_datasetServices.getWidgetSelectionsAndFilters(widget, dataset, false);
+			var userSelections = cockpitModule_widgetSelection.getAllUserSelections();
+			var parameters = cockpitModule_datasetServices.getDatasetParameters(dsId);
+			var parametersString = cockpitModule_datasetServices.getParametersAsString(parameters);
+			var paramsToSend = angular.fromJson(parametersString);
+			requestUrl.COCKPIT_SELECTIONS = {};
+			requestUrl.COCKPIT_SELECTIONS.aggregations = aggregation;
+			requestUrl.COCKPIT_SELECTIONS.parameters = paramsToSend;
+			requestUrl.COCKPIT_SELECTIONS.drivers = drivers;
+			requestUrl.COCKPIT_SELECTIONS.selections = selections;
+			requestUrl.COCKPIT_SELECTIONS.userSelections = (userSelections.length > 0) ? userSelections[0] : selections;
+			requestUrl.COCKPIT_VARIABLES = cockpitModule_properties.VARIABLES;
+			requestUrl.options = options;
 
 			deferred.resolve(requestUrl);
 			return deferred.promise;
@@ -166,17 +276,20 @@
 			toReturn.dataset = aggregation.dataset;
 			toReturn.measures = [];
 			toReturn.categories = [];
-			var toFilter = spatialAttributesToFilter[aggregation.dataset];
-			for (var i=0; i<aggregation.categories.length; i++) {
-				var col = aggregation.categories[i];
-				if (!toFilter.includes(col.columnName)) {
-					toReturn.categories.push(col);
+			var toFilter = spatialAttributesToFilter[aggregation.dataset] ?? [];
+			
+			if(toFilter){
+				for (var i=0; i<aggregation.categories.length; i++) {
+					var col = aggregation.categories[i];
+					if (!toFilter.includes(col.columnName)) {
+						toReturn.categories.push(col);
+					}
 				}
-			}
-			for (var i=0; i<aggregation.measures.length; i++) {
-				var col = aggregation.measures[i];
-				if (!toFilter.includes(col.columnName)) {
-					toReturn.measures.push(col);
+				for (var i=0; i<aggregation.measures.length; i++) {
+					var col = aggregation.measures[i];
+					if (!toFilter.includes(col.columnName)) {
+						toReturn.measures.push(col);
+					}
 				}
 			}
 			return toReturn;

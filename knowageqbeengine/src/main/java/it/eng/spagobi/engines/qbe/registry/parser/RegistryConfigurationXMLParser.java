@@ -25,10 +25,12 @@ import org.apache.log4j.Logger;
 
 import it.eng.spago.base.SourceBean;
 import it.eng.spagobi.engines.qbe.registry.bo.RegistryConfiguration;
+import it.eng.spagobi.engines.qbe.registry.bo.RegistryConfiguration.AuditColumnType;
 import it.eng.spagobi.engines.qbe.registry.bo.RegistryConfiguration.Column;
 import it.eng.spagobi.engines.qbe.registry.bo.RegistryConfiguration.Configuration;
 import it.eng.spagobi.engines.qbe.registry.bo.RegistryConfiguration.Filter;
 import it.eng.spagobi.utilities.assertion.Assert;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
  * @author Davide Zerbetto (davide.zerbetto@eng.it)
@@ -73,6 +75,7 @@ public class RegistryConfigurationXMLParser {
 	public static final String ATTRIBUTE_COLUMN_TITLE = "title";
 	public static final String ATTRIBUTE_COLUMN_DEPENDENCES = "dependsFrom";
 	public static final String ATTRIBUTE_COLUMN_DEPENDENCES_ENTITY = "dependsFromEntity";
+	public static final String ATTRIBUTE_COLUMN_PRECISION = "precision";
 	public static final String ATTRIBUTE_SORTER = "sorter";
 	public static final String ATTRIBUTE_UNSIGNED = "unsigned";
 	public static final String ATTRIBUTE_DRIVER_NAME = "driverName";
@@ -87,6 +90,8 @@ public class RegistryConfigurationXMLParser {
 	public static final String EDITOR_TYPE_COMBO = "COMBO";
 	public static final String EDITOR_TYPE_PICKER = "PICKER";
 	public static final String EDITOR_TYPE_POPUP = "POPUP";
+
+	public static final String ATTRIBUTE_IS_AUDIT_COLUMN = "AUDIT";
 
 	public RegistryConfiguration parse(SourceBean registryConf) {
 		logger.debug("IN");
@@ -126,7 +131,7 @@ public class RegistryConfigurationXMLParser {
 	}
 
 	private List<Filter> parseFilters(SourceBean entitySB, RegistryConfiguration toReturn) {
-		List<RegistryConfiguration.Filter> list = new ArrayList<RegistryConfiguration.Filter>();
+		List<RegistryConfiguration.Filter> list = new ArrayList<>();
 		SourceBean filtersSB = (SourceBean) entitySB.getAttribute(TAG_FILTERS);
 		List filters = filtersSB == null ? null : filtersSB.getAttributeAsList(TAG_FILTER);
 		if (filters != null && filters.size() > 0) {
@@ -172,7 +177,7 @@ public class RegistryConfigurationXMLParser {
 	}
 
 	private List<Column> parseColumns(SourceBean entitySB, RegistryConfiguration toReturn) {
-		List<RegistryConfiguration.Column> list = new ArrayList<RegistryConfiguration.Column>();
+		List<RegistryConfiguration.Column> list = new ArrayList<>();
 		SourceBean filtersSB = (SourceBean) entitySB.getAttribute(TAG_COLUMNS);
 		// columns max size
 		String columnsMaxSize = (String) filtersSB.getAttribute(ATTRIBUTE_COLUMNS_MAX_SIZE);
@@ -232,8 +237,9 @@ public class RegistryConfigurationXMLParser {
 						// if is merge column set it is not editable and set
 						// default color if not specified to white
 						isEditable = false;
-						if (color == null)
+						if (color == null) {
 							color = "#FFFFFF";
+						}
 						sorter = "ASC";
 					}
 				}
@@ -243,12 +249,13 @@ public class RegistryConfigurationXMLParser {
 				// .getAttribute(ATTRIBUTE_EDITOR)) ? Column.EDITOR_TYPE_COMBO
 				// : Column.EDITOR_TYPE_TEXT;
 				String editorType = EDITOR_TYPE_TEXT;
-				if (EDITOR_TYPE_COMBO.equalsIgnoreCase((String) aColumn.getAttribute(ATTRIBUTE_EDITOR)))
+				if (EDITOR_TYPE_COMBO.equalsIgnoreCase((String) aColumn.getAttribute(ATTRIBUTE_EDITOR))) {
 					editorType = Column.EDITOR_TYPE_COMBO;
-				else if (EDITOR_TYPE_PICKER.equalsIgnoreCase((String) aColumn.getAttribute(ATTRIBUTE_EDITOR)))
+				} else if (EDITOR_TYPE_PICKER.equalsIgnoreCase((String) aColumn.getAttribute(ATTRIBUTE_EDITOR))) {
 					editorType = Column.EDITOR_TYPE_PICKER;
-				else if (EDITOR_TYPE_POPUP.equalsIgnoreCase((String) aColumn.getAttribute(ATTRIBUTE_EDITOR)))
+				} else if (EDITOR_TYPE_POPUP.equalsIgnoreCase((String) aColumn.getAttribute(ATTRIBUTE_EDITOR))) {
 					editorType = Column.EDITOR_TYPE_POPUP;
+				}
 
 				String dependences = (String) aColumn.getAttribute(ATTRIBUTE_COLUMN_DEPENDENCES);
 
@@ -259,6 +266,15 @@ public class RegistryConfigurationXMLParser {
 				Assert.assertTrue(field != null, "A column must contain at least attributes " + ATTRIBUTE_FIELD);
 				Assert.assertTrue(subEntity == null || foreignKey != null,
 						"If a " + ATTRIBUTE_SUBENTITY + " attribute is specified, the attribute " + ATTRIBUTE_FOREIGNKEY + " is also requested.");
+
+				String precision = (String) aColumn.getAttribute(ATTRIBUTE_COLUMN_PRECISION);
+				Integer intPrecision = null;
+				try {
+					intPrecision = Integer.parseInt(precision);
+				} catch (NumberFormatException e) {
+					logger.debug("Column precision not integer");
+				}
+
 				column.setField(field);
 				column.setSize(intSize);
 				column.setTitle(title);
@@ -277,6 +293,7 @@ public class RegistryConfigurationXMLParser {
 				column.setInfoColumn(infoColumn);
 				column.setDependences(dependences);
 				column.setDependencesEntity(dependencesEntity);
+				column.setPrecision(intPrecision);
 
 				String mandatoryColumn = (String) aColumn.getAttribute(ATTRIBUTE_MANDATORY_COLUMN);
 				if (mandatoryColumn != null) {
@@ -299,6 +316,19 @@ public class RegistryConfigurationXMLParser {
 					column.setEditorType(EDITOR_TYPE_COMBO);
 				}
 
+				String auditStr = (String) aColumn.getAttribute(ATTRIBUTE_IS_AUDIT_COLUMN);
+				if (auditStr != null) {
+					column.setAudit(true);
+					try {
+						AuditColumnType auditColumnType = AuditColumnType.valueOf(auditStr.toUpperCase());
+						column.setAuditColumnType(auditColumnType);
+					} catch (Exception e) {
+						logger.error("Unrecognized audit column type [" + auditStr + "]");
+						throw new SpagoBIRuntimeException("Unrecognized audit column type [" + auditStr + "]", e);
+					}
+
+				}
+
 				list.add(column);
 			}
 		}
@@ -306,7 +336,7 @@ public class RegistryConfigurationXMLParser {
 	}
 
 	private List<Configuration> parseConfigurations(SourceBean entitySB, RegistryConfiguration toReturn) {
-		List<RegistryConfiguration.Configuration> list = new ArrayList<RegistryConfiguration.Configuration>();
+		List<RegistryConfiguration.Configuration> list = new ArrayList<>();
 
 		SourceBean configurationsSB = (SourceBean) entitySB.getAttribute(TAG_CONFIGURATIONS);
 		List configurations = configurationsSB == null ? null : configurationsSB.getAttributeAsList(TAG_CONFIGURATION);

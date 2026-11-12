@@ -35,8 +35,12 @@ import it.eng.qbe.datasource.jpa.JPADataSource;
 import it.eng.qbe.model.structure.IModelEntity;
 import it.eng.qbe.query.Query;
 import it.eng.qbe.statement.AbstractStatement;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
+import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.assertion.Assert;
+import it.eng.spagobi.utilities.database.DataBaseException;
+import it.eng.spagobi.utilities.database.DataBaseFactory;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
@@ -63,13 +67,13 @@ public class JPQLStatement extends AbstractStatement {
 		// one map of entity aliases for each queries (master query +
 		// subqueries)
 		// each map is indexed by the query id
-		Map<String, Map<String, String>> entityAliasesMaps = new HashMap<String, Map<String, String>>();
+		Map<String, Map<String, String>> entityAliasesMaps = new HashMap<>();
 
 		queryStr = compose(getQuery(), entityAliasesMaps, false);
 
 		if (getParameters() != null) {
 			try {
-				queryStr = StringUtils.replaceParameters(queryStr.trim(), "$P", getParameters());
+				queryStr = KnowageStringUtils.replaceParameters(queryStr.trim(), "$P", getParameters());
 			} catch (IOException e) {
 				throw new SpagoBIRuntimeException("Impossible to set parameters in query", e);
 			}
@@ -77,7 +81,7 @@ public class JPQLStatement extends AbstractStatement {
 
 		if (getProfileAttributes() != null) {
 			try {
-				queryStr = StringUtils.replaceParameters(queryStr.trim(), "$", getProfileAttributes());
+				queryStr = KnowageStringUtils.replaceParameters(queryStr.trim(), "$", getProfileAttributes());
 
 			} catch (IOException e) {
 				throw new SpagoBIRuntimeException("Impossible to set profile attributes in query", e);
@@ -106,7 +110,7 @@ public class JPQLStatement extends AbstractStatement {
 		Assert.assertTrue(!query.isEmpty(), "Input query cannot be empty (i.e. with no selected fields)");
 
 		// let's start with the query at hand
-		entityAliasesMaps.put(query.getId(), new LinkedHashMap<String, String>());
+		entityAliasesMaps.put(query.getId(), new LinkedHashMap<>());
 
 		// JPQLBusinessViewUtility viewsUtility = new
 		// JPQLBusinessViewUtility(this);
@@ -131,7 +135,7 @@ public class JPQLStatement extends AbstractStatement {
 
 		Set subqueryIds;
 		try {
-			subqueryIds = StringUtils.getParameters(queryStr, "Q");
+			subqueryIds = KnowageStringUtils.getParameters(queryStr, "Q");
 		} catch (IOException e) {
 			throw new SpagoBIRuntimeException("Impossible to set parameters in query", e);
 		}
@@ -164,10 +168,10 @@ public class JPQLStatement extends AbstractStatement {
 		// one map of entity aliases for each queries (master query +
 		// subqueries)
 		// each map is indexed by the query id
-		entityAliasesMaps = new HashMap<String, Map<String, String>>();
+		entityAliasesMaps = new HashMap<>();
 
 		// let's start with the query at hand
-		entityAliasesMaps.put(getQuery().getId(), new HashMap<String, String>());
+		entityAliasesMaps.put(getQuery().getId(), new HashMap<>());
 
 		JPQLStatementSelectClause.build(this, getQuery(), entityAliasesMaps);
 		JPQLStatementWhereClause.build(this, getQuery(), entityAliasesMaps);
@@ -201,14 +205,48 @@ public class JPQLStatement extends AbstractStatement {
 		EntityManager em = ds.getEntityManager();
 
 		JPQL2SQLStatementRewriter translator = new JPQL2SQLStatementRewriter(em);
-		return translator.rewrite(getQueryString());
+		String translatedQuery = translator.rewrite(getQueryString());
 
+		String finalSQLQuery = adjustActualAliases(translatedQuery);
+
+		return finalSQLQuery;
 	}
 
 	@Override
 	public String getValueBounded(String operandValueToBound, String operandType) {
 		JPQLStatementWhereClause clause = new JPQLStatementWhereClause(this);
 		return clause.getValueBounded(operandValueToBound, operandType);
+	}
+
+	@Override
+	public String getQuerySQLString(String wrappedDatasetQuery) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	private String adjustActualAliases(String sqlQueryString) {
+		logger.debug("IN: input query is " + sqlQueryString);
+		it.eng.spagobi.tools.datasource.bo.IDataSource dataSource = ((JPADataSource) this.getDataSource()).getToolsDataSource();
+
+		String aliasDelimiter;
+		try {
+			aliasDelimiter = DataBaseFactory.getDataBase(dataSource).getAliasDelimiter();
+		} catch (DataBaseException e) {
+			throw new SpagoBIRuntimeException("An error occurred while getting datasource alias delimiter", e);
+		}
+
+		IMetaData metadata = this.getDataStoreMeta();
+
+		for (int i = 0; i < metadata.getFieldCount(); i++) {
+			IFieldMetaData fieldMeta = metadata.getFieldMeta(i);
+			String alias = fieldMeta.getAlias();
+			int col = sqlQueryString.indexOf(" as col_");
+			int com = sqlQueryString.indexOf("_,") > -1 ? sqlQueryString.indexOf("_,") : sqlQueryString.indexOf("_ ");
+			sqlQueryString = sqlQueryString.replace(sqlQueryString.substring(col, com + 1), " as " + aliasDelimiter + alias + aliasDelimiter);
+		}
+
+		logger.debug("OUT: output query is " + sqlQueryString);
+		return sqlQueryString;
 	}
 
 }

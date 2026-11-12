@@ -49,7 +49,7 @@ public class OlapModelInitializer {
 	Model rootModel;
 	private static Logger logger = LoggerFactory.getLogger(OlapModelInitializer.class);
 
-	static public OlapModelFactory FACTORY = OlapModelFactory.eINSTANCE;
+	public static OlapModelFactory FACTORY = OlapModelFactory.eINSTANCE;
 
 	public OlapModelInitializer() {
 		// setPropertiesInitializer(new OlapModelDefaultPropertiesInitializer());
@@ -69,7 +69,8 @@ public class OlapModelInitializer {
 			}
 			getPropertiesInitializer().addProperties(olapModel);
 		} catch (Throwable t) {
-			t.printStackTrace();
+			//t.printStackTrace();
+			logger.error("Impossible to initialize olap model",t);
 			throw new RuntimeException("Impossible to initialize olap model", t);
 		}
 

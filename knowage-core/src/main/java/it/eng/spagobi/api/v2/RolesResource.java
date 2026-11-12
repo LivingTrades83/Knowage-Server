@@ -17,8 +17,9 @@
  */
 package it.eng.spagobi.api.v2;
 
+import static java.util.stream.Collectors.toList;
+
 import java.net.URI;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -36,9 +37,13 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.owasp.esapi.Encoder;
 
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.bo.Domain;
@@ -46,27 +51,29 @@ import it.eng.spagobi.commons.bo.Role;
 import it.eng.spagobi.commons.bo.RoleBO;
 import it.eng.spagobi.commons.bo.RoleMetaModelCategory;
 import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.commons.dao.IDomainDAO;
+import it.eng.spagobi.commons.dao.ICategoryDAO;
 import it.eng.spagobi.commons.dao.IRoleDAO;
 import it.eng.spagobi.commons.domains.DomainCRUD;
-import it.eng.spagobi.commons.metadata.SbiDomains;
 import it.eng.spagobi.commons.utilities.UserUtilities;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
-import it.eng.spagobi.tools.dataset.constants.DataSetConstants;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 
 @Path("/2.0/roles")
 @ManageAuthorization
 public class RolesResource extends AbstractSpagoBIResource {
-	private final String charset = "; charset=UTF-8";
+
+	private static final Logger LOGGER = LogManager.getLogger(RolesResource.class);
+	private static final String CHARSET = "; charset=UTF-8";
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT, SpagoBIConstants.FINAL_USERS_MANAGEMENT, SpagoBIConstants.READ_ROLES })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+			CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT, CommunityFunctionalityConstants.READ_ROLES })
 	@Path("/")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getRoles() {
 		IRoleDAO rolesDao = null;
 		List<Role> filteredList = null;
@@ -79,7 +86,8 @@ public class RolesResource extends AbstractSpagoBIResource {
 			fullList = rolesDao.loadAllRoles();
 
 			IEngUserProfile profile = this.getUserProfile();
-			if (profile.isAbleToExecuteAction(SpagoBIConstants.PROFILE_MANAGEMENT) || profile.isAbleToExecuteAction(SpagoBIConstants.READ_ROLES)) {
+			if (profile.isAbleToExecuteAction(CommunityFunctionalityConstants.PROFILE_MANAGEMENT)
+					|| profile.isAbleToExecuteAction(CommunityFunctionalityConstants.READ_ROLES)) {
 				filteredList = fullList;
 			} else {
 				// user with FINAL_USERS_MANAGEMENT (users with neither
@@ -91,13 +99,13 @@ public class RolesResource extends AbstractSpagoBIResource {
 
 			return Response.ok(filteredList).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 	}
 
 	private List<Role> filterRolesListForFinalUser(List<Role> allRoles) {
-		List<Role> toReturn = new ArrayList<Role>();
+		List<Role> toReturn = new ArrayList<>();
 		for (Role role : allRoles) {
 			if (role.getRoleTypeCD().equalsIgnoreCase(SpagoBIConstants.ROLE_TYPE_USER)) {
 				toReturn.add(role);
@@ -107,33 +115,54 @@ public class RolesResource extends AbstractSpagoBIResource {
 	}
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
 	@Path("/{id}")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getRoleById(@PathParam("id") Integer id) {
 		IRoleDAO rolesDao = null;
 
 		try {
-			Role role = new Role();
+			Role role = null;
 			rolesDao = DAOFactory.getRoleDAO();
 			rolesDao.setUserProfile(getUserProfile());
 			role = rolesDao.loadByID(id);
 			return Response.ok(role).build();
 		} catch (Exception e) {
-			logger.error("Role with selected id: " + id + " doesn't exists", e);
-			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists", buildLocaleFromSession(), e);
+			LOGGER.error("Role with selected id: " + id + " doesn't exists", e);
+			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists",
+					getLocale(), e);
 		}
 	}
 
 	@GET
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
+	@Path("/{id}/allElement")
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
+	public Response getRoleAllElemntById(@PathParam("id") Integer id) {
+		IRoleDAO rolesDao = null;
+
+		try {
+			Role role = null;
+			rolesDao = DAOFactory.getRoleDAO();
+			rolesDao.setUserProfile(getUserProfile());
+			role = rolesDao.loadAllElemtnsForRoleByID(id);
+			return Response.ok(role).build();
+		} catch (Exception e) {
+			LOGGER.error("Role with selected id: " + id + " doesn't exists", e);
+			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists",
+					getLocale(), e);
+		}
+	}
+
+	@GET
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	@Path("/idsByNames")
 	public Response getRolesIdsByName(@QueryParam("name") List<String> roleNames) {
 		IRoleDAO rolesDao = null;
-		List roles = new ArrayList<>();
+		List<Integer> roles = new ArrayList<>();
 		try {
 			for (int i = 0; i < roleNames.size(); i++) {
-				Role role = new Role();
+				Role role = null;
 				rolesDao = DAOFactory.getRoleDAO();
 				rolesDao.setUserProfile(getUserProfile());
 				role = rolesDao.loadByName(roleNames.get(i));
@@ -142,51 +171,56 @@ public class RolesResource extends AbstractSpagoBIResource {
 
 			return Response.ok(roles).build();
 		} catch (Exception e) {
-			logger.error("Role with selected id: " + roles + " doesn't exists", e);
-			throw new SpagoBIRestServiceException("Item with selected id: " + roles + " doesn't exists", buildLocaleFromSession(), e);
+			LOGGER.error("Role with selected id: " + roles + " doesn't exists", e);
+			throw new SpagoBIRestServiceException("Item with selected id: " + roles + " doesn't exists",
+					getLocale(), e);
 		}
 	}
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
 	@Path("/categories/{id}")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getMetaModelCategoriesById(@PathParam("id") Integer id) {
 		IRoleDAO rolesDao = null;
 
 		try {
-			Role role = new Role();
+			Role role = null;
 			rolesDao = DAOFactory.getRoleDAO();
 			rolesDao.setUserProfile(getUserProfile());
 			role = rolesDao.loadByID(id);
 			List<RoleMetaModelCategory> meta = rolesDao.getMetaModelCategoriesForRole(role.getId());
 			return Response.ok(meta).build();
 		} catch (Exception e) {
-			logger.error("Role with selected id: " + id + " doesn't exists", e);
-			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists", buildLocaleFromSession(), e);
+			LOGGER.error("Role with selected id: " + id + " doesn't exists", e);
+			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists",
+					getLocale(), e);
 		}
 	}
 
 	@SuppressWarnings({ "unchecked", "unchecked" })
 	@GET
 	@Path("/ds_categories")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public String getDataSetCategories() {
 		IRoleDAO rolesDao = null;
-		List<RoleMetaModelCategory> ds = new ArrayList<RoleMetaModelCategory>();
-		List<Domain> resp = new ArrayList<Domain>();
+		List<RoleMetaModelCategory> ds = new ArrayList<>();
+		List<Domain> resp = new ArrayList<>();
 
 		try {
 			UserProfile up = getUserProfile();
 			Collection<String> roles = up.getRoles();
 
-			List<Domain> array = DAOFactory.getDomainDAO().loadListDomainsByType(DataSetConstants.CATEGORY_DOMAIN_TYPE);
+			ICategoryDAO categoryDao = DAOFactory.getCategoryDAO();
+			List<Domain> array = categoryDao.getCategoriesForDataset().stream().map(Domain::fromCategory)
+					.collect(toList());
+
 			if (UserUtilities.isAdministrator(up)) {
 				resp = array;
 
 			} else {
-				for (Iterator iterator = roles.iterator(); iterator.hasNext();) {
-					String role = (String) iterator.next();
+				for (Iterator<String> iterator = roles.iterator(); iterator.hasNext();) {
+					String role = iterator.next();
 					rolesDao = DAOFactory.getRoleDAO();
 					rolesDao.setUserProfile(getUserProfile());
 					ds.addAll(rolesDao.getDataSetCategoriesForRole(role));
@@ -202,49 +236,22 @@ public class RolesResource extends AbstractSpagoBIResource {
 
 			return DomainCRUD.translate(resp, null).toString();
 		} catch (Exception e) {
-			logger.error("Error loading the list of dataset categories associated to user", e);
-			throw new SpagoBIRestServiceException("Error loading the list of dataset categories associated to user", buildLocaleFromSession(), e);
-		}
-	}
-
-	@SuppressWarnings({ "unchecked", "unchecked" })
-	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
-	@Path("/ds_categories/{id}")
-	@Produces(MediaType.APPLICATION_JSON + charset)
-	public Response getDataSetCategoriesById(@PathParam("id") Integer id) {
-		IRoleDAO rolesDao = null;
-
-		try {
-			Role role = new Role();
-			rolesDao = DAOFactory.getRoleDAO();
-			rolesDao.setUserProfile(getUserProfile());
-			role = rolesDao.loadByID(id);
-			List<RoleMetaModelCategory> ds = rolesDao.getMetaModelCategoriesForRole(role.getId());
-			List<RoleMetaModelCategory> resp = new ArrayList<>();
-			List<SbiDomains> array = DAOFactory.getDomainDAO().loadListDomainsByType(DataSetConstants.CATEGORY_DOMAIN_TYPE);
-			for (RoleMetaModelCategory r : ds) {
-				for (SbiDomains dom : array) {
-					if (r.getCategoryId().equals(dom.getValueId())) {
-						resp.add(r);
-					}
-				}
-
-			}
-			return Response.ok(resp).build();
-		} catch (Exception e) {
-			logger.error("Role with selected id: " + id + " doesn't exists", e);
-			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists", buildLocaleFromSession(), e);
+			LOGGER.error("Error loading the list of dataset categories associated to user", e);
+			throw new SpagoBIRestServiceException("Error loading the list of dataset categories associated to user",
+					getLocale(), e);
 		}
 	}
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response insertRole(@Valid RoleBO body) {
 		IRoleDAO rolesDao = null;
-		Role role = BOtoRole(body);
+		if(body.getName().contains(" ")) {
+			throw new SpagoBIRestServiceException("Role name cannot contain spaces", getLocale(), new RuntimeException());
+		}
+		Role role = roleBoToRole(body);
 		List<RoleMetaModelCategory> listMetaModelCategories = body.getRoleMetaModelCategories();
 		try {
 			rolesDao = DAOFactory.getRoleDAO();
@@ -256,43 +263,42 @@ public class RolesResource extends AbstractSpagoBIResource {
 				}
 			}
 
-			String encodedRole = URLEncoder.encode("" + role.getId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedRole = encoder.encodeForURL("" + role.getId());
 			return Response.created(new URI("2.0/roles/" + encodedRole)).entity(encodedRole).build();
 		} catch (Exception e) {
-			logger.error("Error while inserting resource", e);
-			throw new SpagoBIRestServiceException("Error while inserting resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error while inserting resource", e);
+			throw new SpagoBIRestServiceException("Error while inserting resource", getLocale(), e);
 		}
 	}
 
 	@POST
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateRole(@PathParam("id") Integer id, @Valid RoleBO body) {
 
-		IRoleDAO rolesDao = null;
-		IDomainDAO domainsDao = null;
-		Role role = BOtoRole(body);
+		Role role = roleBoToRole(body);
 		role.setId(body.getId());
 		List<RoleMetaModelCategory> listMetaModelCategories = body.getRoleMetaModelCategories();
 		List<Domain> listAll;
 
 		try {
-			rolesDao = DAOFactory.getRoleDAO();
-			domainsDao = DAOFactory.getDomainDAO();
+			IRoleDAO rolesDao = DAOFactory.getRoleDAO();
+			ICategoryDAO categoryDao = DAOFactory.getCategoryDAO();
 			rolesDao.setUserProfile(getUserProfile());
 			rolesDao.modifyRole(role);
 
 			// update Business Model categories
-			listAll = domainsDao.loadListDomainsByType("BM_CATEGORY");
+			listAll = categoryDao.getCategoriesForBusinessModel().stream().map(Domain::fromCategory).collect(toList());
 			for (Domain domain : listAll) {
 				rolesDao.removeRoleMetaModelCategory(role.getId(), domain.getValueId());
 			}
-			listAll = domainsDao.loadListDomainsByType("KPI_KPI_CATEGORY");
+			listAll = categoryDao.getCategoriesForKpi().stream().map(Domain::fromCategory).collect(toList());
 			for (Domain domain : listAll) {
 				rolesDao.removeRoleMetaModelCategory(role.getId(), domain.getValueId());
 			}
-			listAll = domainsDao.loadListDomainsByType("CATEGORY_TYPE");
+			listAll = categoryDao.getCategoriesForDataset().stream().map(Domain::fromCategory).collect(toList());
 			for (Domain domain : listAll) {
 				rolesDao.removeRoleMetaModelCategory(role.getId(), domain.getValueId());
 			}
@@ -302,22 +308,24 @@ public class RolesResource extends AbstractSpagoBIResource {
 				}
 			}
 			// update Data Set categories
-			listAll = domainsDao.loadListDomainsByType("CATEGORY_TYPE");
+			listAll = categoryDao.getCategoriesForDataset().stream().map(Domain::fromCategory).collect(toList());
 			for (Domain domain : listAll) {
 				rolesDao.removeRoleDataSetCategory(role.getId(), domain.getValueId());
 			}
 
-			String encodedRole = URLEncoder.encode("" + role.getId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedRole = encoder.encodeForURL("" + role.getId());
 			return Response.created(new URI("2.0/roles/" + encodedRole)).entity(encodedRole).build();
 		} catch (Exception e) {
-			logger.error("Error while modifying resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error while modifying resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error while modifying resource with id: " + id, e);
+			throw new SpagoBIRestServiceException("Error while modifying resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 
 	@DELETE
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT })
 	public Response deleteRole(@PathParam("id") Integer id) {
 
 		IRoleDAO rolesDao = null;
@@ -328,21 +336,24 @@ public class RolesResource extends AbstractSpagoBIResource {
 			rolesDao = DAOFactory.getRoleDAO();
 			rolesDao.setUserProfile(getUserProfile());
 			// Remove Role - Business Model Categories Associations
-			List<RoleMetaModelCategory> RoleMetaModelCategories = rolesDao.getMetaModelCategoriesForRole(id);
-			for (RoleMetaModelCategory roleMetaModelCategory : RoleMetaModelCategories) {
-				rolesDao.removeRoleMetaModelCategory(roleMetaModelCategory.getRoleId(), roleMetaModelCategory.getCategoryId());
+			List<RoleMetaModelCategory> roleMetaModelCategories = rolesDao.getMetaModelCategoriesForRole(id);
+			for (RoleMetaModelCategory roleMetaModelCategory : roleMetaModelCategories) {
+				rolesDao.removeRoleMetaModelCategory(roleMetaModelCategory.getRoleId(),
+						roleMetaModelCategory.getCategoryId());
 			}
 
 			rolesDao.eraseRole(role);
-			String encodedRole = URLEncoder.encode("" + id, "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedRole = encoder.encodeForURL("" + id);
 			return Response.ok().entity(encodedRole).build();
 		} catch (Exception e) {
-			logger.error("Error with deleting resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error with deleting resource with id: " + id, e);
+			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 
-	public Role BOtoRole(RoleBO bo) {
+	public Role roleBoToRole(RoleBO bo) {
 		Role role = new Role();
 		role.setName(bo.getName());
 		role.setCode(bo.getCode());
@@ -350,12 +361,12 @@ public class RolesResource extends AbstractSpagoBIResource {
 		role.setRoleTypeCD(bo.getRoleTypeCD());
 		role.setRoleTypeID(bo.getRoleTypeID());
 		role.setIsPublic(bo.getIsPublic());
-		role.setIsAbleToSaveIntoPersonalFolder(bo.isAbleToSaveIntoPersonalFolder());
-		role.setIsAbleToEnableDatasetPersistence(bo.isAbleToEnableDatasetPersistence());
-		role.setIsAbleToEnableFederatedDataset(bo.isAbleToEnableFederatedDataset());
-		role.setIsAbleToEnableRate(bo.isAbleToEnableRate());
-		role.setIsAbleToEnablePrint(bo.isAbleToEnablePrint());
-		role.setIsAbleToEnableCopyAndEmbed(bo.isAbleToEnableCopyAndEmbed());
+		role.setAbleToSaveIntoPersonalFolder(bo.isAbleToSaveIntoPersonalFolder());
+		role.setAbleToEnableDatasetPersistence(bo.isAbleToEnableDatasetPersistence());
+		role.setAbleToEnableFederatedDataset(bo.isAbleToEnableFederatedDataset());
+		role.setAbleToEnableRate(bo.isAbleToEnableRate());
+		role.setAbleToEnablePrint(bo.isAbleToEnablePrint());
+		role.setAbleToEnableCopyAndEmbed(bo.isAbleToEnableCopyAndEmbed());
 		role.setAbleToManageGlossaryBusiness(bo.isAbleToManageGlossaryBusiness());
 		role.setAbleToManageGlossaryTechnical(bo.isAbleToManageGlossaryTechnical());
 		role.setAbleToManageKpiValue(bo.isAbleToManageKpiValue());
@@ -365,34 +376,40 @@ public class RolesResource extends AbstractSpagoBIResource {
 		role.setAbleToCreateSelfServiceGeoreport(bo.isAbleToCreateSelfServiceGeoreport());
 		role.setAbleToCreateSelfServiceKpi(bo.isAbleToCreateSelfServiceKpi());
 		role.setAbleToUseFunctionsCatalog(bo.isAbleToUseFunctionsCatalog());
-		role.setIsAbleToEditPythonScripts(bo.isAbleToEditPythonScripts());
-		role.setIsAbleToCreateCustomChart(bo.isAbleToCreateCustomChart());
-		role.setIsAbleToSaveSubobjects(bo.isAbleToSaveSubobjects());
-		role.setIsAbleToSeeSubobjects(bo.isAbleToSeeSubobjects());
-		role.setIsAbleToSeeViewpoints(bo.isAbleToSeeViewpoints());
-		role.setIsAbleToSeeSnapshots(bo.isAbleToSeeSnapshots());
-		role.setIsAbleToRunSnapshots(bo.isAbleToRunSnapshots());
-		role.setIsAbleToSeeNotes(bo.isAbleToSeeNotes());
-		role.setIsAbleToSendMail(bo.isAbleToSendMail());
-		role.setIsAbleToSaveRememberMe(bo.isAbleToSaveRememberMe());
-		role.setIsAbleToSeeMetadata(bo.isAbleToSeeMetadata());
-		role.setIsAbleToSaveMetadata(bo.isAbleToSaveMetadata());
-		role.setIsAbleToBuildQbeQuery(bo.isAbleToBuildQbeQuery());
-		role.setIsAbleToDoMassiveExport(bo.isAbleToDoMassiveExport());
-		role.setIsAbleToManageUsers(bo.isAbleToManageUsers());
-		role.setIsAbleToSeeDocumentBrowser(bo.isAbleToSeeDocumentBrowser());
-		role.setIsAbleToSeeFavourites(bo.isAbleToSeeFavourites());
-		role.setIsAbleToSeeSubscriptions(bo.isAbleToSeeSubscriptions());
-		role.setIsAbleToSeeMyData(bo.isAbleToSeeMyData());
-		role.setIsAbleToSeeMyWorkspace(bo.isAbleToSeeMyWorkspace());
-		role.setIsAbleToSeeToDoList(bo.isAbleToSeeToDoList());
-		role.setIsAbleToCreateDocuments(bo.isAbleToCreateDocuments());
-		role.setIsAbleToCreateSocialAnalysis(bo.isAbleToCreateSocialAnalysis());
-		role.setIsAbleToViewSocialAnalysis(bo.isAbleToViewSocialAnalysis());
-		role.setIsAbleToHierarchiesManagement(bo.isAbleToHierarchiesManagement());
+		role.setAbleToManageFunctionsCatalog(bo.isAbleToManageFunctionsCatalog());
+		role.setAbleToEditPythonScripts(bo.isAbleToEditPythonScripts());
+		role.setAbleToCreateCustomChart(bo.isAbleToCreateCustomChart());
+		role.setAbleToSaveSubobjects(bo.isAbleToSaveSubobjects());
+		role.setAbleToSeeSubobjects(bo.isAbleToSeeSubobjects());
+		role.setAbleToSeeViewpoints(bo.isAbleToSeeViewpoints());
+		role.setAbleToSeeSnapshots(bo.isAbleToSeeSnapshots());
+		role.setAbleToRunSnapshots(bo.isAbleToRunSnapshots());
+		role.setAbleToSeeNotes(bo.isAbleToSeeNotes());
+		role.setAbleToSendMail(bo.isAbleToSendMail());
+		role.setAbleToSaveRememberMe(bo.isAbleToSaveRememberMe());
+		role.setAbleToSeeMetadata(bo.isAbleToSeeMetadata());
+		role.setAbleToSaveMetadata(bo.isAbleToSaveMetadata());
+		role.setAbleToBuildQbeQuery(bo.isAbleToBuildQbeQuery());
+		role.setAbleToDoMassiveExport(bo.isAbleToDoMassiveExport());
+		role.setAbleToManageUsers(bo.isAbleToManageUsers());
+		role.setAbleToSeeDocumentBrowser(bo.isAbleToSeeDocumentBrowser());
+		role.setAbleToSeeFavourites(bo.isAbleToSeeFavourites());
+		role.setAbleToSeeSubscriptions(bo.isAbleToSeeSubscriptions());
+		role.setAbleToSeeMyData(bo.isAbleToSeeMyData());
+		role.setAbleToSeeMyWorkspace(bo.isAbleToSeeMyWorkspace());
+		role.setAbleToSeeToDoList(bo.isAbleToSeeToDoList());
+		role.setAbleToCreateDocuments(bo.isAbleToCreateDocuments());
+		role.setAbleToCreateSocialAnalysis(bo.isAbleToCreateSocialAnalysis());
+		role.setAbleToViewSocialAnalysis(bo.isAbleToViewSocialAnalysis());
+		role.setAbleToHierarchiesManagement(bo.isAbleToHierarchiesManagement());
 		role.setAbleToEditAllKpiComm(bo.isAbleToEditAllKpiComm());
 		role.setAbleToEditMyKpiComm(bo.isAbleToEditMyKpiComm());
 		role.setAbleToDeleteKpiComm(bo.isAbleToDeleteKpiComm());
+		role.setAbleToSeeHelpOnline(bo.isAbleToSeeHelpOnline());
+		role.setAbleToUseDataPreparation(bo.isAbleToUseDataPreparation());
+		role.setAbleToUseDossier(bo.isAbleToUseDossier());
+		role.setAbleToUseDashboardThemeManagement(bo.isAbleToUseDashboardThemeManagement());
+        role.setAbleToUseEngGPT(bo.isAbleToUseEngGPT());
 
 		return role;
 	}
@@ -404,9 +421,10 @@ public class RolesResource extends AbstractSpagoBIResource {
 	 */
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT, SpagoBIConstants.FINAL_USERS_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+			CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
 	@Path("/short")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getRolesSimeple() {
 		IRoleDAO rolesDao = null;
 		List<Role> filteredList = null;
@@ -419,7 +437,7 @@ public class RolesResource extends AbstractSpagoBIResource {
 			fullList = rolesDao.loadAllRoles();
 
 			IEngUserProfile profile = this.getUserProfile();
-			if (profile.isAbleToExecuteAction(SpagoBIConstants.PROFILE_MANAGEMENT)) {
+			if (profile.isAbleToExecuteAction(CommunityFunctionalityConstants.PROFILE_MANAGEMENT)) {
 				filteredList = fullList;
 			} else {
 				filteredList = this.filterRolesListForFinalUser(fullList);
@@ -437,8 +455,8 @@ public class RolesResource extends AbstractSpagoBIResource {
 			return Response.ok(filteredListArray.toString()).build();
 		} catch (Exception e) {
 			String errorString = "sbi.folder.roles.load.error";
-			logger.error(errorString, e);
-			throw new SpagoBIRestServiceException(errorString, buildLocaleFromSession(), e);
+			LOGGER.error(errorString, e);
+			throw new SpagoBIRestServiceException(errorString, getLocale(), e);
 		}
 	}
 }

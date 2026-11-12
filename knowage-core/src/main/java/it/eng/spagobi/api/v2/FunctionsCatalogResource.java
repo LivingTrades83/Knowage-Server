@@ -49,7 +49,7 @@ import it.eng.knowage.functionscatalog.utils.OutputColumnDTO;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.UserUtilities;
 import it.eng.spagobi.functions.dao.FunctionInUseException;
@@ -75,7 +75,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/")
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONS_CATALOG_USAGE, SpagoBIConstants.FUNCTIONS_CATALOG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONS_CATALOG_USAGE, CommunityFunctionalityConstants.FUNCTIONS_CATALOG_MANAGEMENT })
 	public String getAllCatalogFunctions() throws IOException {
 		logger.debug("IN");
 
@@ -89,7 +89,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 
 			// Addition: return a field keyword_list containing random selected keywords
 			JSONArray keywordsArray = new JSONArray();
-			Set<String> keywordSet = new HashSet<String>();
+			Set<String> keywordSet = new HashSet<>();
 
 			for (SbiCatalogFunction f : functions) {
 				JSONObject funcJsonObject = sbiFunctionToJsonObject(f);
@@ -123,9 +123,53 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	}
 
 	@GET
+	@Path("/keywords")
+	@Produces(MediaType.APPLICATION_JSON)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONS_CATALOG_USAGE, CommunityFunctionalityConstants.FUNCTIONS_CATALOG_MANAGEMENT })
+	public String getAllKeywords() throws IOException {
+		logger.debug("IN");
+		JSONArray keywordsArray = new JSONArray();
+
+		try {
+			ICatalogFunctionDAO fcDAO = DAOFactory.getCatalogFunctionDAO();
+			fcDAO.setUserProfile(getUserProfile());
+			List<SbiCatalogFunction> functions = fcDAO.loadAllCatalogFunctions();
+
+			// Addition: return a field keyword_list containing random selected keywords
+
+			Set<String> keywordSet = new HashSet<>();
+
+			for (SbiCatalogFunction f : functions) {
+				JSONObject funcJsonObject = sbiFunctionToJsonObject(f);
+				if (f.getKeywords() != null && f.getKeywords().split(",").length > 0) {
+					for (String key : f.getKeywords().split(",")) {
+						if (!key.equals("")) {
+							keywordSet.add(key);
+						}
+					}
+				}
+			}
+
+			// returning 10 random keywords from all functions keywords. Putting keywords into a set randomize the choice and delete duplicates
+			Object[] keywordSetArray = keywordSet.toArray();
+			for (int i = 0; i < Math.min(keywordSetArray.length, 10); i++) {
+				keywordsArray.put(keywordSetArray[i]);
+			}
+
+		} catch (Exception e) {
+			logger.error("Error returning all functions in the catalog");
+			throw new SpagoBIServiceException("REST service /", "Error retturning all functions ", e);
+		}
+
+		logger.debug("OUT");
+		return keywordsArray.toString();
+
+	}
+
+	@GET
 	@Path("/{type}")
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONS_CATALOG_USAGE, SpagoBIConstants.FUNCTIONS_CATALOG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONS_CATALOG_USAGE, CommunityFunctionalityConstants.FUNCTIONS_CATALOG_MANAGEMENT })
 	public String getCatalogFunctionsByType(@PathParam("type") String type) throws IOException {
 		logger.debug("IN");
 
@@ -136,7 +180,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 			ICatalogFunctionDAO fcDAO = DAOFactory.getCatalogFunctionDAO();
 			fcDAO.setUserProfile(getUserProfile());
 			List<SbiCatalogFunction> allFunctions = fcDAO.loadAllCatalogFunctions();
-			List<SbiCatalogFunction> filteredFunctions = new ArrayList<SbiCatalogFunction>();
+			List<SbiCatalogFunction> filteredFunctions = new ArrayList<>();
 			for (SbiCatalogFunction func : allFunctions) {
 				if (func.getType() != null && func.getType().equals(type)) {
 					filteredFunctions.add(func);
@@ -145,7 +189,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 
 			// Addition: return a field keyword_list containing random selected keywords
 			JSONArray keywordsArray = new JSONArray();
-			Set<String> keywordSet = new HashSet<String>();
+			Set<String> keywordSet = new HashSet<>();
 
 			for (SbiCatalogFunction f : filteredFunctions) {
 				JSONObject funcJsonObject = sbiFunctionToJsonObject(f);
@@ -182,7 +226,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	@Path("/insert")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONS_CATALOG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONS_CATALOG_MANAGEMENT })
 	public String insertCatalogFunction(@Valid CatalogFunctionDTO funcDTO) throws IOException {
 		logger.debug("IN");
 		JSONObject response = new JSONObject();
@@ -208,7 +252,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	@Path("/update/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONS_CATALOG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONS_CATALOG_MANAGEMENT })
 	public String updateCatalogFunction(@PathParam("id") String uuid, @Valid CatalogFunctionDTO funcDTO) {
 		logger.debug("IN");
 		JSONObject response = new JSONObject();
@@ -246,7 +290,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/delete/{id}")
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.FUNCTIONS_CATALOG_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.FUNCTIONS_CATALOG_MANAGEMENT })
 	public String deleteCatalogFunction(@PathParam("id") String uuid) {
 		logger.debug("IN");
 
@@ -279,10 +323,10 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	private JSONObject sbiFunctionToJsonObject(SbiCatalogFunction sbiFunction) {
 
 		JSONObject ret = null;
-		boolean hasPermission = hasPermission(sbiFunction.getFunctionUuid());
+		boolean hasPermission = hasPermission(sbiFunction.getId().getFunctionUuid());
 		try {
 			ret = new JSONObject();
-			ret.put("id", sbiFunction.getFunctionUuid());
+			ret.put("id", sbiFunction.getId().getFunctionUuid());
 			ret.put("name", sbiFunction.getName());
 			ret.put("description", sbiFunction.getDescription());
 			ret.put("benchmarks", sbiFunction.getBenchmarks());
@@ -360,8 +404,9 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 				String userId = (String) profile.getUserId();
 				if (function.getOwner().equals(userId)) {
 					return true;
-				} else
+				} else {
 					return false;
+				}
 			}
 		}
 	}
@@ -386,7 +431,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	}
 
 	private Map<String, String> toInputColumnsMap(List<InputColumnDTO> inputColumnsDTO) {
-		Map<String, String> inputColumns = new HashMap<String, String>();
+		Map<String, String> inputColumns = new HashMap<>();
 		for (int i = 0; i < inputColumnsDTO.size(); i++) {
 			InputColumnDTO inputCol = inputColumnsDTO.get(i);
 			String colName = inputCol.getName();
@@ -397,7 +442,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	}
 
 	private Map<String, IInputVariable> toInputVariablesMap(List<InputVariableDTO> inputVariablesDTO) {
-		Map<String, IInputVariable> inputVariables = new HashMap<String, IInputVariable>();
+		Map<String, IInputVariable> inputVariables = new HashMap<>();
 		for (int i = 0; i < inputVariablesDTO.size(); i++) {
 			InputVariableDTO inputVar = inputVariablesDTO.get(i);
 			String varName = inputVar.getName();
@@ -409,7 +454,7 @@ public class FunctionsCatalogResource extends AbstractSpagoBIResource {
 	}
 
 	private Map<String, IOutputColumn> toOutputColumnsMap(List<OutputColumnDTO> outputColumnsDTO) {
-		Map<String, IOutputColumn> outputColumns = new HashMap<String, IOutputColumn>();
+		Map<String, IOutputColumn> outputColumns = new HashMap<>();
 		for (int i = 0; i < outputColumnsDTO.size(); i++) {
 			OutputColumnDTO outputCol = outputColumnsDTO.get(i);
 			String colName = outputCol.getName();

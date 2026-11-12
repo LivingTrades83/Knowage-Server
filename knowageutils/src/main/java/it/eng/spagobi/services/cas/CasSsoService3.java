@@ -17,26 +17,24 @@
  */
 package it.eng.spagobi.services.cas;
 
+import java.io.IOException;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+
+import org.apache.log4j.Logger;
+import org.jasig.cas.client.authentication.AttributePrincipal;
+import org.jasig.cas.client.util.AbstractCasFilter;
+import org.jasig.cas.client.validation.Assertion;
+import org.jasig.cas.client.validation.Cas20ProxyTicketValidator;
+import org.jasig.cas.client.validation.TicketValidationException;
+
 import it.eng.spago.base.SourceBean;
 import it.eng.spago.configuration.ConfigSingleton;
 import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.services.common.EnginConf;
 import it.eng.spagobi.services.common.SsoServiceInterface;
 import it.eng.spagobi.services.security.exceptions.SecurityException;
-
-import java.io.IOException;
-
-import javax.portlet.PortletSession;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-
-import org.apache.log4j.Logger;
-
-import org.jasig.cas.client.authentication.AttributePrincipal;
-import org.jasig.cas.client.util.AbstractCasFilter;
-import org.jasig.cas.client.validation.Assertion;
-import org.jasig.cas.client.validation.Cas20ProxyTicketValidator;
-import org.jasig.cas.client.validation.TicketValidationException;
 
 
 
@@ -47,7 +45,7 @@ import org.jasig.cas.client.validation.TicketValidationException;
  */
 public class CasSsoService3 implements SsoServiceInterface {
 
-    static private Logger logger = Logger.getLogger(CasSsoService3.class);
+    private static Logger logger = Logger.getLogger(CasSsoService3.class);
     
     /**
      * Read user id.
@@ -56,7 +54,8 @@ public class CasSsoService3 implements SsoServiceInterface {
      * 
      * @return String
      */
-    public String readUserIdentifier(HttpServletRequest request){
+    @Override
+	public String readUserIdentifier(HttpServletRequest request){
     HttpSession session=request.getSession();
     Assertion assertion = (Assertion) session.getAttribute(AbstractCasFilter.CONST_CAS_ASSERTION);
     String userInSession=assertion.getPrincipal().getName();
@@ -66,19 +65,6 @@ public class CasSsoService3 implements SsoServiceInterface {
 	return userInSession;
     }
     
-    /**
-     * Read user id.
-     * 
-     * @param session PortletSession
-     * 
-     * @return String
-     */
-    public String readUserIdentifier(PortletSession session){
-    Assertion assertion = (Assertion) session.getAttribute(AbstractCasFilter.CONST_CAS_ASSERTION);
-    String user=assertion.getPrincipal().getName();
-	logger.debug("CAS user in PortletSession:"+user);
-	return user;
-    }
     
     /**
      * Get a new ticket.
@@ -89,14 +75,15 @@ public class CasSsoService3 implements SsoServiceInterface {
      * 
      * @throws IOException Signals that an I/O exception has occurred.
      */
-    public String readTicket(HttpSession session) throws IOException{
+    @Override
+	public String readTicket(HttpSession session) throws IOException{
 	    logger.debug("IN");
 	    String ticket=null;
 	    String spagoBiServerURL = EnginConf.getInstance().getSpagoBiServerUrl();
 	    logger.debug("Read spagoBiServerURL=" + spagoBiServerURL);
 	    SourceBean engineConfig = EnginConf.getInstance().getConfig();
 	    SourceBean sourceBeanConf = (SourceBean) engineConfig.getAttribute("FILTER_RECEIPT");
-	    String filterReceipt = (String) sourceBeanConf.getCharacters();
+	    String filterReceipt = sourceBeanConf.getCharacters();
 	    logger.debug("Read filterReceipt=" + filterReceipt);
 	    filterReceipt = spagoBiServerURL + filterReceipt;
 	    
@@ -117,7 +104,8 @@ public class CasSsoService3 implements SsoServiceInterface {
      * 
      * @throws SecurityException the security exception
      */
-    public void validateTicket(String ticket, String userId)throws SecurityException {
+    @Override
+	public void validateTicket(String ticket, String userId)throws SecurityException {
 	logger.debug("IN");
 	ConfigSingleton config = ConfigSingleton.getInstance();
 	String validateUrl=null;

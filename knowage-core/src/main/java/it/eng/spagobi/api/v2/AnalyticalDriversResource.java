@@ -18,10 +18,8 @@
 package it.eng.spagobi.api.v2;
 
 import java.net.URI;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 
 import javax.validation.Valid;
@@ -36,12 +34,18 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.owasp.esapi.Encoder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import it.eng.knowage.analyticalDriver.api.AnalyticalDriverManagementAPI;
+import it.eng.knowage.monitor.IKnowageMonitor;
+import it.eng.knowage.monitor.KnowageMonitorFactory;
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectDAO;
@@ -57,7 +61,7 @@ import it.eng.spagobi.behaviouralmodel.lov.bo.ModalitiesValue;
 import it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO;
 import it.eng.spagobi.commons.bo.Role;
 import it.eng.spagobi.commons.bo.RoleBO;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
@@ -67,25 +71,35 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 @Path("/2.0/analyticalDrivers")
 @ManageAuthorization
 public class AnalyticalDriversResource extends AbstractSpagoBIResource {
+
+	private static final Logger LOGGER = LogManager.getLogger(AnalyticalDriversResource.class);
+
 	private final String charset = "; charset=UTF-8";
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Path("/")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getDrivers() {
 		IParameterDAO driversDao = null;
 		List<Parameter> fullList = null;
 
+		IKnowageMonitor monitor = KnowageMonitorFactory.getInstance().start("knowage.analyticaldrivers.list");
+
 		try {
 
 			driversDao = DAOFactory.getParameterDAO();
 			driversDao.setUserProfile(getUserProfile());
 			fullList = driversDao.loadAllParameters();
-			return Response.ok(fullList).build();
+			Response response = Response.ok(fullList).build();
+
+			monitor.stop();
+
+			return response;
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			monitor.stop(e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 
 	}
@@ -106,13 +120,13 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 	// return Response.ok(fullList).build();
 	// } catch (Exception e) {
 	// logger.error("Error with loading resource", e);
-	// throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+	// throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 	// }
 	//
 	// }
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Path("/checks")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getChecks() {
@@ -126,15 +140,15 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 			fullList = checksDao.loadAllChecks();
 			return Response.ok(fullList).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 
 	}
 
 	@GET
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getDriversById(@PathParam("id") Integer id) {
 		IParameterDAO driversDao = null;
@@ -147,40 +161,39 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 			return Response.ok(driver).build();
 
 		} catch (Exception e) {
-			logger.error("Driver with selected id: " + id + " doesn't exists", e);
-			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists", buildLocaleFromSession(), e);
+			LOGGER.error("Driver with selected id {} doesn't exists", id, e);
+			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists",
+					getLocale(), e);
 		}
 
 	}
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Path("/{id}/modes")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getParModesForDriver(@PathParam("id") Integer id) {
-		IParameterUseDAO useModesDao = null;
-		List<ParameterUse> fullList = null;
 
 		try {
 
-			useModesDao = DAOFactory.getParameterUseDAO();
+			IParameterUseDAO useModesDao = DAOFactory.getParameterUseDAO();
 			useModesDao.setUserProfile(getUserProfile());
-			fullList = useModesDao.loadParametersUseByParId(id);
+			List<ParameterUse> fullList = useModesDao.loadParametersUseByParId(id);
 			return Response.ok(fullList).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 
 	}
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Path("/{id}/lovs")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getLovsForDriver(@PathParam("id") Integer idParameter) {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		List<ModalitiesValue> modalitiesValues = null;
 		IModalitiesValueDAO modalitiesValueDAO = null;
@@ -193,21 +206,21 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 
 			return Response.ok(modalitiesValues).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 
 	}
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Path("/{id}/documents")
 	@Produces(MediaType.APPLICATION_JSON + charset)
 	public Response getDocumentsById(@PathParam("id") Integer idParameter) {
 
 		IBIObjectDAO documentsDao = null;
 		List<BIObject> documents = null;
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
 			documentsDao = DAOFactory.getBIObjectDAO();
@@ -216,30 +229,32 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 
 			return Response.ok(documents).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 
 	}
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response insertDriver(@Valid Parameter driver) {
 
 		driver.setModality(driver.getType() + "," + driver.getTypeId().toString());
 		if (driver.getId() != null) {
-			logger.error("Error paramters. New check should not have ID value");
+			LOGGER.error("Error paramters. New check should not have ID value");
 			throw new SpagoBIRuntimeException("Error paramters. New check should not have ID value");
 		}
 		if (parameterLabelNameControl(driver, "INSERT", "label")) {
-			logger.error("Error while inserting AD. Analytical Driver with the same label already exists.");
-			throw new SpagoBIRuntimeException("Error while inserting AD. Analytical Driver with the same label already exists.");
+			LOGGER.error("Error while inserting AD. Analytical Driver with the same label already exists.");
+			throw new SpagoBIRuntimeException(
+					"Error while inserting AD. Analytical Driver with the same label already exists.");
 		}
 		if (parameterLabelNameControl(driver, "INSERT", "name")) {
-			logger.error("Error while inserting AD. Analytical Driver with the same name already exists.");
-			throw new SpagoBIRuntimeException("Error while inserting AD. Analytical Driver with the same name already exists.");
+			LOGGER.error("Error while inserting AD. Analytical Driver with the same name already exists.");
+			throw new SpagoBIRuntimeException(
+					"Error while inserting AD. Analytical Driver with the same name already exists.");
 		}
 		try {
 			IParameterDAO driversDao = DAOFactory.getParameterDAO();
@@ -247,44 +262,37 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 			Parameter toReturn = driversDao.insertParameter(driver);
 			return Response.ok(toReturn).build();
 		} catch (Exception e) {
-			logger.error("Error while inserting resource", e);
-			throw new SpagoBIRestServiceException("Error while inserting resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error while inserting resource", e);
+			throw new SpagoBIRestServiceException("Error while inserting resource", getLocale(), e);
 		}
 	}
 
 	@POST
 	@Path("/modes")
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
-	public Response insertUseMode(String body) {
+	public Response insertUseMode(ParameterUse useMode) {
 		ObjectMapper mapper = new ObjectMapper();
-		ParameterUse useMode = null;
-		try {
-			useMode = mapper.readValue(body, ParameterUse.class);
-		} catch (Exception e1) {
-			logger.error(e1);
-			throw new SpagoBIRestServiceException("Error while inserting resource", buildLocaleFromSession(), e1);
-		}
 		IParameterUseDAO useModesDao = null;
 
-		List<LinkedHashMap> roles = useMode.getAssociatedRoles();
-		List<LinkedHashMap> checks = useMode.getAssociatedChecks();
+		List<Role> roles = useMode.getAssociatedRoles();
+		List<Check> checks = useMode.getAssociatedChecks();
 		if (useMode.getUseID() != null) {
-			logger.error("Error paramters. New check should not have ID value");
+			LOGGER.error("Error paramters. New check should not have ID value");
 			throw new SpagoBIRuntimeException("Error paramters. New check should not have ID value");
 		}
 		if (parameterUseLabelControl(useMode, "INSERT")) {
-			logger.error("Error inserting parameter.Same nqame already exists");
+			LOGGER.error("Error inserting parameter.Same nqame already exists");
 			throw new SpagoBIRuntimeException("Error inserting use mode.Same name already exists");
 		}
 
 		List<Role> formatedRoles = new ArrayList<>();
 		List<Check> formatedChecks = new ArrayList<>();
-		for (LinkedHashMap temp : roles) {
+		for (Role temp : roles) {
 			RoleBO role = mapper.convertValue(temp, RoleBO.class);
 			formatedRoles.add(BOtoRole(role));
 		}
-		for (LinkedHashMap temp : checks) {
+		for (Check temp : checks) {
 			Check check = mapper.convertValue(temp, Check.class);
 			formatedChecks.add(check);
 		}
@@ -294,23 +302,25 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 			useModesDao = DAOFactory.getParameterUseDAO();
 			useModesDao.setUserProfile(getUserProfile());
 			useModesDao.insertParameterUse(useMode);
-			String encodedUseMode = URLEncoder.encode("" + useMode.getUseID(), "UTF-8");
+
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedUseMode = encoder.encodeForURL("" + useMode.getUseID());
 			return Response.created(new URI("2.0/analyticalDrivers/" + encodedUseMode)).entity(encodedUseMode).build();
 		} catch (Exception e) {
-			logger.error("Error while inserting resource", e);
-			throw new SpagoBIRestServiceException("Error while inserting resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error while inserting resource", e);
+			throw new SpagoBIRestServiceException("Error while inserting resource", getLocale(), e);
 		}
 	}
 
 	@PUT
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateDriver(@PathParam("id") Integer id, @Valid Parameter driver) {
 
 		driver.setModality(driver.getType() + "," + driver.getTypeId().toString());
 		if (driver.getId() == null) {
-			logger.error("The check with ID " + id + " doesn't exist");
+			LOGGER.error("The check with ID {} doesn't exist", id);
 			throw new SpagoBIRuntimeException("The check with ID " + id + " doesn't exist");
 		}
 
@@ -332,23 +342,26 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 
 			driversDao.modifyParameter(driver);
 
-			String encodedDriver = URLEncoder.encode("" + driver.getId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedDriver = encoder.encodeForURL("" + driver.getId());
 
 			JSONArray jsonArray = new JSONArray();
 			response.put("encodedDriver", encodedDriver);
 
 			jsonArray.put(response);
 
-			return Response.created(new URI("2.0/analyticalDrivers/" + encodedDriver)).entity(response.toString()).build();
+			return Response.created(new URI("2.0/analyticalDrivers/" + encodedDriver)).entity(response.toString())
+					.build();
 		} catch (Exception e) {
-			logger.error("Error while modifying resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error while modifying resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error while modifying resource with id: {}", id, e);
+			throw new SpagoBIRestServiceException("Error while modifying resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 
 	@PUT
 	@Path("/modes/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateUseMode(@PathParam("id") Integer id, String body) {
 
@@ -358,68 +371,69 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 		try {
 			useMode = mapper.readValue(body, ParameterUse.class);
 		} catch (Exception e1) {
-			logger.error(e1);
-			throw new SpagoBIRestServiceException("Error while inserting resource", buildLocaleFromSession(), e1);
+			LOGGER.error(e1);
+			throw new SpagoBIRestServiceException("Error while inserting resource", getLocale(), e1);
 		}
-		List<LinkedHashMap> roles = useMode.getAssociatedRoles();
-		List<LinkedHashMap> checks = useMode.getAssociatedChecks();
+		List<Role> roles = useMode.getAssociatedRoles();
+		List<Check> checks = useMode.getAssociatedChecks();
 		if (useMode.getUseID() == null) {
-			logger.error("The check with ID " + id + " doesn't exist");
+			LOGGER.error("The check with ID {} doesn't exist", id);
 			throw new SpagoBIRuntimeException("The check with ID " + id + " doesn't exist");
 		}
 		List<Role> formatedRoles = new ArrayList<>();
 		List<Check> formatedChecks = new ArrayList<>();
-		for (LinkedHashMap temp : roles) {
+		for (Role temp : roles) {
 			RoleBO role = mapper.convertValue(temp, RoleBO.class);
 			formatedRoles.add(BOtoRole(role));
 		}
-		for (LinkedHashMap temp : checks) {
+		for (Check temp : checks) {
 			Check check = mapper.convertValue(temp, Check.class);
 			formatedChecks.add(check);
 		}
 		useMode.setAssociatedRoles(formatedRoles);
 		useMode.setAssociatedChecks(formatedChecks);
+		List documents = null;
 		try {
 			useModesDao = DAOFactory.getParameterUseDAO();
 			IObjParuseDAO objParuseDAO = DAOFactory.getObjParuseDAO();
 			useModesDao.setUserProfile(getUserProfile());
-			List documents = objParuseDAO.getDocumentLabelsListWithAssociatedDependencies(useMode.getId());
-			if (documents.size() > 0) {
+			ParameterUse useModeFromDao = useModesDao.loadByUseID(useMode.getUseID());
+			documents = objParuseDAO.getDocumentLabelsListWithAssociatedDependencies(useMode.getUseID());
+			if (!documents.isEmpty()) {
 				// there are some correlations
-				if (useMode.getManualInput().intValue() == 1 || useMode.getIdLov().intValue() != useMode.getIdLov().intValue()) {
+				if (useMode.getManualInput() == 1
+						|| useMode.getIdLov().intValue() != useModeFromDao.getIdLov().intValue()) {
 					// the ParameterUse was changed to manual input or the lov id was changed
-					logger.error("Cant modify use mode because it is used in some documents");
+					LOGGER.error("Cant modify use mode because it is used in some documents");
 					throw new SpagoBIRuntimeException("Cant modify use mode because it is used");
 				}
 			}
 			useModesDao.modifyParameterUse(useMode);
-			String encodedUseMode = URLEncoder.encode("" + useMode.getUseID(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedUseMode = encoder.encodeForURL("" + useMode.getUseID());
 			return Response.created(new URI("2.0/analyticalDrivers/" + encodedUseMode)).entity(encodedUseMode).build();
 		} catch (Exception e) {
-			logger.error("Error while modifying resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error while modifying resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error while modifying resource with id: {}", id, e);
+			throw new SpagoBIRestServiceException("Error while modifying use mode : " + useMode.getName() + ", check correlations inside documents with label " + (documents != null ? documents.toString() : ""),
+					getLocale(), e);
 		}
 	}
 
 	@DELETE
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	public Response deleteDriver(@PathParam("id") Integer id) {
-
-		IParameterDAO driversDao = null;
-		IParameterUseDAO useModesDao = null;
-		List<ParameterUse> fullList = null;
 
 		try {
 			Parameter driver = new Parameter();
 			driver.setId(id);
-			driversDao = DAOFactory.getParameterDAO();
-			useModesDao = DAOFactory.getParameterUseDAO();
+			IParameterDAO driversDao = DAOFactory.getParameterDAO();
+			IParameterUseDAO useModesDao = DAOFactory.getParameterUseDAO();
 			driversDao.setUserProfile(getUserProfile());
-			fullList = useModesDao.loadParametersUseByParId(id);
-			List objectsLabels = DAOFactory.getBIObjectParameterDAO().getDocumentLabelsListUsingParameter(id);
-			if (objectsLabels != null && objectsLabels.size() > 0) {
-				logger.error("Driver in use");
+			List<ParameterUse> fullList = useModesDao.loadParametersUseByParId(id);
+			List<String> objectsLabels = DAOFactory.getBIObjectParameterDAO().getDocumentLabelsListUsingParameter(id);
+			if (objectsLabels != null && !objectsLabels.isEmpty()) {
+				LOGGER.error("Driver in use");
 				throw new SpagoBIRuntimeException("Driver in use");
 			}
 			if (fullList != null) {
@@ -429,17 +443,19 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 			}
 			driversDao.eraseParameter(driver);
 
-			String encodedDriver = URLEncoder.encode("" + driver.getId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedDriver = encoder.encodeForURL("" + driver.getId());
 			return Response.ok().entity(encodedDriver).build();
 		} catch (Exception e) {
-			logger.error("Error with deleting resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error with deleting resource with id: {}", id, e);
+			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 
 	@DELETE
 	@Path("/modes/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PARAMETER_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PARAMETER_MANAGEMENT })
 	public Response deleteUseMode(@PathParam("id") Integer id) {
 
 		IParameterUseDAO useModesDao = null;
@@ -451,11 +467,14 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 			useModesDao.setUserProfile(getUserProfile());
 			useModesDao.eraseParameterUse(mode);
 
-			String encodedMode = URLEncoder.encode("" + mode.getUseID(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedMode = encoder
+					.encodeForURL("" + mode.getUseID());
 			return Response.ok().entity(encodedMode).build();
 		} catch (Exception e) {
-			logger.error("Error with deleting resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error with deleting resource with id: {}", id, e);
+			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 
@@ -468,42 +487,42 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 		role.setRoleTypeCD(bo.getRoleTypeCD());
 		role.setRoleTypeID(bo.getRoleTypeID());
 
-		role.setIsAbleToSaveIntoPersonalFolder(bo.isAbleToSaveIntoPersonalFolder());
-		role.setIsAbleToEnableDatasetPersistence(bo.isAbleToEnableDatasetPersistence());
-		role.setIsAbleToEnableFederatedDataset(bo.isAbleToEnableFederatedDataset());
-		role.setIsAbleToEnableRate(bo.isAbleToEnableRate());
-		role.setIsAbleToEnablePrint(bo.isAbleToEnablePrint());
-		role.setIsAbleToEnableCopyAndEmbed(bo.isAbleToEnableCopyAndEmbed());
+		role.setAbleToSaveIntoPersonalFolder(bo.isAbleToSaveIntoPersonalFolder());
+		role.setAbleToEnableDatasetPersistence(bo.isAbleToEnableDatasetPersistence());
+		role.setAbleToEnableFederatedDataset(bo.isAbleToEnableFederatedDataset());
+		role.setAbleToEnableRate(bo.isAbleToEnableRate());
+		role.setAbleToEnablePrint(bo.isAbleToEnablePrint());
+		role.setAbleToEnableCopyAndEmbed(bo.isAbleToEnableCopyAndEmbed());
 		role.setAbleToManageGlossaryBusiness(bo.isAbleToManageGlossaryBusiness());
 		role.setAbleToManageGlossaryTechnical(bo.isAbleToManageGlossaryTechnical());
 		role.setAbleToManageKpiValue(bo.isAbleToManageKpiValue());
 		role.setAbleToManageCalendar(bo.isAbleToManageCalendar());
 		role.setAbleToUseFunctionsCatalog(bo.isAbleToUseFunctionsCatalog());
-		role.setIsAbleToEditPythonScripts(bo.isAbleToEditPythonScripts());
-		role.setIsAbleToCreateCustomChart(bo.isAbleToCreateCustomChart());
-		role.setIsAbleToSaveSubobjects(bo.isAbleToSaveSubobjects());
-		role.setIsAbleToSeeSubobjects(bo.isAbleToSeeSubobjects());
-		role.setIsAbleToSeeViewpoints(bo.isAbleToSeeViewpoints());
-		role.setIsAbleToSeeSnapshots(bo.isAbleToSeeSnapshots());
-		role.setIsAbleToRunSnapshots(bo.isAbleToRunSnapshots());
-		role.setIsAbleToSeeNotes(bo.isAbleToSeeNotes());
-		role.setIsAbleToSendMail(bo.isAbleToSendMail());
-		role.setIsAbleToSaveRememberMe(bo.isAbleToSaveRememberMe());
-		role.setIsAbleToSeeMetadata(bo.isAbleToSeeMetadata());
-		role.setIsAbleToSaveMetadata(bo.isAbleToSaveMetadata());
-		role.setIsAbleToBuildQbeQuery(bo.isAbleToBuildQbeQuery());
-		role.setIsAbleToDoMassiveExport(bo.isAbleToDoMassiveExport());
-		role.setIsAbleToManageUsers(bo.isAbleToManageUsers());
-		role.setIsAbleToSeeDocumentBrowser(bo.isAbleToSeeDocumentBrowser());
-		role.setIsAbleToSeeFavourites(bo.isAbleToSeeFavourites());
-		role.setIsAbleToSeeSubscriptions(bo.isAbleToSeeSubscriptions());
-		role.setIsAbleToSeeMyData(bo.isAbleToSeeMyData());
-		role.setIsAbleToSeeMyWorkspace(bo.isAbleToSeeMyWorkspace());
-		role.setIsAbleToSeeToDoList(bo.isAbleToSeeToDoList());
-		role.setIsAbleToCreateDocuments(bo.isAbleToCreateDocuments());
-		role.setIsAbleToCreateSocialAnalysis(bo.isAbleToCreateSocialAnalysis());
-		role.setIsAbleToViewSocialAnalysis(bo.isAbleToViewSocialAnalysis());
-		role.setIsAbleToHierarchiesManagement(bo.isAbleToHierarchiesManagement());
+		role.setAbleToEditPythonScripts(bo.isAbleToEditPythonScripts());
+		role.setAbleToCreateCustomChart(bo.isAbleToCreateCustomChart());
+		role.setAbleToSaveSubobjects(bo.isAbleToSaveSubobjects());
+		role.setAbleToSeeSubobjects(bo.isAbleToSeeSubobjects());
+		role.setAbleToSeeViewpoints(bo.isAbleToSeeViewpoints());
+		role.setAbleToSeeSnapshots(bo.isAbleToSeeSnapshots());
+		role.setAbleToRunSnapshots(bo.isAbleToRunSnapshots());
+		role.setAbleToSeeNotes(bo.isAbleToSeeNotes());
+		role.setAbleToSendMail(bo.isAbleToSendMail());
+		role.setAbleToSaveRememberMe(bo.isAbleToSaveRememberMe());
+		role.setAbleToSeeMetadata(bo.isAbleToSeeMetadata());
+		role.setAbleToSaveMetadata(bo.isAbleToSaveMetadata());
+		role.setAbleToBuildQbeQuery(bo.isAbleToBuildQbeQuery());
+		role.setAbleToDoMassiveExport(bo.isAbleToDoMassiveExport());
+		role.setAbleToManageUsers(bo.isAbleToManageUsers());
+		role.setAbleToSeeDocumentBrowser(bo.isAbleToSeeDocumentBrowser());
+		role.setAbleToSeeFavourites(bo.isAbleToSeeFavourites());
+		role.setAbleToSeeSubscriptions(bo.isAbleToSeeSubscriptions());
+		role.setAbleToSeeMyData(bo.isAbleToSeeMyData());
+		role.setAbleToSeeMyWorkspace(bo.isAbleToSeeMyWorkspace());
+		role.setAbleToSeeToDoList(bo.isAbleToSeeToDoList());
+		role.setAbleToCreateDocuments(bo.isAbleToCreateDocuments());
+		role.setAbleToCreateSocialAnalysis(bo.isAbleToCreateSocialAnalysis());
+		role.setAbleToViewSocialAnalysis(bo.isAbleToViewSocialAnalysis());
+		role.setAbleToHierarchiesManagement(bo.isAbleToHierarchiesManagement());
 		role.setAbleToEditAllKpiComm(bo.isAbleToEditAllKpiComm());
 		role.setAbleToEditMyKpiComm(bo.isAbleToEditMyKpiComm());
 		role.setAbleToDeleteKpiComm(bo.isAbleToDeleteKpiComm());
@@ -518,7 +537,7 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 		try {
 			allparameters = DAOFactory.getParameterDAO().loadAllParameters();
 		} catch (EMFUserError e) {
-			logger.error("Error loading Analytical Driver for label testing");
+			LOGGER.error("Error loading Analytical Driver for label testing");
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 		if (operation.equalsIgnoreCase("INSERT")) {
@@ -570,18 +589,18 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 
 		Integer parId = paruse.getId();
 		String labelToCheck = paruse.getLabel();
-		List allParametersUse = null;
+		List<ParameterUse> allParametersUse = null;
 		try {
 			allParametersUse = DAOFactory.getParameterUseDAO().loadParametersUseByParId(parId);
 		} catch (EMFUserError e) {
-			logger.error("Error loading Use Modes for label testing");
+			LOGGER.error("Error loading Use Modes for label testing");
 			throw new SpagoBIRestServiceException(getLocale(), e);
 		}
 		// cannot have two ParametersUse with the same label and the same par_id
 		if (operation.equalsIgnoreCase("INSERT")) {
-			Iterator i = allParametersUse.iterator();
+			Iterator<ParameterUse> i = allParametersUse.iterator();
 			while (i.hasNext()) {
-				ParameterUse aParameterUse = (ParameterUse) i.next();
+				ParameterUse aParameterUse = i.next();
 				String label = aParameterUse.getLabel();
 				if (label.equals(labelToCheck)) {
 					return true;
@@ -589,9 +608,9 @@ public class AnalyticalDriversResource extends AbstractSpagoBIResource {
 			}
 		} else {
 			Integer currentUseId = paruse.getUseID();
-			Iterator i = allParametersUse.iterator();
+			Iterator<ParameterUse> i = allParametersUse.iterator();
 			while (i.hasNext()) {
-				ParameterUse aParameterUse = (ParameterUse) i.next();
+				ParameterUse aParameterUse = i.next();
 				String label = aParameterUse.getLabel();
 				Integer useId = aParameterUse.getUseID();
 

@@ -35,17 +35,13 @@ import org.json.JSONObject;
 
 import it.eng.spagobi.api.v2.DataSetResource;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.services.content.service.ContentServiceImplSupplier;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.user.UserProfileManager;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.rest.RestUtilities;
 import it.eng.spagobi.utilities.rest.RestUtilities.HttpMethod;
-
-/*
- https://localhost:8080/knowage/restful-services/2.0/backendservices/widgets/RWidget
- */
 
 @Path("/2.0/backendservices/widgets/RWidget")
 public class RWidgetProxy extends DataSetResource {
@@ -54,20 +50,28 @@ public class RWidgetProxy extends DataSetResource {
 	HttpMethod methodPost = HttpMethod.valueOf("Post");
 	HttpMethod methodGet = HttpMethod.valueOf("Get");
 
-	static protected Logger logger = Logger.getLogger(RWidgetProxy.class);
+	protected static Logger logger = Logger.getLogger(RWidgetProxy.class);
 
 	@POST
 	@Path("/view/{output_type}")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public Response view(@PathParam("output_type") String outputType, HashMap<String, String> requestBody) {
+	public Response view(@PathParam("output_type") String outputType, Map<String, String> requestBody) {
 		logger.debug("IN");
 		UserProfile userProfile = UserProfileManager.getProfile();
 		String userId = (String) userProfile.getUserUniqueIdentifier();
 		ContentServiceImplSupplier supplier = new ContentServiceImplSupplier();
 		HashMap drivers;
-		String script = null, documentId = null, outputVariable = null, dsLabel = null, parameters = null, aggregations = null, selections = null,
-				widgetId = null, envLabel = null, driversAsString = null;
+		String script = null;
+		String documentId = null;
+		String outputVariable = null;
+		String dsLabel = null;
+		String parameters = null;
+		String aggregations = null;
+		String selections = null;
+		String widgetId = null;
+		String envLabel = null;
+		String driversAsString = null;
 		try {
 			envLabel = requestBody.get("r_environment");
 			dsLabel = requestBody.get("dataset");
@@ -86,8 +90,8 @@ public class RWidgetProxy extends DataSetResource {
 		}
 		String rDataframe = null;
 		if (dsLabel != null) {
-			String knowageDs = getDataStore(dsLabel, parameters, drivers, selections, null, -1, aggregations, null, -1, -1, false, null, null);
-			rDataframe = RUtils.dataStore2DataFrame(knowageDs);
+			String knowageDs = getDataStore(dsLabel, parameters, drivers, selections, null, -1, aggregations, null, -1, -1, false, null, null, false);
+			rDataframe = MLEngineUtils.dataStore2DataFrame(knowageDs);
 		}
 		it.eng.spagobi.utilities.rest.RestUtilities.Response rEngineResponse = null;
 		try {
@@ -116,14 +120,21 @@ public class RWidgetProxy extends DataSetResource {
 	@Path("/edit/{output_type}")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.EDIT_PYTHON_SCRIPTS })
-	public Response edit(@PathParam("output_type") String outputType, HashMap<String, String> requestBody) {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.EDIT_PYTHON_SCRIPTS })
+	public Response edit(@PathParam("output_type") String outputType, Map<String, String> requestBody) {
 		logger.debug("IN");
 		UserProfile userProfile = UserProfileManager.getProfile();
 		String userId = (String) userProfile.getUserUniqueIdentifier();
 		HashMap drivers;
-		String script = null, documentId = null, outputVariable = null, dsLabel = null, parameters = null, aggregations = null, selections = null,
-				envLabel = null, driversAsString = null;
+		String script = null;
+		String documentId = null;
+		String outputVariable = null;
+		String dsLabel = null;
+		String parameters = null;
+		String aggregations = null;
+		String selections = null;
+		String envLabel = null;
+		String driversAsString = null;
 		try {
 			envLabel = requestBody.get("r_environment");
 			dsLabel = requestBody.get("dataset");
@@ -141,8 +152,8 @@ public class RWidgetProxy extends DataSetResource {
 		}
 		String rDataframe = null;
 		if (dsLabel != null) {
-			String knowageDs = getDataStore(dsLabel, parameters, drivers, selections, null, -1, aggregations, null, -1, -1, false, null, null);
-			rDataframe = RUtils.dataStore2DataFrame(knowageDs);
+			String knowageDs = getDataStore(dsLabel, parameters, drivers, selections, null, -1, aggregations, null, -1, -1, false, null, null, false);
+			rDataframe = MLEngineUtils.dataStore2DataFrame(knowageDs);
 		}
 		it.eng.spagobi.utilities.rest.RestUtilities.Response rEngineResponse = null;
 		try {
@@ -170,7 +181,7 @@ public class RWidgetProxy extends DataSetResource {
 	@GET
 	@Path("/libraries/{env_label}")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.EDIT_PYTHON_SCRIPTS })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.EDIT_PYTHON_SCRIPTS })
 	public Response libraries(@PathParam("env_label") String envLabel) {
 		logger.debug("IN");
 		it.eng.spagobi.utilities.rest.RestUtilities.Response rEngineResponse = null;

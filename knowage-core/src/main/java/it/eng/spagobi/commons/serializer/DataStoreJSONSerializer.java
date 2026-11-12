@@ -38,13 +38,14 @@ public class DataStoreJSONSerializer  implements Serializer {
 	public static final String ROOT = "rows";
 	
 	
+	@Override
 	public Object serialize(Object o, Locale locale) throws SerializationException {
 		JSONObject  result = null;
 		JSONObject metadata;
 		IField field;
 		JSONArray fieldsMetaDataJSON;		
 		JSONObject fieldMetaDataJSON;
-		IRecord record;
+		IRecord currRecord;
 		JSONObject recordJSON;
 		int recNo;
 		IDataStore dataStore;
@@ -103,12 +104,12 @@ public class DataStoreJSONSerializer  implements Serializer {
 			recNo = 0;
 			Iterator records = dataStore.iterator();
 			while(records.hasNext()) {
-				record = (IRecord)records.next();
+				currRecord = (IRecord)records.next();
 				recordJSON = new JSONObject();
 				recordJSON.put("id", ++recNo);
 				
 				for(int i = 0; i < metadata.getJSONArray("fields").length(); i++) {
-					field = record.getFieldAt(i);
+					field = currRecord.getFieldAt(i);
 					recordJSON.put("column-" + (i+1), field.getValue().toString());
 				}
 				

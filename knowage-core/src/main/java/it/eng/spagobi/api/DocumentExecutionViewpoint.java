@@ -2,7 +2,6 @@ package it.eng.spagobi.api;
 
 import java.io.IOException;
 import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -17,6 +16,9 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -28,7 +30,6 @@ import it.eng.spagobi.analiticalmodel.document.dao.IViewpointDAO;
 import it.eng.spagobi.analiticalmodel.document.handlers.DriversRuntimeLoaderFactory;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.commons.utilities.StringUtilities;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
@@ -37,6 +38,8 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 @Path("/1.0/documentviewpoint")
 @ManageAuthorization
 public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
+
+	private static final Logger LOGGER = LogManager.getLogger(DocumentExecutionViewpoint.class);
 
 	// request parameters
 	private static final String NAME = "NAME";
@@ -51,9 +54,8 @@ public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
 	@Path("/addViewpoint")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response addViewpoint(@Context HttpServletRequest req) {
-		logger.debug("IN");
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
-		List errorList = new ArrayList<>();
+		LOGGER.debug("IN");
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 		String viewpointOwner;
 		String viewpointString;
 		IViewpointDAO viewpointDAO;
@@ -79,9 +81,10 @@ public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
 			Assert.assertNotNull(userProfile, "Impossible to retrive user profile");
 			BIObject obj;
 			try {
-				obj = DriversRuntimeLoaderFactory.getDriversRuntimeLoader().loadBIObjectForExecutionByLabelAndRole(label, role);
-				logger.debug("User: [" + ((UserProfile) userProfile).getUserId() + "]");
-				logger.debug("Document Id:  [" + obj.getId() + "]");
+				obj = DriversRuntimeLoaderFactory.getDriversRuntimeLoader()
+						.loadBIObjectForExecutionByLabelAndRole(label, role);
+				LOGGER.debug("User: [{}]", ((UserProfile) userProfile).getUserId());
+				LOGGER.debug("Document Id:  [{}]", obj.getId());
 				viewpointOwner = (String) ((UserProfile) userProfile).getUserId();
 				Iterator it = viewpointJSON.keys();
 				Assert.assertTrue(it.hasNext(), "Viewpoint's content cannot be empty");
@@ -91,14 +94,14 @@ public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
 					String parameterValue;
 					parameterValue = viewpointJSON.getString(parameterName);
 					// defines the string of parameters to save into db
-					if (!StringUtilities.isEmpty(parameterValue)) {
+					if (!StringUtils.isEmpty(parameterValue)) {
 						viewpointString += parameterName + "%3D" + parameterValue + "%26";
 					}
 				}
 				if (viewpointString.endsWith("%26")) {
 					viewpointString = viewpointString.substring(0, viewpointString.length() - 3);
 				}
-				logger.debug("Viewpoint's content will be saved on database as: [" + viewpointString + "]");
+				LOGGER.debug("Viewpoint's content will be saved on database as: [{}]", viewpointString);
 				viewpointDAO = DAOFactory.getViewpointDAO();
 				viewpoint = viewpointDAO.loadViewpointByNameAndBIObjectId(viewpointName, obj.getId());
 				Assert.assertTrue(viewpoint == null, "A viewpoint with the name [" + viewpointName + "] alredy exist");
@@ -131,8 +134,9 @@ public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
 	@GET
 	@Path("/getViewpoints")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public Response getViewpoints(@QueryParam("label") String label, @QueryParam("role") String role, @Context HttpServletRequest req) {
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+	public Response getViewpoints(@QueryParam("label") String label, @QueryParam("role") String role,
+			@Context HttpServletRequest req) {
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 		List viewpoints;
 		IEngUserProfile userProfile;
 		Integer biobjectId;
@@ -141,19 +145,21 @@ public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
 		Assert.assertNotNull(userProfile, "Impossible to retrive user profile");
 		BIObject obj;
 		try {
-			obj = DriversRuntimeLoaderFactory.getDriversRuntimeLoader().loadBIObjectForExecutionByLabelAndRole(label, role);
+			obj = DriversRuntimeLoaderFactory.getDriversRuntimeLoader().loadBIObjectForExecutionByLabelAndRole(label,
+					role);
 			biobjectId = obj.getId();
-			logger.debug("User: [" + ((UserProfile) userProfile).getUserId() + "]");
-			logger.debug("Document Id:  [" + biobjectId + "]");
+			LOGGER.debug("User: [{}]", ((UserProfile) userProfile).getUserId());
+			LOGGER.debug("Document Id:  [{}]", biobjectId);
 			try {
 				viewpointDAO = DAOFactory.getViewpointDAO();
 				viewpoints = viewpointDAO.loadAccessibleViewpointsByObjId(biobjectId, getUserProfile());
 			} catch (EMFUserError e) {
-				logger.error("Cannot load viewpoints for document [" + biobjectId + "]", e);
-				throw new SpagoBIServiceException(SERVICE_NAME, "Cannot load viewpoints for document [" + biobjectId + "]", e);
+				LOGGER.error("Cannot load viewpoints for document [{}]", biobjectId, e);
+				throw new SpagoBIServiceException(SERVICE_NAME,
+						"Cannot load viewpoints for document [" + biobjectId + "]", e);
 			}
-			logger.debug("Document [" + biobjectId + "] have " + (viewpoints == null ? "0" : "" + viewpoints.size()) + " valid viewpoints for user ["
-					+ ((UserProfile) userProfile).getUserId() + "]");
+			LOGGER.debug("Document [{}] have {} valid viewpoints for user [{}]", biobjectId,
+					(viewpoints == null ? "0" : "" + viewpoints.size()), ((UserProfile) userProfile).getUserId());
 			resultAsMap.put("viewpoints", viewpoints);
 		} catch (EMFUserError e1) {
 			throw new SpagoBIServiceException(SERVICE_NAME, e1.getMessage());
@@ -165,7 +171,7 @@ public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
 	@Path("/deleteViewpoint")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response deleteViewpoint(@Context HttpServletRequest req) {
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 		IEngUserProfile userProfile;
 		IViewpointDAO viewpointDAO;
 		Viewpoint viewpoint;
@@ -188,8 +194,9 @@ public class DocumentExecutionViewpoint extends AbstractSpagoBIResource {
 					Assert.assertNotNull(viewpoint, "Viewpoint [" + ids[i] + "] does not exist on the database");
 					viewpointDAO.eraseViewpoint(viewpoint.getVpId());
 				} catch (EMFUserError e) {
-					logger.error("Impossible to delete viewpoint with name [" + ids[i] + "] already exists", e);
-					throw new SpagoBIServiceException(SERVICE_NAME, "Impossible to delete viewpoint with name [" + ids[i] + "] already exists", e);
+					LOGGER.error("Impossible to delete viewpoint with name [{}] already exists", ids[i], e);
+					throw new SpagoBIServiceException(SERVICE_NAME,
+							"Impossible to delete viewpoint with name [" + ids[i] + "] already exists", e);
 				}
 			}
 

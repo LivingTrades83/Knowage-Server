@@ -33,6 +33,7 @@ import it.eng.knowage.meta.model.physical.PhysicalTable;
  * @author Andrea Gioia (andrea.gioia@eng.it)
  *
  */
+@Deprecated
 public class PhysicalModelDefaultPropertiesInitializer implements IPropertiesInitializer {
 	
 	// Model property names
@@ -49,8 +50,9 @@ public class PhysicalModelDefaultPropertiesInitializer implements IPropertiesIni
 
 
 	
-	static public ModelFactory FACTORY = ModelFactory.eINSTANCE;
+	public static ModelFactory FACTORY = ModelFactory.eINSTANCE;
 	
+	@Override
 	public void addProperties(ModelObject o) {
 		
 		if(o instanceof PhysicalColumn) {

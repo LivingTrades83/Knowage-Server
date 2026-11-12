@@ -59,7 +59,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		$scope.bulkSelection = false;
 		$scope.selectedCells = [];
 		$scope.selectedRows = [];
-
+		$scope.maxScaleValue = 10;
 		$scope.getTemplateUrl = function(template){
 	  		return cockpitModule_generalServices.getTemplateUrl('advancedTableWidget',template);
 	  	}
@@ -88,7 +88,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 				}
 			}
 		}
-		
+
 		var replacePlaceholders = function(text, data, skipAdapting){
 			function adaptToType(value) {
 				if(skipAdapting) return value;
@@ -110,7 +110,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 			return text;
 		}
 
-		var _rowHeight;
 		if(!$scope.ngModel.settings){
 			$scope.ngModel.settings = cockpitModule_defaultTheme.table.settings;
 		}else $scope.ngModel.settings.page = 1;
@@ -149,6 +148,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 						}else{
 							tempCol.headerTooltip = $scope.ngModel.content.columnSelectedOfDataset[c].aliasToShow || $scope.ngModel.content.columnSelectedOfDataset[c].alias;
 						}
+						if(tempCol.measure === 'MEASURE') tempCol.aggregationSelected = $scope.ngModel.content.columnSelectedOfDataset[c].aggregationSelected;
 						tempCol.pinned = $scope.ngModel.content.columnSelectedOfDataset[c].pinned;
 
 						if ($scope.ngModel.content.columnSelectedOfDataset[c].isCalculated){
@@ -165,21 +165,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 							var previousValue;
 							var previousIndex;
 							for(var r in $scope.tempRows){
-								if(previousValue != $scope.tempRows[r][fields[f].name]){
+								if(!$scope.tempRows[r].span)$scope.tempRows[r].span = {}
+								if(previousValue != $scope.tempRows[r][fields[f].name] || ($scope.ngModel.settings?.summary?.enabled && r >= ($scope.tempRows.length - $scope.ngModel.settings?.summary?.list.length))){
 									previousValue = $scope.tempRows[r][fields[f].name];
 									previousIndex = r;
-									$scope.tempRows[r].span = 1;
+									$scope.tempRows[r].span[fields[f].name] = 1;
 								}else {
-									$scope.tempRows[previousIndex].span ++;
+									$scope.tempRows[previousIndex].span[fields[f].name] ++;
 								}
 							}
 							tempCol.rowSpan = RowSpanCalculator;
 							tempCol.cellClassRules = {
 								'cell-span': function(params) {
-									return $scope.tempRows[params.rowIndex].span > 1
+									return $scope.tempRows[params.rowIndex].span[params.colDef.field] > 1
 								}
 					        }
 						}
+
 
 						//VARIABLES MANAGEMENT
 						if($scope.ngModel.content.columnSelectedOfDataset[c].variables && $scope.ngModel.content.columnSelectedOfDataset[c].variables.length>0){
@@ -192,7 +194,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 								if(variableUsage.action == 'hide' && eval(escapeIfString(variableValue) + variableUsage.condition + escapeIfString(variableUsage.value))) tempCol.hide = true;
 								if(variableUsage.action == 'header' && variableValue) {
 									tempCol.headerName = variableValue;
-									tempCol.headerTooltip = tempCol.headerName;
+									if(!tempCol.headerTooltip) tempCol.headerTooltip = tempCol.headerName;
 								}
 							}
 						}
@@ -237,9 +239,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 						tempCol.fieldType = cockpitModule_generalOptions.typesMap[$scope.ngModel.content.columnSelectedOfDataset[c].type || ($scope.ngModel.content.columnSelectedOfDataset[c].fieldType == 'ATTRIBUTE'? 'java.lang.String': 'java.lang.Float')].label;
 						if($scope.ngModel.content.columnSelectedOfDataset[c].dateFormat) tempCol.dateFormat = $scope.ngModel.content.columnSelectedOfDataset[c].dateFormat;
-						if(tempCol.fieldType == 'date') tempCol.valueFormatter = dateFormatter;
-						if(tempCol.fieldType == 'timestamp') tempCol.valueFormatter = dateTimeFormatter;
-						if(tempCol.fieldType == 'float' || tempCol.fieldType == 'integer' ) {
+						if(tempCol.fieldType == 'date') {
+							tempCol.valueFormatter = dateFormatter;
+							tempCol.comparator = dateComparator;
+						}
+						if(tempCol.fieldType == 'timestamp') {
+							tempCol.valueFormatter = dateTimeFormatter;
+							tempCol.comparator = dateComparator;
+						}
+						if(tempCol.fieldType == 'time') {
+							tempCol.valueFormatter = dateTimeFormatter;
+							tempCol.comparator = dateComparator;
+						}
+						if(tempCol.fieldType == 'float' || tempCol.fieldType == 'integer' || (tempCol.fieldType == 'string' && tempCol.measure == 'MEASURE' && ["COUNT","COUNT_DISTINCT"].indexOf(tempCol.aggregationSelected) != -1) ) {
 							tempCol.valueFormatter = numberFormatter;
 							// When server-side pagination is disabled
 							tempCol.comparator = function (valueA, valueB, nodeA, nodeB, isInverted) {
@@ -405,13 +417,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		};
 
 		function getCellStyle(params){
+			
 			var tempStyle = params.colDef.style || {};
 			if(params.colDef.ranges && params.colDef.ranges.length > 0){
-				for(var k in params.colDef.ranges){
-					if (params.value!="" && eval(params.value + params.colDef.ranges[k].operator + params.colDef.ranges[k].value)) {
-						tempStyle['background-color'] = params.colDef.ranges[k]['background-color'] || (tempStyle['background-color'] || '');
-						tempStyle['color'] = params.colDef.ranges[k]['color'] || (tempStyle['color'] || '');
-                        if (params.colDef.ranges[k].operator == '==') break;
+				for(const range of params.colDef.ranges){
+					var valueToCompare;
+					if(range.compareValueType == 'static') valueToCompare = range.value;
+					if(range.compareValueType == 'variable') {
+						if(range.compareValueKey) valueToCompare = cockpitModule_properties.VARIABLES[range.value][range.compareValueKey];
+						else valueToCompare = cockpitModule_properties.VARIABLES[range.value];
+					}
+					if(range.compareValueType == 'parameter') {
+						var parameterKey = cockpitModule_analyticalDrivers[range.value+'_description'] ? range.value+'_description' : range.value;
+						valueToCompare = cockpitModule_analyticalDrivers[parameterKey];
+					}
+					if (params.value!="" && eval(params.value + range.operator + valueToCompare)) {
+						tempStyle['background-color'] = range['background-color'] || (tempStyle['background-color'] || '');
+						tempStyle['color'] = range['color'] || (tempStyle['color'] || '');
+                        if (range.operator == '==') break;
                     }
 				}
 			}
@@ -427,18 +450,39 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 			return isNaN(moment(params.value,'DD/MM/YYYY HH:mm:ss.SSS'))? params.value : moment(params.value,'DD/MM/YYYY HH:mm:ss.SSS').locale(sbiModule_config.curr_language).format(params.colDef.dateFormat || 'LLL');
 		}
 
+		function dateComparator(date1, date2) {
+
+			  var date1Number = date1 && moment(date1, this.fieldType == 'date' ? 'DD/MM/YYYY': 'DD/MM/YYYY HH:mm:ss.SSS');
+			  var date2Number = date2 && moment(date2, this.fieldType == 'date' ? 'DD/MM/YYYY': 'DD/MM/YYYY HH:mm:ss.SSS');
+
+			  if (date1Number == null && date2Number == null) {
+			    return 0;
+			  }
+
+			  if (date1Number == null) {
+			    return -1;
+			  } else if (date2Number == null) {
+			    return 1;
+			  }
+
+			  return date1Number - date2Number;
+		}
+
 		/*
 		 * The number formatter prepares the data to show the number correctly in the user locale format.
 		 * If a precision is set will use it, otherwise will set the precision to 2 if float, 0 if int.
 		 * In case of a returning empty string that one will be displayed.
 		 */
 		function numberFormatter(params){
-			if(params.value != "" && (!params.colDef.style || (params.colDef.style && !params.colDef.style.asString))) {
+			if(typeof params.value === "number") {
+				var useSeparator = (params.colDef.style && params.colDef.style.asString)? false : true;
 				var defaultPrecision = (params.colDef.fieldType == 'float') ? 2 : 0;
-				return $filter('number')(params.value, (params.colDef.style && typeof params.colDef.style.precision != 'undefined') ? params.colDef.style.precision : defaultPrecision);
+				var precision = (params.colDef.style && params.colDef.style.precision != undefined) ? params.colDef.style.precision : defaultPrecision;
+				var locale = `${sbiModule_config.curr_language}-${sbiModule_config.curr_country}`;
+				return new Intl.NumberFormat(locale, { minimumFractionDigits:precision, maximumFractionDigits:precision,useGrouping:useSeparator}).format(params.value);
 			}else return params.value;
 		}
-		
+
 
 		$scope.showHiddenValues = function(e,values,multi){
 			e.stopImmediatePropagation();
@@ -477,19 +521,39 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 					this.eGui.innerHTML = '<div class="inner-chart-bar" style="justify-content:'+tempStyle['justify-content']+'"><div class="bar" style="justify-content:'+tempStyle['justify-content']+';background-color:'+tempStyle['background-color']+';width:'+percentage+'%">'+(params.colDef.visType.toLowerCase() == 'text & chart' ? '<span style="color:'+tempStyle.color+'">'+tempValue+'</span>' : '')+'</div></div>';
 				}
 				if(params.colDef.ranges && params.colDef.ranges.length > 0){
-					for(var k in params.colDef.ranges){
-						if (typeof params.value != "undefined" && eval(params.value + params.colDef.ranges[k].operator + params.colDef.ranges[k].value)) {
-							if(params.colDef.ranges[k]['background-color']) {
+					
+					for(const range of params.colDef.ranges){
+						var valueToCompare;
+						if(range.compareValueType == 'static') valueToCompare = range.value;
+						if(range.compareValueType == 'variable') {
+							if(range.compareValueKey) valueToCompare = cockpitModule_properties.VARIABLES[range.value][range.compareValueKey];
+							else valueToCompare = cockpitModule_properties.VARIABLES[range.value];
+						}
+						if(range.compareValueType == 'parameter') {
+							var parameterKey = cockpitModule_analyticalDrivers[range.value+'_description'] ? range.value+'_description' : range.value;
+							valueToCompare = cockpitModule_analyticalDrivers[parameterKey];
+						}
+						if(typeof valueToCompare != "undefined" && typeof valueToCompare === 'string') valueToCompare = "'"+valueToCompare+"'";
+						if(range.operator === "IN"){
+							if(range.valueArray.includes(params.value.toString())){
+								if(range['background-color']) params.eParentOfValue.style.backgroundColor = range['background-color'];
+								if(range['color']) params.eParentOfValue.style.color = range['color'];
+								if(params.colDef.visType && params.colDef.visType.toLowerCase() == 'icon only') tempValue = '<i class="'+range.icon+'"></i>';
+							}
+							break;
+						}
+						if (typeof params.value != "undefined" && eval((typeof params.value == 'string' ? "'"+params.value+"'": params.value) + range.operator + valueToCompare)) {
+							if(range['background-color']) {
 								if(params.colDef.visType && (params.colDef.visType.toLowerCase() == 'chart' || params.colDef.visType.toLowerCase() == 'text & chart')) {
 									this.eGui.innerHTML = this.eGui.innerHTML.replace(/background-color:([\#a-z0-9\(\)\,]+);/g,function(match,p1){
-										return 'background-color:'+params.colDef.ranges[k]['background-color']+';';
+										return 'background-color:'+range['background-color']+';';
 									})
-								}else params.eParentOfValue.style.backgroundColor = params.colDef.ranges[k]['background-color'];
+								}else params.eParentOfValue.style.backgroundColor = range['background-color'];
 							}
-							if(params.colDef.ranges[k]['color']) params.eParentOfValue.style.color = params.colDef.ranges[k]['color'];
-							if(params.colDef.visType && params.colDef.visType.toLowerCase() == 'icon only') tempValue = '<i class="'+params.colDef.ranges[k].icon+'"></i>';
-							else tempValue += '<i class="'+params.colDef.ranges[k].icon+'"></i>';
-	                        if (params.colDef.ranges[k].operator == '==') break;
+							if(range['color']) params.eParentOfValue.style.color = range['color'];
+							if(params.colDef.visType && params.colDef.visType.toLowerCase() == 'icon only') tempValue = '<i class="'+range.icon+'"></i>';
+							else tempValue += '<i class="'+range.icon+'"></i>';
+	                        if (range.operator == '==') break;
 	                    }
 					}
 				}
@@ -540,7 +604,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		}
 
 		function crossIconRenderer(params){
-			return '<md-button class="md-icon-button" ng-click=""><md-icon md-font-icon="'+params.colDef.crossIcon+'"></md-icon></md-button>';
+			if(params.node.rowPinned === 'bottom') return '';
+			else return '<md-button class="md-icon-button" ng-click=""><md-icon md-font-icon="'+params.colDef.crossIcon+'"></md-icon></md-button>';
 		}
 
 		function cellMultiRenderer () {}
@@ -581,7 +646,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             else {
             	var title = $filter('i18n')(params.summaryRows[params.rowIndex].label);
             	if(title && params.style && params.style['pinnedOnly'] && params.column.pinned) this.eGui.innerHTML ='<b style="margin-right: 4px;">'+title+'</b>';
-            	if(params.valueFormatted || params.value){
+            	if(params.valueFormatted || (typeof params.value != "string" && typeof params.value != 'undefined')){
             		if (params.rowIndex == 0 || !params.colDef.isCalculated) {
 	            		if(params.summaryRows[params.rowIndex].aggregation == 'COUNT' || params.summaryRows[params.rowIndex].aggregation == 'COUNT_DISTINCT') {
 	            			var tempValue = $filter('number')(params.value,0);
@@ -618,10 +683,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		}
 
 		function RowSpanCalculator(params) {
-			if(params.data.span > 1){
-				return params.data.span;
+			if(params.data.span && params.data.span[params.colDef.field] > 1){
+				return params.data.span[params.colDef.field];
 			}else return 1;
-        };
+		};
+
 
 		$scope.init=function(element,width,height){
 			for(var k in $scope.ngModel.content.columnSelectedOfDataset){
@@ -649,10 +715,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 				$scope.totalRows = datasetRecords.results;
 				$scope.tempRows = datasetRecords.rows;
 				if($scope.ngModel.style && $scope.ngModel.style.tr && $scope.ngModel.style.tr.height){
-					_rowHeight = $scope.ngModel.style.tr.height;
+					$scope.advancedTableGrid.rowHeight = $scope.ngModel.style.tr.height;
 					$scope.advancedTableGrid.api.resetRowHeights();
 				}else {
-					_rowHeight = 0;
+					$scope.advancedTableGrid.rowHeight = 28;
 					$scope.advancedTableGrid.api.resetRowHeights();
 				}
 				if($scope.ngModel.style && $scope.ngModel.style.th){
@@ -687,7 +753,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 					if($scope.ngModel.settings.norows.hide) $scope.advancedTableGrid.api.hideOverlay();
 					if($scope.ngModel.settings.norows.message) $scope.advancedTableGrid.localeText.noRowsToShow = $scope.ngModel.settings.norows.message;
 				}
-				if($scope.ngModel.settings.pagination.enabled && $scope.ngModel.settings.pagination.frontEnd && $scope.ngModel.settings.pagination.itemsNumber) $scope.advancedTableGrid.api.paginationSetPageSize($scope.ngModel.settings.pagination.itemsNumber);
+				if($scope.ngModel.settings.pagination.enabled && $scope.ngModel.settings.pagination.frontEnd && $scope.ngModel.settings.pagination.itemsNumber) {
+					$scope.advancedTableGrid.api.paginationSetPageSize($scope.ngModel.settings.pagination.itemsNumber);
+				} else if (!$scope.ngModel.settings.pagination.enabled) {
+					$scope.advancedTableGrid.api.paginationSetPageSize($scope.totalRows || Number.MAX_SAFE_INTEGER);
+				}
 				resizeColumns();
 				$scope.hideWidgetSpinner();
 			}else $scope.hideWidgetSpinner();
@@ -707,7 +777,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 				obj["type"] = 'table';
 			return obj;
 		}
-		
+
 		function rowThresholdComparer(data){
 			var validThresholds = [];
 			for(var k in $scope.ngModel.settings.rowThresholds.list){
@@ -733,7 +803,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 						var parameterKey = cockpitModule_analyticalDrivers[threshold.compareValue+'_description'] ? threshold.compareValue+'_description' : threshold.compareValue;
 						valueToCompare = cockpitModule_analyticalDrivers[parameterKey];
 					}
-					
+
 					// getting the condition to compare with and comparing
 					var fullfilledCondition = false;
 					switch(threshold.condition){
@@ -751,12 +821,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 						break;
 					case '>':
 						fullfilledCondition = data[threshold.column] > valueToCompare;
+						break;
 					case '<':
 						fullfilledCondition = data[threshold.column] < valueToCompare;
+						break;
 					case '!=':
 						fullfilledCondition = data[threshold.column] != valueToCompare;
+						break;
 					}
-					
+
 					if(fullfilledCondition){
 						// changing border color property to override ag-grid default behaviour
 						if(threshold.style['border-bottom-color']) threshold.style['border-bottom'] = "1px solid "+threshold.style['border-bottom-color'];
@@ -786,7 +859,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 			        agColumnHeader: CustomHeader
 			    },
 				onColumnResized: columnResized,
-				getRowHeight: getRowHeight,
+				rowHeight: 28,
+				rowBuffer: 60,
 				getRowStyle: function(params) {
 					if($scope.ngModel.settings.rowThresholds && $scope.ngModel.settings.rowThresholds.enabled){
 						if(rowThresholdComparer(mapRow(params.data))) return rowThresholdComparer(mapRow(params.data));
@@ -806,10 +880,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 		if($scope.ngModel.settings.norows && $scope.ngModel.settings.norows.message) $scope.advancedTableGrid.localeText.noRowsToShow = $filter('i18n')($scope.ngModel.settings.norows.message);
 
-		function getRowHeight(params) {
-			if(_rowHeight > 0) return _rowHeight;
-			else return 28;
-		}
 		function changeSorting(){
 			if($scope.ngModel.settings.pagination && $scope.ngModel.settings.pagination.enabled && !$scope.ngModel.settings.pagination.frontEnd){
 				$scope.showWidgetSpinner();
@@ -917,12 +987,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 				if($scope.ngModel.content.columnSelectedOfDataset[k].aliasToShow && $scope.ngModel.content.columnSelectedOfDataset[k].aliasToShow == colAlias) return $scope.ngModel.content.columnSelectedOfDataset[k].name;
 			}
 		}
+		
+		function getColumnFromTableMetadata(colId){
+			if(colId){
+				for(var m in $scope.metadata.fields){
+					if($scope.metadata.fields[m].name && $scope.metadata.fields[m].name == colId) return $scope.metadata.fields[m];
+				}
+			}
+		}
 
 		function onCellClicked(node){
 			var interactionType = $scope.interaction && ($scope.interaction.crossType || $scope.interaction.previewType || $scope.interaction.interactionType);
 			if($scope.cliccable==false) return;
 			if(node.colDef.measure=='MEASURE' && !$scope.ngModel.settings.modalSelectionColumn && !crossHasType('allRow')) return;
-			if(!crossHasType('icon') && (node.value == "" || node.value == undefined)) return;
+			if(!crossHasType('icon') && (node.value === "" || node.value == undefined)) return;
 			if(node.rowPinned) return;
 			if(crossHasType('icon') && node.colDef.crossIcon) {
 				$scope.doSelection(node.colDef.field || null, null, null, null, mapRow(node.data));
@@ -992,16 +1070,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 				if ($scope.ngModel.settings.modalSelectionColumn!= undefined) {
 
 					var rows = [];
-					rows.push(mapRow(node.data));
+					var tempAlias = '';
 
-					for(var k in rows){
-						newValue.push(rows[k][$scope.ngModel.settings.modalSelectionColumn]);
+					for(var i in $scope.ngModel.content.columnSelectedOfDataset){
+						if($scope.ngModel.content.columnSelectedOfDataset[i].name == $scope.ngModel.settings.modalSelectionColumn){
+							tempAlias = $scope.ngModel.content.columnSelectedOfDataset[i].aliasToShow;
+						}
+					}
+
+					rows.push(mapRow(node.data));
+					if(tempAlias){
+						for(var k in rows){
+							newValue.push(rows[k][tempAlias]);
+						}
 					}
 				}
 				else {
 					newValue = null;
 				}
-				$scope.doSelection(getColumnNameFromTableMetadata(node.colDef.headerName, node.colDef.field), node.value, $scope.ngModel.settings.modalSelectionColumn, newValue, mapRow(node.data));
+				if(['timestamp','time','date'].includes(node.colDef.fieldType)){
+					var isoDate = luxon.DateTime.fromFormat(node.value, getColumnFromTableMetadata(node.colDef.field).dateFormat).toISO()
+				}
+				
+				$scope.doSelection(getColumnNameFromTableMetadata(node.colDef.headerName, node.colDef.field), node.value, $scope.ngModel.settings.modalSelectionColumn, newValue, mapRow(node.data),undefined,undefined,undefined,undefined,isoDate);
 			}
 		}
 

@@ -22,7 +22,7 @@ import java.util.Locale;
 import java.util.Locale.Builder;
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -47,7 +47,7 @@ import it.eng.spagobi.utilities.assertion.Assert;
  */
 public class ConsoleDriver extends GenericDriver {
 
-	static private Logger logger = Logger.getLogger(ConsoleDriver.class);
+	private static Logger logger = Logger.getLogger(ConsoleDriver.class);
 
 	/**
 	 * Returns a map of parameters which will be send in the request to the engine application.
@@ -122,9 +122,9 @@ public class ConsoleDriver extends GenericDriver {
 		throw new InvalidOperationRequest();
 	}
 
-	private final static String PARAM_SERVICE_NAME = "ACTION_NAME";
-	private final static String PARAM_NEW_SESSION = "NEW_SESSION";
-	private final static String PARAM_MODALITY = "MODALITY";
+	private static final String PARAM_SERVICE_NAME = "ACTION_NAME";
+	private static final String PARAM_NEW_SESSION = "NEW_SESSION";
+	private static final String PARAM_MODALITY = "MODALITY";
 
 	private Map applyService(Map parameters, BIObject biObject) {
 		ObjTemplate template;
@@ -203,7 +203,7 @@ public class ConsoleDriver extends GenericDriver {
 	public ArrayList<String> getDatasetAssociated(byte[] contentTemplate) throws JSONException {
 		logger.debug("IN");
 
-		ArrayList<String> datasetsLabel = new ArrayList<String>();
+		ArrayList<String> datasetsLabel = new ArrayList<>();
 		JSONObject templateContent = getTemplateAsJsonObject(contentTemplate);
 
 		// get datasets from template

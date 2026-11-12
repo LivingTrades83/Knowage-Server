@@ -17,22 +17,21 @@
  */
 package it.eng.spagobi.services.common;
 
-import it.eng.spagobi.services.security.exceptions.SecurityException;
-
 import java.io.IOException;
 
-import javax.portlet.PortletSession;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 import org.apache.log4j.Logger;
+
+import it.eng.spagobi.services.security.exceptions.SecurityException;
 
 /**
  * This class contain the specific code for TAM
  */
 public class TamSsoService implements SsoServiceInterface {
 
-    static private Logger logger = Logger.getLogger(TamSsoService.class);
+    private static Logger logger = Logger.getLogger(TamSsoService.class);
     
     /**
      * Read user id.
@@ -41,22 +40,11 @@ public class TamSsoService implements SsoServiceInterface {
      * 
      * @return String
      */
-    public String readUserIdentifier(HttpServletRequest request){
+    @Override
+	public String readUserIdentifier(HttpServletRequest request){
     	String user=request.getHeader("iv-user");
     	logger.debug("User in HttpHeader (TAM):"+user);
     	return user;
-    }
-    
-    /**
-     * Read user id.
-     * 
-     * @param session PortletSession
-     * 
-     * @return String
-     */
-    public String readUserIdentifier(PortletSession session){
-    	logger.warn("NOT Implemented");
-    	return "";
     }
     
     /**
@@ -68,7 +56,8 @@ public class TamSsoService implements SsoServiceInterface {
      * 
      * @throws IOException Signals that an I/O exception has occurred.
      */
-    public String readTicket(HttpSession session) throws IOException{
+    @Override
+	public String readTicket(HttpSession session) throws IOException{
 	    return "NA";
     }
 
@@ -82,7 +71,8 @@ public class TamSsoService implements SsoServiceInterface {
      * 
      * @throws SecurityException the security exception
      */
-    public void validateTicket(String ticket, String userId)throws SecurityException {
+    @Override
+	public void validateTicket(String ticket, String userId)throws SecurityException {
     	
     }
 

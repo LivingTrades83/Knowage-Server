@@ -41,7 +41,7 @@ import org.json.JSONObject;
 
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.serializer.SerializerFactory;
 import it.eng.spagobi.federateddataset.dao.ISbiFederationDefinitionDAO;
@@ -56,14 +56,14 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 @Path("/federateddataset")
 public class RestFederationDefinition extends AbstractSpagoBIResource {
 
-	static private Logger logger = Logger.getLogger(RestFederationDefinition.class);
+	private static Logger logger = Logger.getLogger(RestFederationDefinition.class);
 
 	public static final String DATASET_ID = "id";
 	public static final String VERSION_NUM = "versionNum";
 
 	@GET
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.FEDERATED_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = {  })
 	@Produces(MediaType.APPLICATION_JSON)
 	public List<FederationDefinition> get() {
 		try {
@@ -75,7 +75,7 @@ public class RestFederationDefinition extends AbstractSpagoBIResource {
 
 			List<FederationDefinition> listOfFederations = federDsDao.loadNotDegeneratedFederatedDataSets();
 			if (listOfFederations == null) {
-				listOfFederations = new ArrayList<FederationDefinition>();
+				listOfFederations = new ArrayList<>();
 			}
 			return listOfFederations;
 		} catch (EMFUserError e) {
@@ -86,7 +86,7 @@ public class RestFederationDefinition extends AbstractSpagoBIResource {
 
 	@GET
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.FEDERATED_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = {  })
 	@Produces(MediaType.APPLICATION_JSON)
 	public FederationDefinition getFederationByID(@PathParam("id") Integer id) {
 		try {
@@ -147,15 +147,18 @@ public class RestFederationDefinition extends AbstractSpagoBIResource {
 
 	@PUT
 	@Path("/{id}")
-	public Integer modifyFederation(@Valid FederatedDatasetDefinitionDTO requestDTO) {
+	public Integer modifyFederation(@PathParam("id") Integer id, @Valid FederatedDatasetDefinitionDTO requestDTO) {
 		try {
 			logger.debug("Editing the federation");
 			FederationDefinition fdsNew = recoverFederatedDatasetDetails(requestDTO);
+
+			fdsNew.setFederation_id(id);
+
 			logger.debug("The federation definition label is " + fdsNew.getLabel());
 			logger.debug("The federation definition ID is " + fdsNew.getFederation_id());
 
 			ISbiFederationDefinitionDAO federatedDatasetDao = DAOFactory.getFedetatedDatasetDAO();
-			Integer id = federatedDatasetDao.modifyFederation(fdsNew);
+			id = federatedDatasetDao.modifyFederation(fdsNew);
 
 			logger.debug("Saving OK");
 			logger.debug("OUT");
@@ -232,8 +235,8 @@ public class RestFederationDefinition extends AbstractSpagoBIResource {
 
 	private Set<IDataSet> deserializeDatasets(String relationships) {
 
-		Set<String> datasetNames = new HashSet<String>();
-		Set<IDataSet> datasets = new HashSet<IDataSet>();
+		Set<String> datasetNames = new HashSet<>();
+		Set<IDataSet> datasets = new HashSet<>();
 
 		// loading the datasets
 		try {

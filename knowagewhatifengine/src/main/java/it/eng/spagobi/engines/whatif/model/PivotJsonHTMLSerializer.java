@@ -67,7 +67,6 @@ import it.eng.spagobi.engines.whatif.calculatedmember.MDXFormulas;
 import it.eng.spagobi.engines.whatif.cube.CubeUtilities;
 import it.eng.spagobi.engines.whatif.dimension.SbiDimension;
 import it.eng.spagobi.engines.whatif.hierarchy.SbiHierarchy;
-import it.eng.spagobi.engines.whatif.version.VersionManager;
 import it.eng.spagobi.pivot4j.ui.WhatIfHTMLRenderer;
 import it.eng.spagobi.pivot4j.ui.html.WhatIfHTMLRendereCallback;
 import it.eng.spagobi.utilities.engines.SpagoBIEngineRuntimeException;
@@ -96,7 +95,7 @@ public class PivotJsonHTMLSerializer extends JsonSerializer<PivotObjectForRender
 	private static final String FORMULAS = "formulas";
 	private static final String CALCULATED_FIELDS = "CALCULATED_FIELDS";
 	private static final int PAGES_COUNT = WhatIfEngineConfig.getInstance().getPivotTableLoadCount();
-	private static final String MDXWITHOUTCF = "MDXWITHOUTCF";;
+	private static final String MDXWITHOUTCF = "MDXWITHOUTCF";
 
 	public PivotJsonHTMLSerializer() {
 	}
@@ -248,12 +247,6 @@ public class PivotJsonHTMLSerializer extends JsonSerializer<PivotObjectForRender
 		// modelConfig.getColumnSet());
 		// renderer.render(model, callback);
 		// modelConfig.setRowCount(rowCount);
-
-		// updates the actual version in the model config
-		if (modelConfig.isWhatIfScenario()) {
-			Integer actualVersion = VersionManager.getActualVersion(value, modelConfig);
-			modelConfig.setActualVersion(actualVersion);
-		}
 		// model.addCalucatedMembers(true);
 		// List<String> tables = new ArrayList<String>();
 
@@ -375,9 +368,9 @@ public class PivotJsonHTMLSerializer extends JsonSerializer<PivotObjectForRender
 				if (withSlicers) {
 					List<Member> slicers = ph.getSlicer(hierarchy);
 					if (slicers != null && slicers.size() > 0) {
-						List<Map<String, String>> slicerMap = new ArrayList<Map<String, String>>();
+						List<Map<String, String>> slicerMap = new ArrayList<>();
 						for (int k = 0; k < slicers.size(); k++) {
-							Map<String, String> slicer = new HashMap<String, String>();
+							Map<String, String> slicer = new HashMap<>();
 							slicer.put(UNIQUE_NAME, slicers.get(k).getUniqueName());
 							slicer.put(NAME, slicers.get(k).getCaption());
 							slicerMap.add(slicer);
@@ -410,7 +403,7 @@ public class PivotJsonHTMLSerializer extends JsonSerializer<PivotObjectForRender
 		if (formulas != null) {
 			for (MDXFormula formula : formulas.getFormulas()) {
 
-				Map<String, Object> formulaObject = new HashMap<String, Object>();
+				Map<String, Object> formulaObject = new HashMap<>();
 
 				formulaObject.put("name", formula.getName());
 				formulaObject.put("syntax", formula.getSyntax());
@@ -471,7 +464,7 @@ public class PivotJsonHTMLSerializer extends JsonSerializer<PivotObjectForRender
 		modelConfig.setRowCount(model.getCellSet().getAxes().get(Axis.ROWS.axisOrdinal()).getPositionCount());
 		modelConfig.setColumnCount(model.getCellSet().getAxes().get(Axis.COLUMNS.axisOrdinal()).getPositionCount());
 
-		Map<Integer, String> tables = new HashMap<Integer, String>();
+		Map<Integer, String> tables = new HashMap<>();
 
 		// SimpleDateFormat format = new SimpleDateFormat("hh:mm:ss.SSS");
 

@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Vector;
 
 import org.apache.log4j.Logger;
 import org.hibernate.Criteria;
@@ -30,13 +29,14 @@ import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.criterion.Criterion;
-import org.hibernate.criterion.Expression;
+import org.hibernate.criterion.Restrictions;
 
 import it.eng.spago.error.EMFErrorSeverity;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.Parameter;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.metadata.SbiParameters;
 import it.eng.spagobi.behaviouralmodel.analyticaldriver.metadata.SbiParuse;
+import it.eng.spagobi.behaviouralmodel.check.bo.Check;
 import it.eng.spagobi.behaviouralmodel.lov.bo.ModalitiesValue;
 import it.eng.spagobi.behaviouralmodel.lov.metadata.SbiLov;
 import it.eng.spagobi.commons.bo.Role;
@@ -50,18 +50,16 @@ import it.eng.spagobi.commons.metadata.SbiDomains;
  * @author zoppello
  */
 public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParameterDAO {
-	static private Logger logger = Logger.getLogger(ParameterDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(ParameterDAOHibImpl.class);
 
 	/**
 	 * Load for detail by parameter id.
 	 *
-	 * @param parameterID
-	 *            the parameter id
+	 * @param parameterID the parameter id
 	 *
 	 * @return the parameter
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterDAO#loadForDetailByParameterID(java.lang.Integer)
 	 */
@@ -81,16 +79,12 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return toReturn;
 	}
@@ -104,7 +98,7 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			Criterion labelCriterrion = Expression.eq("label", label);
+			Criterion labelCriterrion = Restrictions.eq("label", label);
 			Criteria criteria = aSession.createCriteria(SbiParameters.class);
 			criteria.add(labelCriterrion);
 			SbiParameters hibPar = (SbiParameters) criteria.uniqueResult();
@@ -114,14 +108,10 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 			tx.commit();
 		} catch (HibernateException he) {
 			logger.error(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return parameter;
@@ -130,23 +120,19 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 	/**
 	 * Load for execution by parameter i dand role name.
 	 *
-	 * @param parameterID
-	 *            the parameter id
-	 * @param roleName
-	 *            the role name
+	 * @param parameterID the parameter id
+	 * @param roleName    the role name
 	 *
 	 * @return the parameter
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterDAO#loadForExecutionByParameterIDandRoleName(java.lang.Integer, java.lang.String)
 	 */
 	@Override
-	public Parameter loadForExecutionByParameterIDandRoleName(Integer parameterID, String roleName, Boolean loadDSwithDrivers) throws EMFUserError {
+	public Parameter loadForExecutionByParameterIDandRoleName(Integer parameterID, String roleName,
+			Boolean loadDSwithDrivers) throws EMFUserError {
 
-		Query hqlQuery = null;
-		String hql = null;
 		Session aSession = null;
 		Transaction tx = null;
 		Parameter parameter = null;
@@ -159,20 +145,21 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			Query hibQuery = aSession.createQuery("select pu from SbiParuse pu, SbiParuseDet pud where pu.sbiParameters.parId = ? "
-					+ " and pud.id.sbiParuse.useId = pu.useId and pud.id.sbiExtRoles.extRoleId = ?");
+			Query hibQuery = aSession
+					.createQuery("select pu from SbiParuse pu, SbiParuseDet pud where pu.sbiParameters.parId = ? "
+							+ " and pud.id.sbiParuse.useId = pu.useId and pud.id.sbiExtRoles.extRoleId = ?");
 			hibQuery.setInteger(0, parameter.getId());
 			hibQuery.setInteger(1, role.getId());
 
-			List results = hibQuery.list();
+			List<SbiParuse> results = hibQuery.list();
 
-			if (results == null || results.size() == 0) {
+			if (results == null || results.isEmpty()) {
 				if (loadDSwithDrivers) {
 					return parameter;
 				} else {
-					logger.error("No parameteruse for association among parameter " + parameterID + " and role " + roleName);
-					Vector v = new Vector();
-					v.add(roleName);
+					logger.error(
+							"No parameteruse for association among parameter " + parameterID + " and role " + roleName);
+					List<Object> v = Arrays.asList(roleName);
 					throw new EMFUserError(EMFErrorSeverity.ERROR, 1078, v);
 				}
 			}
@@ -185,25 +172,28 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 				// the list would have to contain only one element but if the
 				// list contains more than one
 				// object it's an error
-				logger.error("the parameter with id " + parameterID + " has more than one parameteruse for the role " + roleName);
+				logger.error("the parameter with id " + parameterID + " has more than one parameteruse for the role "
+						+ roleName);
 				throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 			}
 
-			SbiParuse hibParuse = (SbiParuse) results.get(0);
+			SbiParuse hibParuse = results.get(0);
 
 			// if modval is null, then the parameter always has a man_in
 			// modality
 			// force the man_in modality to the parameter
-			Integer man_in = hibParuse.getManualInput();
-			Boolean isMapDriver = (hibParuse.getSelectedLayer() == null || hibParuse.getSelectedLayer().equals("")) ? false : true;
-			// Integer sbiLovId = sbiLov.getLovId();
-			if (isMapDriver || man_in.intValue() == 1) {
+			Integer manIn = hibParuse.getManualInput();
+			Boolean isMapDriver = (hibParuse.getSelectedLayer() == null || hibParuse.getSelectedLayer().equals(""))
+					? false
+					: true;
+			if (isMapDriver || manIn.intValue() == 1) {
 				ModalitiesValue manInModVal = new ModalitiesValue();
 				manInModVal.setITypeCd("MAN_IN");
 				manInModVal.setITypeId("37"); // why is setted a FIX id?? Isn't possible get it by other dao method ??
 				parameter.setModalityValue(manInModVal);
 			} else {
-				ModalitiesValue modVal = DAOFactory.getModalitiesValueDAO().loadModalitiesValueByID(hibParuse.getSbiLov().getLovId());
+				ModalitiesValue modVal = DAOFactory.getModalitiesValueDAO()
+						.loadModalitiesValueByID(hibParuse.getSbiLov().getLovId());
 				modVal.setSelectionType(hibParuse.getSelectionType());
 				modVal.setMultivalue(hibParuse.getMultivalue() != null && hibParuse.getMultivalue().intValue() > 0);
 				parameter.setModalityValue(modVal);
@@ -226,9 +216,17 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 			} else {
 				parameter.setModalityValueForMax(null);
 			}
-
+			
+			currLov = hibParuse.getSbiLovForMin();
+			if (currLov != null) {
+			    ModalitiesValue lov = DAOFactory.getModalitiesValueDAO().loadModalitiesValueByID(currLov.getLovId());
+			    parameter.setModalityValueForMin(lov);
+			} else {
+			    parameter.setModalityValueForMin(null);
+			}
+			
 			ParameterUseDAOHibImpl dao = new ParameterUseDAOHibImpl();
-			List checks = dao.getAssociatedChecks(hibParuse);
+			List<Check> checks = dao.getAssociatedChecks(hibParuse);
 			parameter.setChecks(checks);
 
 			tx.commit();
@@ -236,18 +234,13 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} catch (EMFUserError emfue) {
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw emfue;
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}
@@ -257,42 +250,37 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 	 *
 	 * @return the list
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterDAO#loadAllParameters()
 	 */
 	@Override
-	public List loadAllParameters() throws EMFUserError {
+	public List<Parameter> loadAllParameters() throws EMFUserError {
 		Session aSession = null;
 		Transaction tx = null;
-		List realResult = new ArrayList();
+		List<Parameter> realResult = new ArrayList<>();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
 			Query hibQuery = aSession.createQuery(" from SbiParameters");
-			List hibList = hibQuery.list();
+			List<SbiParameters> hibList = hibQuery.list();
 
-			Iterator it = hibList.iterator();
+			Iterator<SbiParameters> it = hibList.iterator();
 
 			while (it.hasNext()) {
-				realResult.add(toParameter((SbiParameters) it.next()));
+				realResult.add(toParameter(it.next()));
 			}
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return realResult;
 	}
@@ -302,24 +290,23 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 	 *
 	 * @return the list
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterDAO#loadAllSbiParameters()
 	 */
 	@Override
-	public List loadAllSbiParameters() throws EMFUserError {
+	public List<SbiParameters> loadAllSbiParameters() throws EMFUserError {
 		Session aSession = null;
 		Transaction tx = null;
-		List realResult = new ArrayList();
+		List<SbiParameters> realResult = new ArrayList<>();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
 			Query hibQuery = aSession.createQuery(" from SbiParameters");
-			List hibList = hibQuery.list();
+			List<SbiParameters> hibList = hibQuery.list();
 
-			Iterator it = hibList.iterator();
+			Iterator<SbiParameters> it = hibList.iterator();
 
 			while (it.hasNext()) {
 				realResult.add(it.next());
@@ -328,16 +315,12 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return realResult;
 	}
@@ -346,34 +329,32 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 	public List<Parameter> loadParametersByLovId(Integer lovId) throws EMFUserError {
 		Session aSession = null;
 		Transaction tx = null;
-		List realResult = new ArrayList();
+		List<Parameter> realResult = new ArrayList<>();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			Query hibQuery = aSession.createQuery(("select distinct params from   SbiParameters as params " + "inner join params.sbiParuses as paruses "
-					+ "inner join paruses.sbiLov as lov " + "where  lov.lovId = " + lovId));
-			List hibList = hibQuery.list();
+			Query hibQuery = aSession.createQuery(("select distinct params from   SbiParameters as params "
+					+ "inner join params.sbiParuses as paruses " + "inner join paruses.sbiLov as lov "
+					+ "where  lov.lovId = :lovId"));
+			hibQuery.setParameter("lovId", lovId);
+			List<SbiParameters> hibList = hibQuery.list();
 
-			Iterator it = hibList.iterator();
+			Iterator<SbiParameters> it = hibList.iterator();
 
 			while (it.hasNext()) {
-				realResult.add(toParameter((SbiParameters) it.next()));
+				realResult.add(toParameter(it.next()));
 			}
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return realResult;
 	}
@@ -382,34 +363,32 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 	public List<Parameter> loadParametersByBIObjectLabel(String label) throws EMFUserError {
 		Session aSession = null;
 		Transaction tx = null;
-		List realResult = new ArrayList();
+		List<Parameter> realResult = new ArrayList<>();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			Query hibQuery = aSession.createQuery("select distinct params from   SbiParameters as params " + "inner join params.sbiObjPars as objpars "
-					+ "inner join objpars.sbiObject as obj " + "where  obj.label = '" + label + "'");
-			List hibList = hibQuery.list();
+			Query hibQuery = aSession.createQuery("select distinct params from   SbiParameters as params "
+					+ "inner join params.sbiObjPars as objpars " + "inner join objpars.sbiObject as obj "
+					+ "where  obj.label =  :label");
+			hibQuery.setParameter("label", label);
+			List<SbiParameters> hibList = hibQuery.list();
 
-			Iterator it = hibList.iterator();
+			Iterator<SbiParameters> it = hibList.iterator();
 
 			while (it.hasNext()) {
-				realResult.add(toParameter((SbiParameters) it.next()));
+				realResult.add(toParameter(it.next()));
 			}
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return realResult;
 	}
@@ -417,11 +396,9 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 	/**
 	 * Modify parameter.
 	 *
-	 * @param aParameter
-	 *            the a parameter
+	 * @param aParameter the a parameter
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterDAO#modifyParameter(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.Parameter)
 	 */
@@ -436,26 +413,26 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 
 			String[] info = aParameter.getModality().split(",");
 			List<String> list = Arrays.asList(info);
-			String input_type_cd = null;
-			String input_type_id = null;
+			String inputTypeCd = null;
+			String inputTypeId = null;
 
 			Iterator<String> iterator = list.iterator();
 			while (iterator.hasNext()) {
-				input_type_cd = iterator.next();
-				input_type_id = iterator.next();
+				inputTypeCd = iterator.next();
+				inputTypeId = iterator.next();
 
 			}
 
-			Integer typeId = Integer.valueOf(input_type_id);
+			Integer typeId = Integer.valueOf(inputTypeId);
 			SbiDomains parameterType = (SbiDomains) aSession.load(SbiDomains.class, typeId);
 
 			SbiParameters hibParameters = (SbiParameters) aSession.load(SbiParameters.class, aParameter.getId());
 			updateSbiCommonInfo4Update(hibParameters);
 			hibParameters.setDescr(aParameter.getDescription());
-			hibParameters.setLength(new Short(aParameter.getLength().shortValue()));
+			hibParameters.setLength(aParameter.getLength().shortValue());
 			hibParameters.setLabel(aParameter.getLabel());
 			hibParameters.setName(aParameter.getName());
-			hibParameters.setParameterTypeCode(input_type_cd);
+			hibParameters.setParameterTypeCode(inputTypeCd);
 			hibParameters.setMask(aParameter.getMask());
 			hibParameters.setParameterType(parameterType);
 			hibParameters.setValueSelection(aParameter.getValueSelection());
@@ -463,29 +440,25 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 			hibParameters.setSelectedLayerProp(aParameter.getSelectedLayerProp());
 
 			if (aParameter.isFunctional())
-				hibParameters.setFunctionalFlag(new Short((short) 1));
+				hibParameters.setFunctionalFlag((short) 1);
 			else
-				hibParameters.setFunctionalFlag(new Short((short) 0));
+				hibParameters.setFunctionalFlag((short) 0);
 
 			if (aParameter.isTemporal())
-				hibParameters.setTemporalFlag(new Short((short) 1));
+				hibParameters.setTemporalFlag((short) 1);
 			else
-				hibParameters.setTemporalFlag(new Short((short) 0));
+				hibParameters.setTemporalFlag((short) 0);
 
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}
@@ -493,11 +466,9 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 	/**
 	 * Insert parameter.
 	 *
-	 * @param aParameter
-	 *            the a parameter
+	 * @param aParameter the a parameter
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterDAO#insertParameter(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.Parameter)
 	 */
@@ -512,64 +483,57 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 
 			String[] info = aParameter.getModality().split(",");
 			List<String> list = Arrays.asList(info);
-			String input_type_cd = null;
-			String input_type_id = null;
+			String inputTypeCd = null;
+			String inputTypeId = null;
 
 			Iterator<String> iterator = list.iterator();
 			while (iterator.hasNext()) {
-				input_type_cd = iterator.next();
-				input_type_id = iterator.next();
+				inputTypeCd = iterator.next();
+				inputTypeId = iterator.next();
 
 			}
 
-			Integer typeId = Integer.valueOf(input_type_id);
+			Integer typeId = Integer.valueOf(inputTypeId);
 			SbiDomains parameterType = (SbiDomains) aSession.load(SbiDomains.class, typeId);
 
 			SbiParameters hibParameters = new SbiParameters();
 			hibParameters.setDescr(aParameter.getDescription());
-			hibParameters.setLength(new Short(aParameter.getLength().shortValue()));
+			hibParameters.setLength(aParameter.getLength().shortValue());
 			hibParameters.setLabel(aParameter.getLabel());
 			hibParameters.setName(aParameter.getName());
-			hibParameters.setParameterTypeCode(input_type_cd);
+			hibParameters.setParameterTypeCode(inputTypeCd);
 			hibParameters.setMask(aParameter.getMask());
 			hibParameters.setParameterType(parameterType);
 			if (aParameter.isFunctional())
-				hibParameters.setFunctionalFlag(new Short((short) 1));
+				hibParameters.setFunctionalFlag((short) 1);
 			else
-				hibParameters.setFunctionalFlag(new Short((short) 0));
+				hibParameters.setFunctionalFlag((short) 0);
 			if (aParameter.isTemporal())
-				hibParameters.setTemporalFlag(new Short((short) 1));
+				hibParameters.setTemporalFlag((short) 1);
 			else
-				hibParameters.setTemporalFlag(new Short((short) 0));
+				hibParameters.setTemporalFlag((short) 0);
 			updateSbiCommonInfo4Insert(hibParameters);
 			aSession.save(hibParameters);
 			tx.commit();
-			Parameter toReturn = toParameter(hibParameters);
-			return toReturn;
+			return toParameter(hibParameters);
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	/**
 	 * Erase parameter.
 	 *
-	 * @param aParameter
-	 *            the a parameter
+	 * @param aParameter the a parameter
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterDAO#eraseParameter(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.Parameter)
 	 */
@@ -591,24 +555,19 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	/**
 	 * From the hibernate parametes at input, gives the corrispondent <code>Parameter</code> object.
 	 *
-	 * @param hibParameters
-	 *            The hybernate parameter
+	 * @param hibParameters The hybernate parameter
 	 *
 	 * @return The corrispondent <code>Parameter</code> object
 	 */
@@ -618,7 +577,7 @@ public class ParameterDAOHibImpl extends AbstractHibernateDAO implements IParame
 		aParameter.setId(hibParameters.getParId());
 		aParameter.setLabel(hibParameters.getLabel());
 		aParameter.setName(hibParameters.getName());
-		aParameter.setLength(new Integer(hibParameters.getLength().intValue()));
+		aParameter.setLength(hibParameters.getLength().intValue());
 		aParameter.setMask(hibParameters.getMask());
 		aParameter.setType(hibParameters.getParameterTypeCode());
 		aParameter.setTypeId(hibParameters.getParameterType().getValueId());

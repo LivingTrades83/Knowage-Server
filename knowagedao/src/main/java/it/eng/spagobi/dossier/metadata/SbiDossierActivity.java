@@ -1,3 +1,20 @@
+/*
+ * Knowage, Open Source Business Intelligence suite
+ * Copyright (C) 2024 Engineering Ingegneria Informatica S.p.A.
+
+ * Knowage is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+
+ * Knowage is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package it.eng.spagobi.dossier.metadata;
 
 import it.eng.spagobi.commons.metadata.SbiHibernateModel;
@@ -15,6 +32,14 @@ public class SbiDossierActivity extends SbiHibernateModel {
 	private byte[] binContent;
 	private byte[] docBinContent;
 	private String configContent;
+	private byte[] pptV2BinContent;
+
+	public SbiDossierActivity(Integer id) {
+		this.id = id;
+	}
+
+	public SbiDossierActivity() {
+	}
 
 	public String getConfigContent() {
 		return configContent;
@@ -32,15 +57,11 @@ public class SbiDossierActivity extends SbiHibernateModel {
 		this.binContent = binContent;
 	}
 
-	public SbiDossierActivity() {
-
-	}
-
 	public Integer getId() {
 		return id;
 	}
 
-	public void setId(Integer id) {
+	private void setId(Integer id) {
 		this.id = id;
 	}
 
@@ -82,6 +103,14 @@ public class SbiDossierActivity extends SbiHibernateModel {
 
 	public void setDocBinContent(byte[] docBinContent) {
 		this.docBinContent = docBinContent;
+	}
+
+	public byte[] getPptV2BinContent() {
+		return pptV2BinContent;
+	}
+
+	public void setPptV2BinContent(byte[] pptV2BinContent) {
+		this.pptV2BinContent = pptV2BinContent;
 	}
 
 }

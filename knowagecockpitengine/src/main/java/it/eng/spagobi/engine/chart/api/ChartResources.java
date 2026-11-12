@@ -35,20 +35,20 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 
 @Path("1.0/chart/template")
 public class ChartResources extends AbstractChartEngineResource {
 
-	static private Logger logger = Logger.getLogger(ChartResources.class);
+	private static Logger logger = Logger.getLogger(ChartResources.class);
 
 	@POST
 	@Path("/save")
 	@Produces(MediaType.APPLICATION_XML)
 	@Consumes(MediaType.APPLICATION_FORM_URLENCODED)
-	@UserConstraint(functionalities = { SpagoBIConstants.CREATE_COCKPIT_FUNCTIONALITY })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.CREATE_COCKPIT_FUNCTIONALITY })
 	public String saveTemplate(@FormParam("jsonTemplate") String jsonTemplate, @FormParam("docLabel") String docLabel,
 			@Context HttpServletResponse servletResponse) {
 		JSONObject newTemplate;

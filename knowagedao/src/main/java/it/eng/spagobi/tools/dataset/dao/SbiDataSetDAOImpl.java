@@ -39,6 +39,7 @@ import org.hibernate.criterion.Disjunction;
 import org.hibernate.criterion.MatchMode;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
+import org.json.JSONObject;
 
 import it.eng.spago.error.EMFErrorSeverity;
 import it.eng.spago.error.EMFUserError;
@@ -49,6 +50,7 @@ import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.SpagoBIDAOException;
+import it.eng.spagobi.commons.dao.dto.SbiCategory;
 import it.eng.spagobi.commons.metadata.SbiDomains;
 import it.eng.spagobi.commons.utilities.UserUtilities;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
@@ -58,7 +60,13 @@ import it.eng.spagobi.utilities.assertion.Assert;
 
 public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataSetDAO {
 
-	static private Logger logger = Logger.getLogger(SbiDataSetDAOImpl.class);
+	private static Logger logger = Logger.getLogger(SbiDataSetDAOImpl.class);
+	private static final String LABEL = "label";
+	private static final String OWNER = "owner";
+	private static final String CATEGORY = "category";
+	private static final String SCOPE = "scope";
+	private static final String ACTIVE = "active";
+	private static final String DS_SCOPE = "DS_SCOPE";
 
 	@Override
 	public SbiDataSet loadSbiDataSetByLabel(String label) {
@@ -79,8 +87,8 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 				Assert.assertNotNull(session, "session cannot be null");
 				transaction = session.beginTransaction();
 				Assert.assertNotNull(transaction, "transaction cannot be null");
-			} catch (Throwable t) {
-				throw new SpagoBIDAOException("An error occured while creating the new transaction", t);
+			} catch (Exception e) {
+				throw new SpagoBIDAOException("An error occured while creating the new transaction", e);
 			}
 			Query hibQuery = session.createQuery("from SbiDataSet h where h.active = ? and h.label = ? ");
 			hibQuery.setBoolean(0, true);
@@ -91,11 +99,11 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 			transaction.commit();
 
 			return sbiDataSet;
-		} catch (Throwable t) {
+		} catch (Exception e) {
 			if (transaction != null && transaction.isActive()) {
 				transaction.rollback();
 			}
-			throw new SpagoBIDAOException("An unexpected error occured while loading dataset whose label is equal to [" + label + "]", t);
+			throw new SpagoBIDAOException("An unexpected error occured while loading dataset whose label is equal to [" + label + "]", e);
 		} finally {
 			if (session != null && session.isOpen()) {
 				session.close();
@@ -110,11 +118,36 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 	}
 
 	@Override
+	public boolean isFileNameReferenced(String fileName, String organization) {
+		Session session = null;
+		try {
+			session = getSession();
+			Query query = session.createQuery("select ds.configuration from SbiDataSet ds where ds.id.organization = :organization");
+			query.setString("organization", organization);
+			// Include inactive versions and every owner: an older or differently named
+			// dataset can still reference the file. Do not construct executable datasets.
+			List<String> configurations = query.list();
+			for (String configuration : configurations) {
+				if (fileName.equalsIgnoreCase(new JSONObject(configuration).optString("fileName"))) {
+					return true;
+				}
+			}
+			return false;
+		} catch (Exception e) {
+			throw new SpagoBIDAOException("Cannot check dataset file references", e);
+		} finally {
+			if (session != null && session.isOpen()) {
+				session.close();
+			}
+		}
+	}
+
+	@Override
 	public SbiDataSet loadSbiDataSetByIdAndOrganiz(Integer id, String organiz, Session session) {
 		SbiDataSet sbiDataSet = null;
 		try {
 			Criteria c = session.createCriteria(SbiDataSet.class);
-			c.addOrder(Order.asc("label"));
+			c.addOrder(Order.asc(LABEL));
 			c.add(Restrictions.eq("id.dsId", id));
 			if (organiz != null) {
 				c.add(Restrictions.eq("id.organization", organiz));
@@ -159,14 +192,14 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 		try {
 			session = getSession();
 			Criteria c = session.createCriteria(SbiDataSet.class);
-			c.addOrder(Order.asc("label"));
+			c.addOrder(Order.asc(LABEL));
 
 			if (page != null && item_per_page != null) {
 				c.setFirstResult((page - 1) * item_per_page);
 				c.setMaxResults(item_per_page);
 			}
 
-			c.add(Restrictions.like("label", search == null ? "" : search, MatchMode.ANYWHERE).ignoreCase());
+			c.add(Restrictions.like(LABEL, search == null ? "" : search, MatchMode.ANYWHERE).ignoreCase());
 			onlyActive(c);
 
 			if (ids != null && ids.length > 0) {
@@ -181,46 +214,45 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 
 				logger.debug("For final user take only owned, enterprise and shared");
 
-				SbiDomains scopeUserDomain = DAOFactory.getDomainDAO().loadSbiDomainByCodeAndValue("DS_SCOPE", SpagoBIConstants.DS_SCOPE_USER);
-				SbiDomains scopeEnterpriseDomain = DAOFactory.getDomainDAO().loadSbiDomainByCodeAndValue("DS_SCOPE", SpagoBIConstants.DS_SCOPE_ENTERPRISE);
-				SbiDomains scopeTechnicalDomain = DAOFactory.getDomainDAO().loadSbiDomainByCodeAndValue("DS_SCOPE", SpagoBIConstants.DS_SCOPE_TECHNICAL);
+				SbiDomains scopeUserDomain = DAOFactory.getDomainDAO().loadSbiDomainByCodeAndValue(DS_SCOPE, SpagoBIConstants.DS_SCOPE_USER);
+				SbiDomains scopeEnterpriseDomain = DAOFactory.getDomainDAO().loadSbiDomainByCodeAndValue(DS_SCOPE, SpagoBIConstants.DS_SCOPE_ENTERPRISE);
+				SbiDomains scopeTechnicalDomain = DAOFactory.getDomainDAO().loadSbiDomainByCodeAndValue(DS_SCOPE, SpagoBIConstants.DS_SCOPE_TECHNICAL);
 
 				Disjunction or = Restrictions.disjunction();
 
 				// OWNER OR
 
 				// take owned datasets
-				or.add(Restrictions.eq("owner", ((UserProfile) finalUserProfile).getUserId().toString()));
+				or.add(Restrictions.eq(OWNER, ((UserProfile) finalUserProfile).getUserId().toString()));
 
 				// get categories
 				Set<Domain> categoryList = UserUtilities.getDataSetCategoriesByUser(finalUserProfile);
 
 				if (categoryList != null) {
-					if (categoryList.size() > 0) {
-						SbiDomains[] categoryArray = new SbiDomains[categoryList.size()];
+					if (!categoryList.isEmpty()) {
+						SbiCategory[] categoryArray = new SbiCategory[categoryList.size()];
 						int i = 0;
 						for (Iterator iterator = categoryList.iterator(); iterator.hasNext();) {
 							Domain domain = (Domain) iterator.next();
-							String domainCd = domain.getDomainCode();
 							String valueCd = domain.getValueCd();
-							SbiDomains sbiDomain = DAOFactory.getDomainDAO().loadSbiDomainByCodeAndValue(domainCd, valueCd);
-							categoryArray[i] = sbiDomain;
+							SbiCategory sbiCategory = DAOFactory.getCategoryDAO().getCategoryForDataSet(valueCd);
+							categoryArray[i] = sbiCategory;
 							i++;
 						}
 						// (IN CATEGORY AND (SCOPE=USER OR SCOPE=ENTERPRISE)) OR SCOPE=TECHNICAL
 						Conjunction andCategories = Restrictions.conjunction();
-						andCategories.add(Restrictions.in("category", categoryArray));
+						andCategories.add(Restrictions.in(CATEGORY, categoryArray));
 
 						Disjunction orScope = Restrictions.disjunction();
-						orScope.add(Restrictions.eq("scope", scopeUserDomain));
-						orScope.add(Restrictions.eq("scope", scopeEnterpriseDomain));
+						orScope.add(Restrictions.eq(SCOPE, scopeUserDomain));
+						orScope.add(Restrictions.eq(SCOPE, scopeEnterpriseDomain));
 
 						andCategories.add(orScope);
 
 						if (seeTechnical != null && seeTechnical) {
 							Disjunction orTechnical = Restrictions.disjunction();
 							orTechnical.add(andCategories);
-							orTechnical.add(Restrictions.eq("scope", scopeTechnicalDomain));
+							orTechnical.add(Restrictions.eq(SCOPE, scopeTechnicalDomain));
 							or.add(orTechnical);
 						} else {
 							or.add(andCategories);
@@ -230,8 +262,8 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 				} else {
 					// if no categoryList take also all USER and ENTERPRISE dataset
 					// SCOPE=USER OR SCOPE=ENTERPRISE)
-					or.add(Restrictions.eq("scope", scopeUserDomain));
-					or.add(Restrictions.eq("scope", scopeEnterpriseDomain));
+					or.add(Restrictions.eq(SCOPE, scopeUserDomain));
+					or.add(Restrictions.eq(SCOPE, scopeEnterpriseDomain));
 				}
 
 				c.add(or);
@@ -260,37 +292,28 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 		logger.debug("IN");
 
 		try {
-			// open session
 			session = getSession();
-
-			// create statement
-			String statement = "from SbiDataSet h where h.active = ?";
-			if (owner != null) {
-				String ownedCondition = includeOwned ? "h.owner = ?" : "h.owner != ?";
-				statement += " and " + ownedCondition + " ";
-			}
-			if (type != null)
-				statement += " and h.scope.valueCd = ? ";
-			if (category != null)
-				statement += " and h.category.valueCd = ? ";
-			if (implementation != null)
-				statement += " and h.type = ? ";
-			if (showDerivedDatasets == null || showDerivedDatasets.equals(false))
-				statement += " and h.federation is null ";
+			
+			String ownerStatement = String.format(" and (%s) ", Boolean.TRUE.equals(includeOwned) ? "h.owner = :owner" : "h.owner != :owner");
+			String statement = String.format("from SbiDataSet h where h.active = :active%s%s%s%s%s", 
+					(owner != null ? ownerStatement : ""), 
+					(type != null ? " and h.scope.valueCd = :type " : ""), 
+					(category != null ? " and h.category.code = :category " : ""),
+					(implementation != null ? " and h.type = :implementation " : ""),
+					(showDerivedDatasets != null ? " and h.federation is null " : ""));
 
 			// inject parameters
-			int paramIndex = 0;
 			Query query = session.createQuery(statement);
-			query.setBoolean(paramIndex++, true);
+			query.setBoolean(ACTIVE, true);
 			if (owner != null) {
-				query.setString(paramIndex++, owner);
+				query.setString(OWNER, owner);
 			}
 			if (type != null)
-				query.setString(paramIndex++, type);
+				query.setString("type", type);
 			if (category != null)
-				query.setString(paramIndex++, category);
+				query.setString(CATEGORY, category);
 			if (implementation != null)
-				query.setString(paramIndex++, implementation);
+				query.setString("implementation", implementation);
 
 			List<SbiDataSet> datasets = executeQuery(query, session);
 			initialize(datasets);
@@ -317,11 +340,11 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 			sbiDataSetList = query.list();
 
 			transaction.commit();
-		} catch (Throwable t) {
+		} catch (Exception e) {
 			if (transaction != null && transaction.isActive()) {
 				transaction.rollback();
 			}
-			throw new SpagoBIDAOException("An unexpected error occured while loading dataset", t);
+			throw new SpagoBIDAOException("An unexpected error occured while loading dataset", e);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -344,11 +367,12 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-
-			String hql = "select count(*) from SbiDataSet where active=true and label like '%" + search + "%'" + getIdsWhereClause(ids);
+			String idquery = getIdsWhereClause(ids);
+			String hql = "select count(*) from SbiDataSet where active=true and label like :search ".concat(idquery);
 			Query hqlQuery = aSession.createQuery(hql);
+			hqlQuery.setParameter("search", "%" + search + "%");
 			Long temp = (Long) hqlQuery.uniqueResult();
-			resultNumber = new Integer(temp.intValue());
+			resultNumber = temp.intValue();
 
 		} catch (HibernateException he) {
 			logger.error("Error while loading the list of SbiDataSet", he);
@@ -464,8 +488,8 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 						logger.debug("The owner can see all it's datasets");
 					} else {
 						List<String> collect = categoryList.stream().map(e -> e.getValueCd()).collect(Collectors.toList());
-						cr.createAlias("category", "c");
-						cr.add(Restrictions.in("c.valueCd", collect));
+						cr.createAlias(CATEGORY, "c");
+						cr.add(Restrictions.in("c.code", collect));
 					}
 				} else {
 					logger.debug("No categories for the user so we take just it's own datasets");
@@ -482,8 +506,8 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 
 			results = cr.list();
 
-		} catch (Throwable t) {
-			throw new SpagoBIDAOException("An unexpected error occured while loading dataset whose owner is equal to [" + owner + "]", t);
+		} catch (Exception e) {
+			throw new SpagoBIDAOException("An unexpected error occured while loading dataset whose owner is equal to [" + owner + "]", e);
 		} finally {
 			if (session != null && session.isOpen()) {
 				session.close();
@@ -505,20 +529,21 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 			Set<Domain> categoryList = null;
 			List<Integer> categoryIds = null;
 
-			statement.append("from SbiDataSet ds where ds.active = :active and (ds.owner = :owner or (");
+			statement.append("from SbiDataSet ds where ds.active = :active and (ds.owner = :owner");
 			session = getSession();
 			categoryList = UserUtilities.getDataSetCategoriesByUser(userProfile);
 			if (!categoryList.isEmpty()) {
 				categoryIds = extractCategoryIds(categoryList);
-				statement.append("ds.category.valueId in (:categories) and ");
+				statement.append(" or ds.category.id in (:categories)");
 			}
+			statement.append(")");
 
 			statement.append(
-					"ds.scope.valueId in (select dom.valueId from SbiDomains dom where dom.valueCd in ('USER', 'ENTERPRISE') and dom.domainCd = 'DS_SCOPE')))");
+					" and ds.scope.valueId in (select dom.valueId from SbiDomains dom where dom.valueCd in ('USER', 'ENTERPRISE') and dom.domainCd = 'DS_SCOPE')");
 
 			Query query = session.createQuery(statement.toString());
-			query.setBoolean("active", true);
-			query.setString("owner", userProfile.getUserId().toString());
+			query.setBoolean(ACTIVE, true);
+			query.setString(OWNER, userProfile.getUserId().toString());
 
 			if (categoryIds != null && !categoryIds.isEmpty())
 				query.setParameterList("categories", categoryIds);
@@ -554,14 +579,14 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 	}
 
 	private void withDerived(Criteria cr, Boolean showDerivedDatasets) {
-		if (showDerivedDatasets == false) {
+		if (Boolean.FALSE.equals(showDerivedDatasets)) {
 			cr.add(Restrictions.isNull("federation"));
 		}
 	}
 
 	private void withDsTypeCd(Criteria cr, String type) {
 		if (StringUtils.isNotEmpty(type)) {
-			cr.createAlias("scope", "s");
+			cr.createAlias(SCOPE, "s");
 			cr.add(Restrictions.eq("s.valueCd", type));
 		}
 	}
@@ -656,20 +681,20 @@ public class SbiDataSetDAOImpl extends AbstractHibernateDAO implements ISbiDataS
 	}
 
 	private Criterion onlyActiveRestriction() {
-		return Restrictions.eq("active", true);
+		return Restrictions.eq(ACTIVE, true);
 	}
 
 	private Criterion notOwnedRestriction(String owner) {
-		return Restrictions.ne("owner", owner);
+		return Restrictions.ne(OWNER, owner);
 	}
 
 	private Criterion ownedByRestriction(String owner) {
-		return Restrictions.eq("owner", owner);
+		return Restrictions.eq(OWNER, owner);
 	}
 
 	private Criterion ownedByRestriction(IEngUserProfile userProfile) {
 		String owner = userProfile.getUserUniqueIdentifier().toString();
-		return Restrictions.eq("owner", owner);
+		return Restrictions.eq(OWNER, owner);
 	}
 
 }

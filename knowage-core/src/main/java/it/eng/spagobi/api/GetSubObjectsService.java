@@ -1,45 +1,56 @@
 package it.eng.spagobi.api;
 
+import java.util.HashMap;
+import java.util.List;
+
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import it.eng.spago.error.EMFInternalError;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.document.bo.SubObject;
 import it.eng.spagobi.analiticalmodel.document.dao.ISubObjectDAO;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 
-import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import java.util.HashMap;
-import java.util.List;
-
 @Path("/1.0/olapsubobjects")
 @ManageAuthorization
 public class GetSubObjectsService extends AbstractSpagoBIResource {
+
+	private static final Logger LOGGER = LogManager.getLogger(GetSubObjectsService.class);
+
 	public static final String SERVICE_NAME = "GET_SUBOBJECTS_SERVICE_ACTION";
 
 	@GET
 	@Path("/getSubObjects")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response getSubObjects(@QueryParam("idObj") Integer biobjectId) {
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
-		List subObjectsList = null;
+		HashMap<String, Object> resultAsMap = new HashMap<>();
+		List<SubObject> subObjectsList = null;
 		IEngUserProfile userProfile = this.getUserProfile();
 		try {
-			if (userProfile.isAbleToExecuteAction(SpagoBIConstants.DOCUMENT_MANAGEMENT_ADMIN)) {
+			if (userProfile.isAbleToExecuteAction(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_ADMIN)) {
 				subObjectsList = DAOFactory.getSubObjectDAO().getSubObjects(biobjectId);
 			} else {
 				subObjectsList = DAOFactory.getSubObjectDAO().getAccessibleSubObjects(biobjectId, userProfile);
 			}
 		} catch (EMFUserError e) {
-			logger.error("Error while recovering subobjects list for document with id = " + biobjectId, e);
+			LOGGER.error("Error while recovering subobjects list for document with id = {}", biobjectId, e);
 			throw new SpagoBIServiceException(SERVICE_NAME, "Cannot load customized views", e);
 		} catch (EMFInternalError e) {
-			logger.error("Error while recovering information about user", e);
+			LOGGER.error("Error while recovering information about user", e);
 			throw new SpagoBIServiceException(SERVICE_NAME, "Error while recovering information about user", e);
 		}
 
@@ -58,31 +69,31 @@ public class GetSubObjectsService extends AbstractSpagoBIResource {
 		try {
 			subObject = dao.getSubObject(biobjectId);
 		} catch (EMFUserError e) {
-			logger.error("SubObject with id = " + biobjectId + " not found", e);
+			LOGGER.error("SubObject with id = " + biobjectId + " not found", e);
 			throw new SpagoBIServiceException(SERVICE_NAME, "Customized view not found", e);
 		}
 		boolean canDeleteSubObject = false;
 		try {
-			if (userProfile.isAbleToExecuteAction(SpagoBIConstants.DOCUMENT_MANAGEMENT_ADMIN)
+			if (userProfile.isAbleToExecuteAction(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_ADMIN)
 					|| subObject.getOwner().equals(userProfile.getUserId().toString())) {
 				canDeleteSubObject = true;
 			}
 		} catch (EMFInternalError e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
+			LOGGER.error("Error while recovering information about user",e1);
 		}
 		if (canDeleteSubObject) {
-			logger.info("User [id: " + userProfile.getUserUniqueIdentifier() + ", userId: " + userProfile.getUserId() + ", name: " + userProfile.getUserName()
-					+ "] " + "is deleting customized view [id: " + subObject.getId() + ", name: " + subObject.getName() + "] ...");
+			LOGGER.info("User [id: {}, userId: {}, name: {}] is deleting customized view [id: {}, name: {}] ...",
+					userProfile.getUserUniqueIdentifier(), userProfile.getUserId(), userProfile.getUserName(),
+					subObject.getId(), subObject.getName());
 			try {
 				dao.deleteSubObject(biobjectId);
 			} catch (EMFUserError e) {
 				throw new SpagoBIServiceException(SERVICE_NAME, "Error while deleting customized view", e);
 			}
-			logger.debug("Customized view [id: " + subObject.getId() + ", name: " + subObject.getName() + "] deleted.");
+			LOGGER.debug("Customized view [id: {}, name: {}] deleted.", subObject.getId(), subObject.getName());
 		} else {
-			logger.error("User [id: " + userProfile.getUserUniqueIdentifier() + ", userId: " + userProfile.getUserId() + ", name: " + userProfile.getUserName()
-					+ "] cannot delete customized view");
+			LOGGER.error("User [id: {}, userId: {}, name: {}] cannot delete customized view",
+					userProfile.getUserUniqueIdentifier(), userProfile.getUserId(), userProfile.getUserName());
 			throw new SpagoBIServiceException(SERVICE_NAME, "User cannot delete customized view");
 		}
 

@@ -18,8 +18,6 @@
  */
 package it.eng.spagobi.tools.dataset.strategy;
 
-import org.apache.log4j.Logger;
-
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.tools.dataset.bo.DatasetEvaluationStrategyType;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
@@ -31,7 +29,8 @@ import it.eng.spagobi.utilities.assertion.Assert;
 
 public class DatasetEvaluationStrategyFactory {
 
-	private static final Logger logger = Logger.getLogger(DatasetEvaluationStrategyFactory.class);
+	private DatasetEvaluationStrategyFactory() {
+	}
 
 	/**
 	 * @param strategyType
@@ -42,15 +41,18 @@ public class DatasetEvaluationStrategyFactory {
 	public static IDatasetEvaluationStrategy get(DatasetEvaluationStrategyType strategyType, IDataSet dataSet, UserProfile userProfile) {
 		Assert.assertNotNull(strategyType, "Strategy type cannot be null");
 		Assert.assertNotNull(dataSet, "Dataset cannot be null");
-
+		AbstractEvaluationStrategy ret = null;
 		switch (strategyType) {
 
 		case PERSISTED:
-			return new PersistedEvaluationStrategy(dataSet);
+			ret = new PersistedEvaluationStrategy(dataSet);
+			break;
 		case FLAT:
-			return new FlatEvaluationStrategy(dataSet);
+			ret = new FlatEvaluationStrategy(dataSet);
+			break;
 		case INLINE_VIEW:
-			return new InlineViewEvaluationStrategy(dataSet);
+			ret = new InlineViewEvaluationStrategy(dataSet);
+			break;
 		case CACHED:
 			Assert.assertNotNull(userProfile, "User profile cannot be null to build " + CachedEvaluationStrategy.class);
 			ICache cache = null;
@@ -59,7 +61,8 @@ public class DatasetEvaluationStrategyFactory {
 			} catch (Exception e) {
 				throw new CacheException(e);
 			}
-			return new CachedEvaluationStrategy(userProfile, dataSet, cache);
+			ret = new CachedEvaluationStrategy(userProfile, dataSet, cache);
+			break;
 		case REALTIME:
 			Assert.assertNotNull(userProfile, "User profile cannot be null to build " + RealtimeEvaluationStrategy.class);
 			ICache cacheRT = null;
@@ -68,15 +71,20 @@ public class DatasetEvaluationStrategyFactory {
 			} catch (Exception e) {
 				throw new CacheException(e);
 			}
-			return new RealtimeEvaluationStrategy(userProfile, dataSet, cacheRT);
+			ret = new RealtimeEvaluationStrategy(userProfile, dataSet, cacheRT);
+			break;
 		case SOLR:
-			return new SolrEvaluationStrategy(dataSet);
+			ret = new SolrEvaluationStrategy(dataSet);
+			break;
 		case SOLR_FACET_PIVOT:
-			return new SolrFacetPivotEvaluationStrategy(dataSet);
+			ret = new SolrFacetPivotEvaluationStrategy(dataSet);
+			break;
 		case SOLR_SIMPLE:
-			return new SolrSimpleEvaluationStrategy(dataSet);
+			ret = new SolrSimpleEvaluationStrategy(dataSet);
+			break;
 		default:
 			throw new IllegalArgumentException("The strategy " + strategyType + " is not valid");
 		}
+		return new TimeMonitoringEvaluationStrategyWrapper(ret);
 	}
 }

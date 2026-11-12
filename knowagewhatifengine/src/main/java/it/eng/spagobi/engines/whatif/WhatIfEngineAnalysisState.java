@@ -43,7 +43,7 @@ import it.eng.spagobi.utilities.engines.SpagoBIEngineRuntimeException;
 public class WhatIfEngineAnalysisState extends EngineAnalysisState {
 
 	/** Logger component. */
-	private static transient Logger logger = Logger.getLogger(WhatIfEngineAnalysisState.class);
+	private static final Logger logger = Logger.getLogger(WhatIfEngineAnalysisState.class);
 
 	public WhatIfEngineAnalysisState() {
 		super();
@@ -140,20 +140,36 @@ public class WhatIfEngineAnalysisState extends EngineAnalysisState {
 	}
 
 	public Map<String, Object> getDriversValues() {
-		Map<String, Object> toReturn = new HashMap<String, Object>();
+		Map<String, Object> toReturn = new HashMap<>();
 		try {
 			JSONObject analysisStateJSON = (JSONObject) getProperty(WhatIfConstants.WHAT_IF_ANALYSIS_STATE);
 			JSONObject driversAsJSON = analysisStateJSON.optJSONObject(WhatIfConstants.DRIVERS);
-			Iterator<String> keys = driversAsJSON.keys();
-			while (keys.hasNext()) {
-				String key = keys.next();
-				toReturn.put(key, driversAsJSON.get(key));
+			if (driversAsJSON != null) {
+				Iterator<String> keys = driversAsJSON.keys();
+				while (keys.hasNext()) {
+					String key = keys.next();
+					Object value = driversAsJSON.get(key);
+					if (value instanceof JSONArray) {
+						Object[] array = fromJSONArray2ObjectsArray((JSONArray) value);
+						toReturn.put(key, array);
+					} else {
+						toReturn.put(key, value);
+					}
+				}
 			}
 			LogMF.debug(logger, "Retrieved drivers from analisys state: [{0}]", toReturn);
 		} catch (Exception e) {
 			throw new SpagoBIEngineRuntimeException("Impossible to get drivers from analisys state", e);
 		}
 		return toReturn;
+	}
+
+	protected Object[] fromJSONArray2ObjectsArray(JSONArray jsonArray) throws JSONException {
+		Object[] array = new Object[jsonArray.length()];
+		for (int i = 0; i < jsonArray.length(); i++) {
+			array[i] = jsonArray.get(i);
+		}
+		return array;
 	}
 
 	/**
@@ -209,7 +225,7 @@ public class WhatIfEngineAnalysisState extends EngineAnalysisState {
 	}
 
 	private void setCalculatedMember(String cc, WhatIfEngineInstance instance) throws JSONException {
-		List<CalculatedMember> toreturn = new ArrayList<CalculatedMember>();
+		List<CalculatedMember> toreturn = new ArrayList<>();
 
 		if (instance.getPivotModel() instanceof SpagoBIPivotModel) {
 			SpagoBIPivotModel model = (SpagoBIPivotModel) instance.getPivotModel();

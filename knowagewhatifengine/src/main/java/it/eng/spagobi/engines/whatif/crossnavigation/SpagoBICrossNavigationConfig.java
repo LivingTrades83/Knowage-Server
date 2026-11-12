@@ -27,7 +27,7 @@ import it.eng.spago.base.SourceBean;
 import it.eng.spagobi.engines.whatif.template.initializer.AbstractInitializer;
 
 public class SpagoBICrossNavigationConfig {
-	private static transient Logger logger = Logger.getLogger(SpagoBICrossNavigationConfig.class);
+	private static final Logger logger = Logger.getLogger(SpagoBICrossNavigationConfig.class);
 
 	private List<TargetParameter> parameters = null;
 
@@ -52,7 +52,7 @@ public class SpagoBICrossNavigationConfig {
 	}
 
 	private void init(SourceBean node) {
-		parameters = new ArrayList<TargetParameter>();
+		parameters = new ArrayList<>();
 		List parametersSB = node.getAttributeAsList(AbstractInitializer.TAG_TN_PARAMETERS);
 		List parameterSB = ((SourceBean) parametersSB.get(0)).getAttributeAsList(AbstractInitializer.TAG_TN_PARAMETER);
 

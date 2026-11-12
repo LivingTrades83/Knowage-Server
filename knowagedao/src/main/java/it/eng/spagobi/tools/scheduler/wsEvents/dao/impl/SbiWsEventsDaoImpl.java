@@ -29,7 +29,7 @@ import it.eng.spagobi.tools.scheduler.wsEvents.dao.criterion.SearchWsEventByName
 import it.eng.spagobi.tools.scheduler.wsEvents.dao.criterion.SearchWsEventNotConsumed;
 
 public class SbiWsEventsDaoImpl extends AbstractHibernateDAO implements SbiWsEventsDao {
-	static private Logger logger = Logger.getLogger(SbiWsEventsDaoImpl.class);
+	private static Logger logger = Logger.getLogger(SbiWsEventsDaoImpl.class);
 
 	@Override
 	public List<SbiWsEvent> getWsEventList() {
@@ -59,6 +59,11 @@ public class SbiWsEventsDaoImpl extends AbstractHibernateDAO implements SbiWsEve
 	@Override
 	public List<SbiWsEvent> loadSbiWsEventsNotConsumed() {
 		return list(new SearchWsEventNotConsumed());
+	}
+
+	@Override
+	public void deleteEvent(SbiWsEvent sbiWsEvent) {
+		delete(SbiWsEvent.class, sbiWsEvent.getId());
 	}
 
 }

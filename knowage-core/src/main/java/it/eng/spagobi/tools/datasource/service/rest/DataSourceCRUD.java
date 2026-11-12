@@ -18,13 +18,34 @@
 
 package it.eng.spagobi.tools.datasource.service.rest;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+
+import org.apache.log4j.Logger;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import it.eng.spago.base.SourceBeanException;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
+import it.eng.spagobi.api.v2.DataSourceResource;
 import it.eng.spagobi.commons.bo.Domain;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.IDomainDAO;
 import it.eng.spagobi.commons.serializer.SerializationException;
@@ -45,36 +66,25 @@ import it.eng.spagobi.utilities.database.DataBaseFactory;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 import it.eng.spagobi.utilities.rest.RestUtilities;
-import org.apache.log4j.Logger;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import javax.servlet.http.HttpServletRequest;
-import javax.ws.rs.*;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
 
 /**
  * @authors Alberto Ghedin (alberto.ghedin@eng.it)
- *
+ * @deprecated Merge this with {@link DataSourceResource}.
+ * TODO Merge with {@link DataSourceResource} and delete
  */
 @Path("/datasources")
+@Deprecated
 public class DataSourceCRUD extends AbstractSpagoBIResource {
 
-	static private Logger logger = Logger.getLogger(DataSourceCRUD.class);
-	static private String deleteNullIdDataSourceError = "error.mesage.description.data.source.cannot.be.null";
-	static private String deleteInUseDSError = "error.mesage.description.data.source.deleting.inuse";
-	static private String canNotFillResponseError = "error.mesage.description.generic.can.not.responce";
-	static private String saveDuplicatedDSError = "error.mesage.description.data.source.saving.duplicated";
+	private static Logger logger = Logger.getLogger(DataSourceCRUD.class);
+	private static String deleteNullIdDataSourceError = "error.mesage.description.data.source.cannot.be.null";
+	private static String deleteInUseDSError = "error.mesage.description.data.source.deleting.inuse";
+	private static String canNotFillResponseError = "error.mesage.description.generic.can.not.responce";
+	private static String saveDuplicatedDSError = "error.mesage.description.data.source.saving.duplicated";
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.DATASOURCE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT })
 	public String getAllDataSources(@Context HttpServletRequest req, @QueryParam("onlySqlLike") boolean onlySqlLike) {
 		IDataSourceDAO dataSourceDao = null;
 		IDomainDAO domaindao = null;
@@ -86,18 +96,17 @@ public class DataSourceCRUD extends AbstractSpagoBIResource {
 			dataSourceDao = DAOFactory.getDataSourceDAO();
 			dataSourceDao.setUserProfile(profile);
 			if (profile.getIsSuperadmin() != null && profile.getIsSuperadmin()) {
-				TenantManager.unset();
 				dataSources = dataSourceDao.loadDataSourcesForSuperAdmin();
 			} else {
 				dataSourceDao.setUserProfile(profile);
 				dataSources = dataSourceDao.loadAllDataSources();
 			}
 
-			if(onlySqlLike) {
+			if (onlySqlLike) {
 				Iterator<IDataSource> dataSourceIterator = dataSources.iterator();
 				while (dataSourceIterator.hasNext()) {
 					DatabaseDialect dialect = DataBaseFactory.getDataBase(dataSourceIterator.next()).getDatabaseDialect();
-					if(!dialect.isSqlLike()) {
+					if (!dialect.isSqlLike()) {
 						dataSourceIterator.remove();
 					}
 
@@ -119,7 +128,7 @@ public class DataSourceCRUD extends AbstractSpagoBIResource {
 
 	@DELETE
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.DATASOURCE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT })
 	public String deleteDataSource(@Context HttpServletRequest req) {
 		IEngUserProfile profile = getUserProfile();
 		HashMap<String, String> logParam = new HashMap();
@@ -171,7 +180,7 @@ public class DataSourceCRUD extends AbstractSpagoBIResource {
 
 	@POST
 	@Produces(MediaType.APPLICATION_JSON)
-	@UserConstraint(functionalities = { SpagoBIConstants.DATASOURCE_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT })
 	public String saveDataSource(@Context HttpServletRequest req) {
 		UserProfile profile = (UserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
 
@@ -305,6 +314,8 @@ public class DataSourceCRUD extends AbstractSpagoBIResource {
 
 		Boolean writeDefault = requestBodyJSON.optBoolean("WRITE_DEFAULT");
 
+		Boolean useForDataprep = requestBodyJSON.optBoolean("USE_FOR_DATAPREP");
+
 		Boolean isMultiSchema = false;
 		if (multiSchema != null && (multiSchema.equals("on") || multiSchema.equals("true"))) {
 			isMultiSchema = true;
@@ -323,6 +334,7 @@ public class DataSourceCRUD extends AbstractSpagoBIResource {
 		ds.setMultiSchema(isMultiSchema);
 		ds.setReadOnly(readOnly);
 		ds.setWriteDefault(writeDefault);
+		ds.setUseForDataprep(useForDataprep);
 
 		return ds;
 	}

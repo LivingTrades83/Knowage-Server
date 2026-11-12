@@ -17,15 +17,16 @@
  */
 package it.eng.spagobi.tools.scheduler.to;
 
-import it.eng.spago.security.IEngUserProfile;
-import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
-
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import org.quartz.JobExecutionContext;
+
+import it.eng.spago.security.IEngUserProfile;
+import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 
 public class DispatchContext implements Serializable {
 
@@ -130,6 +131,8 @@ public class DispatchContext implements Serializable {
 	private long schedulationStartDate;
 
 	private int sequence;
+
+	private String outputTypeTrigger;
 
 	public boolean isZipMailDocument() {
 		return zipMailDocument;
@@ -801,5 +804,17 @@ public class DispatchContext implements Serializable {
 		this.sequence = sequence;
 	}
 
+
+	private final void writeObject(ObjectOutputStream aOutputStream) {
+		  throw new UnsupportedOperationException("Security violation : cannot serialize object to a stream");
+	}
+
+	public String getOutputTypeTrigger() {
+		return outputTypeTrigger;
+	}
+
+	public void setOutputTypeTrigger(String outputTypeTrigger) {
+		this.outputTypeTrigger = outputTypeTrigger;
+	}
 
 }

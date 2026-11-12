@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.Locale.Builder;
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 
 import it.eng.spago.base.RequestContainer;
@@ -43,7 +43,7 @@ import it.eng.spagobi.engines.drivers.generic.GenericDriver;
  */
 public class JPaloDriver extends GenericDriver implements IEngineDriver {
 
-	static private Logger logger = Logger.getLogger(JPaloDriver.class);
+	private static Logger logger = Logger.getLogger(JPaloDriver.class);
 
 	/**
 	 * Returns the url to be invoked for editing template document.

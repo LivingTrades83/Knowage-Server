@@ -33,7 +33,7 @@ import it.eng.spagobi.utilities.rest.RestUtilities.Response;
 
 public class RUtils extends MLEngineUtils {
 
-	static protected Logger logger = Logger.getLogger(RUtils.class);
+	protected static Logger logger = Logger.getLogger(RUtils.class);
 
 	static String getFinalResult(Response rEngineResponse, String outputType) {
 		String rString = rEngineResponse.getResponseBody();
@@ -46,7 +46,7 @@ public class RUtils extends MLEngineUtils {
 	}
 
 	static HashMap<String, String> createDriversMap(String driversString) {
-		HashMap<String, String> driversMap = new HashMap<String, String>();
+		HashMap<String, String> driversMap = new HashMap<>();
 		try {
 			JSONObject driversJSON = new JSONObject(driversString);
 			Iterator<String> keys = driversJSON.keys();
@@ -66,7 +66,7 @@ public class RUtils extends MLEngineUtils {
 		List<IConfiguration> allRConfigs = SingletonConfig.getInstance().getConfigsValueByCategory("R_CONFIGURATION");
 		for (IConfiguration cfg : allRConfigs) {
 			if (cfg.getLabel().equals(envLabel)) {
-				return "http://" + cfg.getValueCheck() + "/";
+				return fixUrl(cfg.getValueCheck() + "/");
 			}
 		}
 		throw new SpagoBIRuntimeException("Cannot retrieve R address from label [" + envLabel + "]");

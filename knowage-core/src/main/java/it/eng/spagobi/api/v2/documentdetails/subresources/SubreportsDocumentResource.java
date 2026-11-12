@@ -34,7 +34,7 @@ import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.analiticalmodel.document.dao.ISubreportDAO;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.bo.Subreport;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.assertion.Assert;
@@ -43,12 +43,12 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 @Path("/")
 public class SubreportsDocumentResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(SubreportsDocumentResource.class);
+	protected static Logger logger = Logger.getLogger(SubreportsDocumentResource.class);
 
 	@SuppressWarnings("unchecked")
 	@GET
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public List<Subreport> getSubreports(@PathParam("id") Integer id) {
 		logger.debug("IN");
 		ISubreportDAO subRaportDAO = null;
@@ -59,7 +59,7 @@ public class SubreportsDocumentResource extends AbstractSpagoBIResource {
 			Assert.assertNotNull(subreports, "Subreports can not be null");
 		} catch (EMFUserError e) {
 			logger.debug("Getting subreport has failed", e);
-			throw new SpagoBIRestServiceException("Getting subreport has failed", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Getting subreport has failed", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return subreports;
@@ -68,7 +68,7 @@ public class SubreportsDocumentResource extends AbstractSpagoBIResource {
 	@POST
 	@Consumes("application/json")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public Subreport addSubReport(@PathParam("id") Integer id, BIObject document) {
 		logger.debug("IN");
 		Assert.assertNotNull(document, "Subreport can not be null");
@@ -82,7 +82,7 @@ public class SubreportsDocumentResource extends AbstractSpagoBIResource {
 			subReportDAO.insertSubreport(subreport);
 		} catch (EMFUserError e) {
 			logger.debug("Adding subreport has failed", e);
-			throw new SpagoBIRestServiceException("Adding subreport has failed", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Adding subreport has failed", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return subreport;
@@ -91,7 +91,7 @@ public class SubreportsDocumentResource extends AbstractSpagoBIResource {
 	@DELETE
 	@Path("{subreportId}")
 	@Produces("application/json")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV })
 	public Subreport deleteSubReport(@PathParam("id") Integer id, @PathParam("subreportId") Integer subreportId) {
 		logger.debug("IN");
 		Assert.assertNotNull(subreportId, "SubreportID can not be null");
@@ -102,7 +102,7 @@ public class SubreportsDocumentResource extends AbstractSpagoBIResource {
 			subReportDAO.eraseSubreportBySubRptId(subreportId);
 		} catch (EMFUserError e) {
 			logger.debug("Documents objects can not be provided", e);
-			throw new SpagoBIRestServiceException("Erasing subreport has failed", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("Erasing subreport has failed", getLocale(), e);
 		}
 		logger.debug("OUT");
 		return subreport;

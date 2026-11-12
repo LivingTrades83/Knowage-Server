@@ -87,9 +87,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		$scope.rowsRegex   = /(?:\[kn-column=\'([a-zA-Z0-9\_\-\s]+)\'(?:\s+row=\'(\d+)\'){1}(?:\s+aggregation=\'(AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT)\')?(?:\s+precision=\'(\d)\')?(\s+format)?\s?\])/g;
 		$scope.noAggregationsExistRegex = /\[kn-column=\'[a-zA-Z0-9\_\-\s]+\'(?:\s+row=\'\d+\')?(?!\s+aggregation=\'(AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT)\')(?:\s+precision=\'(?:\d)\')?(?:\s+format)?\s?\]/g;
 		$scope.limitRegex = /<[\s\w\=\"\'\-\[\]]*(?!limit=)"([\-\d]+)"[\s\w\=\"\'\-\[\]]*>/g;
-		$scope.aggregationsRegex = /(?:\[kn-column=[\']{1}([a-zA-Z0-9\_\-\s]+)[\']{1}(?:\s+aggregation=[\']{1}(AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT)[\']{1}){1}(?:\s+precision=\'(\d)\')?(\s+format)?\])/g;
-		$scope.aggregationRegex = /(?:\[kn-column=[\']{1}([a-zA-Z0-9\_\-\s]+)[\']{1}(?:\s+aggregation=[\']{1}(AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT)[\']{1}){1}(?:\s+precision=\'(\d)\')?(\s+format)?\])/;
-		$scope.paramsRegex = /(?:\[kn-parameter=[\'\"]{1}([a-zA-Z0-9\_\-\s]+)[\'\"]{1}\])/g;
+		$scope.aggregationsRegex = /(?:\[kn-column=[\']{1}([a-zA-Z0-9\_\-\s]+)[\']{1}(?:\s+row=\'(\d*)\')?(?:\s+aggregation=[\']{1}(AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT)[\']{1}){1}(?:\s+precision=\'(\d)\')?(\s+format)?\])/g;
+		$scope.aggregationRegex = /(?:\[kn-column=[\']{1}([a-zA-Z0-9\_\-\s]+)[\']{1}(?:\s+row=\'(\d*)\')?(?:\s+aggregation=[\']{1}(AVG|MIN|MAX|SUM|COUNT_DISTINCT|COUNT|DISTINCT COUNT)[\']{1}){1}(?:\s+precision=\'(\d)\')?(\s+format)?\])/;
+		$scope.paramsRegex = /(?:\[kn-parameter=[\'\"]{1}([a-zA-Z0-9\_\-\s]+)[\'\"]{1}(\s+value)?\])/g;
 		$scope.calcRegex = /(?:\[kn-calc=\(([\[\]\w\s\-\=\>\<\"\'\!\+\*\/\%\&\,\.\|]*)\)(?:\s+min=\'(\d*)\')?(?:\s+max=\'(\d*)\')?(?:\s+precision=\'(\d)\')?(\s+format)?\])/g;
 		$scope.advancedCalcRegex = /(?:\[kn-calc=\{([\(\)\[\]\w\s\-\=\>\<\"\'\!\+\*\/\%\&\,\.\|]*)\}(?:\s+min=\'(\d*)\')?(?:\s+max=\'(\d*)\')?(?:\s+precision=\'(\d)\')?(\s+format)?\])/g;
 		$scope.repeatIndexRegex = /\[kn-repeat-index\]/g;
@@ -104,6 +104,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		if($scope.ngModel.datasetId){
 			$scope.ngModel.dataset.dsId = $scope.ngModel.datasetId;
 			delete $scope.ngModel.datasetId;
+		}
+		
+		$scope.sendMessage = function(info){
+			$scope.doSelection(null, null, null, null, info, null, null, null, "message");
 		}
 
 		$scope.showPreview = function(datasetLabel){
@@ -254,12 +258,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 						var aggregationReg = $scope.aggregationRegex.exec(aggregationsReg[a]);
 						for(var m in tempDataset.metadata.fieldsMeta){
 							if(aggregationReg && aggregationReg[1] && tempDataset.metadata.fieldsMeta[m].name == aggregationReg[1]){
-								tempDataset.metadata.fieldsMeta[m].alias = aggregationReg[1]+'_'+aggregationReg[2];
+								tempDataset.metadata.fieldsMeta[m].alias = aggregationReg[1]+'_'+aggregationReg[3];
 								tempDataset.metadata.fieldsMeta[m].fieldType = 'MEASURE';
-								tempDataset.metadata.fieldsMeta[m].aggregationSelected = aggregationReg[2];
+								tempDataset.metadata.fieldsMeta[m].aggregationSelected = aggregationReg[3];
 								var exists = false;
 								for(var c in tempModel.content.columnSelectedOfDataset){
-									if(tempModel.content.columnSelectedOfDataset[c].alias == aggregationReg[1]+'_'+aggregationReg[2]) exists = true;
+									if(tempModel.content.columnSelectedOfDataset[c].alias == aggregationReg[1]+'_'+aggregationReg[3]) exists = true;
 								}
 								if(!exists) tempModel.content.columnSelectedOfDataset.push(angular.copy(tempDataset.metadata.fieldsMeta[m]));
 							}
@@ -358,6 +362,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 				    	var datasetPreviewLabel = allElements[j].getAttribute("kn-preview");
 				    	allElements[j].setAttribute("ng-click", "showPreview('" + datasetPreviewLabel + "')");
 				    }
+				  if (allElements[j] && allElements[j].hasAttribute("kn-message")){
+				    	allElements[j].setAttribute("ng-click", "sendMessage('"+allElements[j].getAttribute("kn-message")+"')");
+				    }
 				  if (allElements[j] && allElements[j].hasAttribute("kn-cross")){
 				    	allElements[j].setAttribute("ng-click", "doSelection(null,'"+allElements[j].getAttribute("kn-cross")+"')");
 				    }
@@ -414,7 +421,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		}
 		
 		$scope.addslashes = function( str ) {
-		    return (str + '').replace(/[\\"']/g, '\\$&').replace(/\u0000/g, '\\0');
+		    return (str + '').replace(/\"/g, '&quot;').replace(/\'/g, '&apos;').replace(/\u0000/g, '\\0');
 		}
 
 		$scope.calcReplacer = function(match,p1,min,max,precision,format){
@@ -441,9 +448,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 			return (precision && !isNaN(p1))? parseFloat(p1).toFixed(precision) : p1;
 		}
 
-		$scope.ifConditionParamsReplacer = function(match, p1){
-			var paramLabel = cockpitModule_analyticalDrivers[p1+'_description'] ? p1+'_description' : p1;
-			var textToReturn = cockpitModule_analyticalDrivers[paramLabel] || null;
+		$scope.ifConditionParamsReplacer = function(match, p1, p2){
+			var textToReturn = cockpitModule_analyticalDrivers[p2 ? p1 + '_description' : p1] || null;
 			if(typeof(textToReturn) == 'string'){
 				textToReturn = '\''+$scope.addslashes(textToReturn)+'\''
 			}
@@ -467,9 +473,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 			return p1;
 
 		}
-		$scope.paramsReplacer = function(match, p1){
-			var paramLabel = cockpitModule_analyticalDrivers[p1+'_description'] ? p1+'_description' : p1;
-			p1 = cockpitModule_analyticalDrivers[paramLabel] || null;
+		$scope.paramsReplacer = function(match, p1, p2){
+			p1 = cockpitModule_analyticalDrivers[p2 ? p1 + '_description' : p1] || null;
 			return $scope.addslashes(p1);
 		}
 

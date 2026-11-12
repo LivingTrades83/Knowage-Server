@@ -35,8 +35,8 @@ import it.eng.spago.base.SourceBean;
 import it.eng.spagobi.engines.qbe.QbeEngineInstance;
 import it.eng.spagobi.engines.qbe.registry.bo.RegistryConfiguration;
 import it.eng.spagobi.engines.qbe.services.core.AbstractQbeEngineAction;
-import it.eng.spagobi.engines.qbe.services.initializers.RegistryEngineStartAction;
 import it.eng.spagobi.utilities.assertion.Assert;
+import it.eng.spagobi.utilities.engines.EngineConstants;
 import it.eng.spagobi.utilities.engines.SpagoBIEngineServiceException;
 import it.eng.spagobi.utilities.engines.SpagoBIEngineServiceExceptionHandler;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
@@ -83,7 +83,7 @@ public class DeleteRecordsAction extends AbstractQbeEngineAction {
 					}
 				}
 
-				Map<String, Object> properties = new HashMap<String, Object>();
+				Map<String, Object> properties = new HashMap<>();
 				properties.put("keyField", keyColumn);
 				properties.put("ids", arrays);
 
@@ -104,8 +104,9 @@ public class DeleteRecordsAction extends AbstractQbeEngineAction {
 			errorHitsMonitor.stop();
 			throw SpagoBIEngineServiceExceptionHandler.getInstance().getWrappedException(getActionName(), getEngineInstance(), t);
 		} finally {
-			if (totalTimeMonitor != null)
+			if (totalTimeMonitor != null) {
 				totalTimeMonitor.stop();
+			}
 			logger.debug("OUT");
 		}
 	}
@@ -123,7 +124,7 @@ public class DeleteRecordsAction extends AbstractQbeEngineAction {
 			return null;
 		}
 
-		qbeEngineInstance = (QbeEngineInstance) getAttributeFromSession(RegistryEngineStartAction.ENGINE_INSTANCE);
+		qbeEngineInstance = (QbeEngineInstance) getAttributeFromSession(EngineConstants.ENGINE_INSTANCE);
 		Assert.assertNotNull(qbeEngineInstance,
 				"It's not possible to execute " + this.getActionName() + " service before having properly created an instance of EngineInstance class");
 
@@ -140,7 +141,7 @@ public class DeleteRecordsAction extends AbstractQbeEngineAction {
 		Assert.assertNotNull(registryConf,
 				"It's not possible to execute " + this.getActionName() + " service before having properly created an instance of RegistryConfiguration class");
 
-		idsToReturn = new Vector<Integer>();
+		idsToReturn = new Vector<>();
 
 		for (int i = 0; i < selectedRecords.length(); i++) {
 			JSONObject aRecord = selectedRecords.getJSONObject(i);

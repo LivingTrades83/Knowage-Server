@@ -17,6 +17,11 @@
  */
 package it.eng.spagobi.rest.interceptors;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.util.Base64;
+import java.util.Base64.Decoder;
+import java.util.Optional;
 import java.util.StringTokenizer;
 
 import javax.annotation.Priority;
@@ -26,7 +31,6 @@ import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.Provider;
 
-import org.apache.axis.encoding.Base64;
 import org.apache.log4j.Logger;
 
 import it.eng.spago.security.IEngUserProfile;
@@ -48,13 +52,25 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 @Priority(Priorities.AUTHENTICATION)
 public class SecurityServerInterceptor extends AbstractSecurityServerInterceptor {
 
-	static private Logger logger = Logger.getLogger(SecurityServerInterceptor.class);
+	/**
+	 * TODO : Move from here into a generic configuration class
+	 */
+	private static final String KNOWAGE_AUTHORIZATION_HEADER_NAME = "KNOWAGE_AUTHORIZATION_HEADER_NAME";
+
+	private static final Logger LOGGER = Logger.getLogger(SecurityServerInterceptor.class);
+
+	/**
+	 * TODO : Move from here into a generic configuration class
+	 */
+	private String authorizationHeaderName;
+
+	private final Decoder base64Decoder = Base64.getDecoder();
 
 	@Override
 	protected void notAuthenticated(ContainerRequestContext requestContext) {
 		/*
-		 * This response is standard in Basic authentication. If the header with credentials is missing the server send the response asking for the header. The
-		 * browser will show a popup that requires the user credential.
+		 * This response is standard in Basic authentication. If the header with credentials is missing the server send the response asking for the header. The browser
+		 * will show a popup that requires the user credential.
 		 */
 		requestContext.abortWith(Response.status(401).build());
 	}
@@ -62,26 +78,45 @@ public class SecurityServerInterceptor extends AbstractSecurityServerInterceptor
 	@Override
 	protected UserProfile authenticateUser() {
 		UserProfile profile = null;
+		HttpSession session = servletRequest.getSession(false);
 
-		logger.trace("IN");
+		LOGGER.trace("IN");
 
 		try {
-			/*
-			 * author radmila.selakovic@mht.net checking if request header is "X-Auth-Token"
-			 */
-			if (servletRequest.getHeader("X-Auth-Token") == null) {
+			String authorizationHeaderName = getAuthorizationHeaderName();
+
+			if (servletRequest.getHeader(authorizationHeaderName) != null) {
+				String token = servletRequest.getHeader(authorizationHeaderName);
+
+				token = token.replaceFirst("Bearer ", "");
+				if (it.eng.spagobi.security.saml.FederatedTokenGuard.isFederated(token)) {
+					return (UserProfile) UserUtilities.getUserProfile(token);
+				}
+				ISecurityServiceSupplier supplier = SecurityServiceSupplierFactory.createISecurityServiceSupplier();
+
+				SpagoBIUserProfile spagoBIUserProfile = supplier.checkAuthenticationToken(token);
+				if (spagoBIUserProfile != null) {
+					profile = (UserProfile) UserUtilities.getUserProfile(spagoBIUserProfile.getUniqueIdentifier());
+				}
+			} else if (servletRequest.getHeader("X-Auth-Token") == null) {
+				/*
+				 * author radmila.selakovic@mht.net checking if request header is "X-Auth-Token"
+				 */
 				String auto = servletRequest.getHeader("Authorization");
+
+				LOGGER.trace("Token is: " + auto);
+
 				int position = auto.indexOf("Direct");
 				if (position > -1 && position < 5) {// Direct stay at the beginning of the header
 					String encodedUser = auto.replaceFirst("Direct ", "");
-					byte[] decodedBytes = Base64.decode(encodedUser);
-					String user = new String(decodedBytes, "UTF-8");
+					byte[] decodedBytes = base64Decoder.decode(encodedUser);
+					String user = new String(decodedBytes, UTF_8);
 					profile = (UserProfile) UserUtilities.getUserProfile(user);
 				} else {
 					String encodedUserPassword = auto.replaceFirst("Basic ", "");
 					String credentials = null;
-					byte[] decodedBytes = Base64.decode(encodedUserPassword);
-					credentials = new String(decodedBytes, "UTF-8");
+					byte[] decodedBytes = base64Decoder.decode(encodedUserPassword);
+					credentials = new String(decodedBytes, UTF_8);
 
 					StringTokenizer tokenizer = new StringTokenizer(credentials, ":");
 					String user = tokenizer.nextToken();
@@ -98,20 +133,22 @@ public class SecurityServerInterceptor extends AbstractSecurityServerInterceptor
 				// if request header is
 				// "X-Auth-Token chencking authorization will be by access token"
 				String token = servletRequest.getHeader("X-Auth-Token");
+
+				if (it.eng.spagobi.security.saml.FederatedTokenGuard.isFederated(token)) {
+					return (UserProfile) UserUtilities.getUserProfile(token);
+				}
+
 				ISecurityServiceSupplier supplier = SecurityServiceSupplierFactory.createISecurityServiceSupplier();
 
 				SpagoBIUserProfile spagoBIUserProfile = supplier.checkAuthenticationToken(token);
 				if (spagoBIUserProfile != null) {
 					profile = (UserProfile) UserUtilities.getUserProfile(spagoBIUserProfile.getUniqueIdentifier());
 				}
-
-				servletRequest.getSession().setAttribute(IEngUserProfile.ENG_USER_PROFILE, profile);
-
 			}
 		} catch (Throwable t) {
-			logger.trace("Problem during authentication, returning null", t);
+			LOGGER.error("Problem during authentication, returning null", t);
 		} finally {
-			logger.trace("OUT");
+			LOGGER.trace("OUT");
 		}
 
 		return profile;
@@ -141,9 +178,9 @@ public class SecurityServerInterceptor extends AbstractSecurityServerInterceptor
 			engProfile = this.getUserProfileFromUserId();
 
 			if (engProfile != null) {
-				logger.debug("User is authenticated but his profile is not already stored in session");
+				LOGGER.debug("User is authenticated but his profile is not already stored in session");
 			} else {
-				logger.debug("User is not authenticated");
+				LOGGER.debug("User is not authenticated");
 				authenticated = false;
 			}
 		}
@@ -169,4 +206,16 @@ public class SecurityServerInterceptor extends AbstractSecurityServerInterceptor
 		int position = auto.indexOf("Direct");
 		return (position > -1 && position < 5);
 	}
+
+	/**
+	 * TODO : Move from here into a generic configuration class
+	 */
+	public String getAuthorizationHeaderName() {
+		if (authorizationHeaderName == null) {
+			authorizationHeaderName = Optional.ofNullable(System.getenv(KNOWAGE_AUTHORIZATION_HEADER_NAME))
+					.orElse("X-Kn-Authorization");
+		}
+		return authorizationHeaderName;
+	}
+
 }

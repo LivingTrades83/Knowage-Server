@@ -71,7 +71,7 @@ public class SbiEventsLog extends SbiHibernateModel {
 	 * @param id
 	 *            the new id
 	 */
-	public void setId(Integer id) {
+	private void setId(Integer id) {
 		this.id = id;
 	}
 
@@ -149,25 +149,6 @@ public class SbiEventsLog extends SbiHibernateModel {
 	 */
 	public void setParams(String params) {
 		this.params = params;
-	}
-
-	/**
-	 * Gets the roles.
-	 *
-	 * @return the roles
-	 */
-	public Set getRoles() {
-		return roles;
-	}
-
-	/**
-	 * Sets the roles.
-	 *
-	 * @param roles
-	 *            the new roles
-	 */
-	public void setRoles(Set roles) {
-		this.roles = roles;
 	}
 
 	/**

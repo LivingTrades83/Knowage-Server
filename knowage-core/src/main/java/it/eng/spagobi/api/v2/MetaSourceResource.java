@@ -1,8 +1,24 @@
 package it.eng.spagobi.api.v2;
 
+import java.util.List;
+
+import javax.validation.Valid;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.SpagoBIDAOException;
 import it.eng.spagobi.metadata.dao.ISbiMetaSourceDAO;
@@ -13,172 +29,169 @@ import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 
-import javax.validation.Valid;
-import javax.ws.rs.*;
-import javax.ws.rs.core.MediaType;
-import java.util.List;
-
 @Path("2.0/metaSourceResource")
 @ManageAuthorization
 public class MetaSourceResource extends AbstractSpagoBIResource {
 
-    private ISbiMetaSourceDAO sbiMetaSourceDAO = null;
-    private ISbiMetaTableDAO sbiMetaTableDAO = null;
-    private final static String SERVICE_NAME = "MetaSourceResource";
+	private static final Logger LOGGER = LogManager.getLogger(MetaSourceResource.class);
+	private static final String SERVICE_NAME = "MetaSourceResource";
 
-    public MetaSourceResource() {
+	private ISbiMetaSourceDAO sbiMetaSourceDAO = null;
+	private ISbiMetaTableDAO sbiMetaTableDAO = null;
 
-    }
+	public MetaSourceResource() {
 
-    private void init() {
-        sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
-        sbiMetaTableDAO = DAOFactory.getSbiMetaTableDAO();
-    }
+	}
 
-    @UserConstraint(functionalities = {SpagoBIConstants.DATASOURCE_MANAGEMENT})
-    @GET
-    @Path("/")
-    @Produces(MediaType.APPLICATION_JSON)
-    public List<SbiMetaSource> getAll() throws EMFUserError {
-        List<SbiMetaSource> sources = null;
+	private void init() {
+		sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
+		sbiMetaTableDAO = DAOFactory.getSbiMetaTableDAO();
+	}
 
-        sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT, CommunityFunctionalityConstants.DATASOURCE_READ })
+	@GET
+	@Path("/")
+	@Produces(MediaType.APPLICATION_JSON)
+	public List<SbiMetaSource> getAll() throws EMFUserError {
+		List<SbiMetaSource> sources = null;
 
-        sources = sbiMetaSourceDAO.loadAllSources();
+		sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
 
-        return sources;
-    }
+		sources = sbiMetaSourceDAO.loadAllSources();
 
-    @UserConstraint(functionalities = {SpagoBIConstants.DATASOURCE_MANAGEMENT})
-    @GET
-    @Path("/{sourceId}")
-    @Produces(MediaType.APPLICATION_JSON)
-    public SbiMetaSource getById(@PathParam("sourceId") Integer sourceId) throws EMFUserError {
-        init();
-        SbiMetaSource sbiMetaSource = sbiMetaSourceDAO.loadSourceByID(sourceId);
-        return sbiMetaSource;
-    }
+		return sources;
+	}
 
-    @UserConstraint(functionalities = {SpagoBIConstants.DATASOURCE_MANAGEMENT})
-    @GET
-    @Path("/{sourceId}/metatables")
-    @Produces(MediaType.APPLICATION_JSON)
-    public List<SbiMetaTable> getAllTables(@PathParam("sourceId") Integer sourceId) throws EMFUserError {
-        List<SbiMetaTable> metaTables = null;
-        sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
-        try {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT })
+	@GET
+	@Path("/{sourceId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	public SbiMetaSource getById(@PathParam("sourceId") Integer sourceId) throws EMFUserError {
+		init();
+		SbiMetaSource sbiMetaSource = sbiMetaSourceDAO.loadSourceByID(sourceId);
+		return sbiMetaSource;
+	}
 
-            metaTables = sbiMetaSourceDAO.loadMetaTables(sourceId);
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT })
+	@GET
+	@Path("/{sourceId}/metatables")
+	@Produces(MediaType.APPLICATION_JSON)
+	public List<SbiMetaTable> getAllTables(@PathParam("sourceId") Integer sourceId) throws EMFUserError {
+		List<SbiMetaTable> metaTables = null;
+		sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
+		try {
 
-        } catch (EMFUserError e) {
-            logger.debug(e.getMessage());
-        }
-        return metaTables;
-    }
+			metaTables = sbiMetaSourceDAO.loadMetaTables(sourceId);
 
-    @UserConstraint(functionalities = {SpagoBIConstants.DATASOURCE_MANAGEMENT})
-    @GET
-    @Path("/{sourceId}/metatables/{tableId}")
-    @Produces(MediaType.APPLICATION_JSON)
-    public SbiMetaTable getTableById(@PathParam("sourceId") Integer sourceId, @PathParam("tableId") Integer tableId) {
-        init();
+		} catch (EMFUserError e) {
+			LOGGER.debug(e.getMessage());
+		}
+		return metaTables;
+	}
 
-        try {
-            List<SbiMetaTable> metaTables = sbiMetaSourceDAO.loadMetaTables(sourceId);
-            for (SbiMetaTable metaTable : metaTables) {
-                if (metaTable.getTableId().equals(tableId)) {
-                    return metaTable;
-                }
-            }
-        } catch (EMFUserError e) {
-            logger.debug(e.getMessage());
-        }
-        return null;
-    }
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT })
+	@GET
+	@Path("/{sourceId}/metatables/{tableId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	public SbiMetaTable getTableById(@PathParam("sourceId") Integer sourceId, @PathParam("tableId") Integer tableId) {
+		init();
 
-    @POST
-    @Path("/")
-    public Integer insert(SbiMetaSource sbiMetaSource) throws EMFUserError {
+		try {
+			List<SbiMetaTable> metaTables = sbiMetaSourceDAO.loadMetaTables(sourceId);
+			for (SbiMetaTable metaTable : metaTables) {
+				if (metaTable.getTableId().equals(tableId)) {
+					return metaTable;
+				}
+			}
+		} catch (EMFUserError e) {
+			LOGGER.debug(e.getMessage());
+		}
+		return null;
+	}
 
-        sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
+	@POST
+	@Path("/")
+	public Integer insert(SbiMetaSource sbiMetaSource) throws EMFUserError {
 
-        Integer newSourceId = sbiMetaSourceDAO.insertSource(sbiMetaSource);
-        return newSourceId;
+		sbiMetaSourceDAO = DAOFactory.getSbiMetaSourceDAO();
 
-    }
+		Integer newSourceId = sbiMetaSourceDAO.insertSource(sbiMetaSource);
+		return newSourceId;
 
-    @POST
-    @Path("/{sourceId}/metatables")
-    public Integer insertTable(@PathParam("sourceId") Integer sourceId, SbiMetaTable sbiMetaTable) throws EMFUserError {
-        init();
-        Integer metaTableId = null;
-        SbiMetaSource sbiMetaSource = sbiMetaSourceDAO.loadSourceByID(sourceId);
-        if (sbiMetaSource != null) {
-            sbiMetaTable.setSbiMetaSource(sbiMetaSource);
-            metaTableId = sbiMetaTableDAO.insertTable(sbiMetaTable);
-        }
+	}
 
-        return metaTableId;
-    }
+	@POST
+	@Path("/{sourceId}/metatables")
+	public Integer insertTable(@PathParam("sourceId") Integer sourceId, SbiMetaTable sbiMetaTable) throws EMFUserError {
+		init();
+		Integer metaTableId = null;
+		SbiMetaSource sbiMetaSource = sbiMetaSourceDAO.loadSourceByID(sourceId);
+		if (sbiMetaSource != null) {
+			sbiMetaTable.setSbiMetaSource(sbiMetaSource);
+			metaTableId = sbiMetaTableDAO.insertTable(sbiMetaTable);
+		}
 
-    @UserConstraint(functionalities = {SpagoBIConstants.DATASOURCE_MANAGEMENT})
-    @PUT
-    @Path("/{sourceId}")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    public SbiMetaSource modify(@Valid SbiMetaSource sbiMetaSource, @PathParam("sourceId") Integer sourceId) {
-        logger.debug("IN");
-        init();
-        if (sbiMetaSource == null) {
-            logger.debug("sbiMetasource is null");
-        }
+		return metaTableId;
+	}
 
-        SbiMetaSource temp = null;
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DATASOURCE_MANAGEMENT })
+	@PUT
+	@Path("/{sourceId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public SbiMetaSource modify(@Valid SbiMetaSource sbiMetaSource, @PathParam("sourceId") Integer sourceId) {
+		LOGGER.debug("IN");
+		init();
+		if (sbiMetaSource == null) {
+			LOGGER.debug("sbiMetasource is null");
+		}
 
-        try {
-            temp = sbiMetaSourceDAO.loadSourceByID(sourceId);
-            sbiMetaSourceDAO.modifySource(sbiMetaSource);
-            temp = sbiMetaSourceDAO.loadSourceByID(sourceId);
-        } catch (SpagoBIDAOException e) {
-            throw new SpagoBIServiceException(SERVICE_NAME, e.getMessage());
-        } catch (Exception e) {
-            throw new SpagoBIServiceException(SERVICE_NAME, e.getLocalizedMessage());
-        }
-        logger.debug("OUT");
-        return temp;
+		SbiMetaSource temp = null;
 
-    }
+		try {
+			temp = sbiMetaSourceDAO.loadSourceByID(sourceId);
+			sbiMetaSourceDAO.modifySource(sbiMetaSource);
+			temp = sbiMetaSourceDAO.loadSourceByID(sourceId);
+		} catch (SpagoBIDAOException e) {
+			throw new SpagoBIServiceException(SERVICE_NAME, e.getMessage());
+		} catch (Exception e) {
+			throw new SpagoBIServiceException(SERVICE_NAME, e.getLocalizedMessage());
+		}
+		LOGGER.debug("OUT");
+		return temp;
 
-    @PUT
-    @Path("/{sourceId}/metatables/{tableId}")
-    @Produces(MediaType.APPLICATION_JSON)
-    @Consumes(MediaType.APPLICATION_JSON)
-    public SbiMetaTable modifyTable(@PathParam("sourceId") Integer sourceId, @Valid SbiMetaTable sbiMetaTable, @PathParam("tableId") Integer tableId)
-            throws EMFUserError {
-        init();
-        SbiMetaTable toReturnTable = null;
+	}
 
-        SbiMetaSource sbiMetaSource = sbiMetaSourceDAO.loadSourceByID(sourceId);
-        if (sbiMetaSource != null) {
-            sbiMetaTable.setSbiMetaSource(sbiMetaSource);
-            sbiMetaTableDAO.modifyTable(sbiMetaTable);
-            toReturnTable = sbiMetaTableDAO.loadTableByID(tableId);
+	@PUT
+	@Path("/{sourceId}/metatables/{tableId}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Consumes(MediaType.APPLICATION_JSON)
+	public SbiMetaTable modifyTable(@PathParam("sourceId") Integer sourceId, @Valid SbiMetaTable sbiMetaTable, @PathParam("tableId") Integer tableId)
+			throws EMFUserError {
+		init();
+		SbiMetaTable toReturnTable = null;
 
-        }
-        return toReturnTable;
+		SbiMetaSource sbiMetaSource = sbiMetaSourceDAO.loadSourceByID(sourceId);
+		if (sbiMetaSource != null) {
+			sbiMetaTable.setSbiMetaSource(sbiMetaSource);
+			sbiMetaTableDAO.modifyTable(sbiMetaTable);
+			toReturnTable = sbiMetaTableDAO.loadTableByID(tableId);
 
-    }
+		}
+		return toReturnTable;
 
-    @DELETE
-    @Path("/{sourceId}")
-    public Integer delete(@PathParam("sourceId") Integer sourceId) {
-        return null;
-    }
+	}
 
-    public Integer deleteTable(Integer id, Integer tableId) {
+	@DELETE
+	@Path("/{sourceId}")
+	public Integer delete(@PathParam("sourceId") Integer sourceId) {
+		return null;
+	}
 
-        return null;
+	public Integer deleteTable(Integer id, Integer tableId) {
 
-    }
+		return null;
+
+	}
 
 }

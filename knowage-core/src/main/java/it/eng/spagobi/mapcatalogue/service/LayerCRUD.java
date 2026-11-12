@@ -68,7 +68,7 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 @Path("/layers")
 public class LayerCRUD {
 
-	static private Logger logger = Logger.getLogger(LayerCRUD.class);
+	private static Logger logger = Logger.getLogger(LayerCRUD.class);
 	public static final String LAYER_ID = "id";
 	public static final String LAYER_LABEL = "label";
 	public static final String LAYER_URL = "layerUrl";
@@ -109,36 +109,33 @@ public class LayerCRUD {
 	@Path("/getFilter")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public String getFilter(@Context HttpServletRequest req) throws JSONException {
-		Object id = null;
-		Integer layerId = null;
+		String layerLabel;
 
 		try {
-
-			id = req.getParameter("id");
-			if (id == null || id.equals("")) {
+			layerLabel = req.getParameter("label");
+			if (layerLabel == null || layerLabel.isEmpty()) {
 				throw new SpagoBIRuntimeException("The layer id passed in the request is null or empty");
 			}
-			layerId = new Integer(id.toString());
 		} catch (Exception e) {
 			logger.error("error loading filter", e);
 			throw new SpagoBIRuntimeException("error request", e);
 		}
 
 		ISbiGeoLayersDAO dao = DAOFactory.getSbiGeoLayerDao();
-		ArrayList<String> properties = null;
+		ArrayList<String> properties;
 		try {
-			properties = dao.getProperties(layerId);
+			properties = dao.getProperties(layerLabel);
 		} catch (Exception e2) {
-			logger.error("Error loading the properties for the layer with id " + id, e2);
-			throw new SpagoBIRuntimeException(
-					"Error loading the properties for the layer with id [" + id + "]. Please check the layer configuration or the file content.", e2);
+			logger.error("Error loading the properties for the layer with layer " + layerLabel, e2);
+			throw new SpagoBIRuntimeException("Error loading the properties for the layer with layer [" + layerLabel
+					+ "]. Please check the layer configuration or the file content.", e2);
 		}
 		ArrayList<JSONObject> prop = new ArrayList<>();
-		for (int i = 0; i < properties.size(); i++) {
-			JSONObject obj = new JSONObject();
-			obj.put("property", properties.get(i));
-			prop.add(obj);
-		}
+        for (String property : properties) {
+            JSONObject obj = new JSONObject();
+            obj.put("property", property);
+            prop.add(obj);
+        }
 
 		return prop.toString();
 	}
@@ -179,9 +176,23 @@ public class LayerCRUD {
 	@GET
 	@Path("/{layerId}/download/{typeWFS}")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public Response getDownload(@PathParam("layerId") int layerId, @PathParam("typeWFS") String typeWFS) throws JSONException {
+	public Response getDownload(@PathParam("layerId") int layerId, @PathParam("typeWFS") String typeWFS)
+			throws JSONException {
 		ISbiGeoLayersDAO dao = DAOFactory.getSbiGeoLayerDao();
 		JSONObject content = dao.getContentforDownload(layerId, typeWFS);
+		if (content == null) {
+			return Response.status(404).build();
+		} else {
+			return Response.ok(content.toString()).build();
+		}
+	}
+
+	@GET
+	@Path("/{label}/downloadByLabel/{typeWFS}")
+	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
+	public Response getDownloadByLabel(@PathParam("label") String label, @PathParam("typeWFS") String typeWFS) throws JSONException, EMFUserError {
+		ISbiGeoLayersDAO dao = DAOFactory.getSbiGeoLayerDao();
+		JSONObject content = dao.getContentforDownload(dao.loadLayerByLabel(label).getLayerId(), typeWFS);
 		if (content == null) {
 			return Response.status(404).build();
 		} else {
@@ -205,7 +216,7 @@ public class LayerCRUD {
 		// get roles from database
 		List<Role> roles = null;
 		Role aRole = null;
-		ArrayList<JSONObject> roles_get = new ArrayList<JSONObject>();
+		ArrayList<JSONObject> roles_get = new ArrayList<>();
 		try {
 			roles = DAOFactory.getRoleDAO().loadAllRolesFiltereByTenant();
 		} catch (EMFUserError e) {
@@ -221,8 +232,7 @@ public class LayerCRUD {
 				jo.put("id", aRole.getId());
 				jo.put("name", aRole.getName());
 			} catch (JSONException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				logger.error("getRoles",e);
 			}
 
 			roles_get.add(jo);
@@ -235,7 +245,8 @@ public class LayerCRUD {
 	@GET
 	@Path("/GetLayer")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public String getLayer(@Context HttpServletRequest req) throws EMFUserError, UnsupportedEncodingException, JSONException {
+	public String getLayer(@Context HttpServletRequest req)
+			throws EMFUserError, UnsupportedEncodingException, JSONException {
 		Object id = null;
 		Integer layerId = null;
 
@@ -273,7 +284,7 @@ public class LayerCRUD {
 	public String postItem(@Context HttpServletRequest req) throws EMFUserError, JSONException {
 
 		JSONObject requestBodyJSON = null;
-		ArrayList<JSONObject> roles_get = new ArrayList<JSONObject>();
+		ArrayList<JSONObject> roles_get = new ArrayList<>();
 		try {
 			requestBodyJSON = RestUtilities.readBodyAsJSONObject(req);
 		} catch (Exception e) {
@@ -298,8 +309,7 @@ public class LayerCRUD {
 				jo.put("id", aRole.getId());
 				jo.put("name", aRole.getName());
 			} catch (JSONException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				logger.error("put",e);
 			}
 
 			roles_get.add(jo);
@@ -313,15 +323,15 @@ public class LayerCRUD {
 	@Path("/deleteLayer")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public String deleteLayer(@Context HttpServletRequest req) throws JSONException {
-		Object id = null;
-		Integer layerId = null;
+		Object label = null;
+		String layerLabel = null;
 
 		try {
-			id = req.getParameter("id");
-			if (id == null || id.equals("")) {
+			label = req.getParameter("label");
+			if (label == null || label.equals("")) {
 				throw new SpagoBIRuntimeException("The layer id passed in the request is null or empty");
 			}
-			layerId = new Integer(id.toString());
+			layerLabel = label.toString();
 		} catch (Exception e) {
 			logger.error("error loading the layer to delete from the request", e);
 			throw new SpagoBIRuntimeException("error loading the layer to delete from the request", e);
@@ -330,10 +340,10 @@ public class LayerCRUD {
 		logger.debug("Deleting the layer");
 		ISbiGeoLayersDAO dao = DAOFactory.getSbiGeoLayerDao();
 		try {
-			dao.eraseLayer(layerId);
+			dao.eraseLayer(layerLabel);
 		} catch (EMFUserError e) {
-			logger.error("Error delationg the ayer with id " + id, e);
-			throw new SpagoBIRuntimeException("Error delationg the layer with id " + id, e);
+			logger.error("Error delationg the ayer with id " + label, e);
+			throw new SpagoBIRuntimeException("Error delationg the layer with id " + label, e);
 		}
 		return "{}";
 	}
@@ -469,7 +479,8 @@ public class LayerCRUD {
 
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public String modifyLayer(@Context HttpServletRequest req) throws EMFUserError, JSONException, UnsupportedEncodingException {
+	public String modifyLayer(@Context HttpServletRequest req)
+			throws EMFUserError, JSONException, UnsupportedEncodingException {
 		JSONObject requestBodyJSON = null;
 		try {
 			requestBodyJSON = RestUtilities.readBodyAsJSONObject(req);
@@ -502,12 +513,13 @@ public class LayerCRUD {
 
 		String s = "[]";
 		List<String> labels = form.get("labels");
-		List<GeoLayer> layers = new ArrayList<GeoLayer>();
+		List<GeoLayer> layers = new ArrayList<>();
 
 		for (int i = 0; i < labels.size(); i++) {
 			try {
 				ISbiGeoLayersDAO geoLayersDAO = DAOFactory.getSbiGeoLayerDao();
-				geoLayersDAO.setUserProfile((IEngUserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE));
+				geoLayersDAO.setUserProfile(
+						(IEngUserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE));
 				GeoLayer geoLayer = geoLayersDAO.loadLayerByLabel(labels.get(i));
 
 				if (geoLayer != null) {

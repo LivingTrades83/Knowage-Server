@@ -46,13 +46,14 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-# eclipse projects' files
+# Eclipse
 .settings/
 .classpath
 .project
-.gitignore
 .eclipse
 .metadata
+.checkstyle
+bin/
 
 Servers
 
@@ -71,28 +72,25 @@ target/
 # npm/yarn node Modules
 node_modules/
 dist/
-package-lock.json
+# package-lock.json
 
 # zanata folder
 .zanata-cache/
+
+# Python
 Knowage-Python/pythonwebservice/app/utilities/__pycache__/
-
 Knowage-Python/pythonwebservice/app/__pycache__/
-
 Knowage-Python/pythonwebservice/app/services/__pycache__/
-
 Knowage-Python/pythonwebservice/app/services/tmp/
-
 Knowage-Python/pythonwebservice/logs/
-
 Knowage-Python/pythonwebservice/cert.pem
-
 Knowage-Python/pythonwebservice/key.pem
+Knowage-Python/src/hmackey
 
+# R
 Knowage-R/configs.R
-
 Knowage-R/.Rhistory
-
 Knowage-R/.RData
 
-Knowage-Python/src/hmackey
+# ???
+knowagecockpitengine/src/main/webapp/WEB-INF/jsp/commons/angular/angularResource.jsp

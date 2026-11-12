@@ -18,14 +18,21 @@
 
 package it.eng.spagobi.profiling.bo;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
+
+import it.eng.knowage.commons.multitenant.OrganizationImageManager;
 import it.eng.spago.error.EMFInternalError;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
-import it.eng.spagobi.tenant.TenantManager;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
  * Business Object used to retrieve basic informations about current the user
@@ -39,27 +46,49 @@ public class UserInformationDTO {
 	private String userId;
 	private String fullName;
 	private Boolean isSuperadmin;
-	private Integer sessionRole;
+	private String defaultRole = null;
+
 	private Map<String, Object> attributes;
 	private String organization;
+	private String organizationImageb64;
 	private String uniqueIdentifier;
-	private String emailAddress;
+	private String email;
 	private Locale locale = null;
 	private Object userUniqueIdentifier = null;
 	private Collection roles = null;
+	private Collection functionalities;
+	private boolean enterprise;
+	private boolean enterpriseValid;
 
-	public UserInformationDTO(UserProfile user) throws EMFInternalError {
-		this.userId = String.valueOf(user.getUserId());
-		this.fullName = String.valueOf(user.getUserName());
-		this.isSuperadmin = user.getIsSuperadmin();
-		this.organization = TenantManager.getTenant().getName();
-		// TODO: Change when there will be user email address
-		this.emailAddress = null;
-		this.userUniqueIdentifier = user.getUserUniqueIdentifier();
+	public UserInformationDTO(UserProfile user) {
+		try {
+			this.userId = String.valueOf(user.getUserId());
+			this.fullName = String.valueOf(user.getUserName());
+			this.isSuperadmin = user.getIsSuperadmin();
+			this.attributes = user.getUserAttributes();
+			this.organization = user.getOrganization();
+			this.organizationImageb64 = OrganizationImageManager.getOrganizationB64Image(organization);
+			// TODO: Change when there will be user email address
+			this.email = null;
 
-		this.locale = GeneralUtilities.getDefaultLocale();
-		this.roles = user.getRolesForUse();
+			if (user.getUserAttribute("email") != null && StringUtils.isNotBlank(user.getUserAttribute("email").toString()))
+				this.email = user.getUserAttribute("email").toString();
+			this.userUniqueIdentifier = user.getUserUniqueIdentifier();
 
+			this.locale = GeneralUtilities.getDefaultLocale();
+			this.roles = user.getRoles();
+
+			Collection rolesOrDefaultRole = user.getRolesForUse();
+			ArrayList<String> newList = new ArrayList<>(rolesOrDefaultRole);
+			this.defaultRole = newList.size() == 1 ? newList.get(0) : null;
+
+			this.functionalities = user.getFunctionalities();
+
+			this.enterprise = isEnterpriseEdition();
+			this.enterpriseValid = isEnterpriseEditionValid();
+		} catch (EMFInternalError e) {
+			throw new SpagoBIRuntimeException("Cannot create UserInformationDTO from UserProfile object", e);
+		}
 	}
 
 	public String getUserId() {
@@ -86,12 +115,12 @@ public class UserInformationDTO {
 		this.isSuperadmin = isSuperadmin;
 	}
 
-	public Integer getSessionRole() {
-		return sessionRole;
+	public String getDefaultRole() {
+		return defaultRole;
 	}
 
-	public void setSessionRole(Integer sessionRole) {
-		this.sessionRole = sessionRole;
+	public void setDefaultRole(String defaultRole) {
+		this.defaultRole = defaultRole;
 	}
 
 	public Map<String, Object> getAttributes() {
@@ -118,6 +147,14 @@ public class UserInformationDTO {
 		this.organization = organization;
 	}
 
+	public String getOrganizationImageb64() {
+		return organizationImageb64;
+	}
+
+	public void setOrganizationImageb64(String organizationImageb64) {
+		this.organizationImageb64 = organizationImageb64;
+	}
+
 	public String getUniqueIdentifier() {
 		return uniqueIdentifier;
 	}
@@ -126,12 +163,12 @@ public class UserInformationDTO {
 		this.uniqueIdentifier = object;
 	}
 
-	public String getEmailAddress() {
-		return emailAddress;
+	public String getEmail() {
+		return email;
 	}
 
-	public void setEmailAddress(String emailAddress) {
-		this.emailAddress = emailAddress;
+	public void setEmail(String email) {
+		this.email = email;
 	}
 
 	public Object getUserUniqueIdentifier() {
@@ -148,6 +185,68 @@ public class UserInformationDTO {
 
 	public void setRoles(Collection roles) {
 		this.roles = roles;
+	}
+
+	public Collection getFunctionalities() {
+		return functionalities;
+	}
+
+	public void setFunctionalities(Collection functionalities) {
+		this.functionalities = functionalities;
+	}
+
+	public boolean isEnterprise() {
+		return enterprise;
+	}
+
+	public void setEnterprise(boolean enterprise) {
+		this.enterprise = enterprise;
+	}
+
+	public void setEnterpriseValid(boolean enterpriseValid) {
+		this.enterpriseValid = enterpriseValid;
+	}
+
+	public boolean isEnterpriseValid() {
+		return enterpriseValid;
+	}
+
+	private boolean isEnterpriseEditionValid() {
+		try {
+			Class<?> clazz = Class.forName("it.eng.knowage.tools.servermanager.utils.LicenseManager");
+			Constructor<?> constructor = clazz.getDeclaredConstructor();
+			constructor.setAccessible(true);
+
+			Object instance = constructor.newInstance();
+
+			Method method = clazz.getDeclaredMethod("areLicensesValid");
+
+			return (Boolean) method.invoke(instance);
+
+		} catch (ClassNotFoundException e) {
+			return false;
+		}
+		catch (InvocationTargetException | InstantiationException | IllegalAccessException |
+				NoSuchMethodException e) {
+			throw new SpagoBIRuntimeException("Cannot create LicenseManager instance", e);
+		}
+    }
+
+	private boolean isEnterpriseEdition() {
+		try {
+			Class.forName("it.eng.knowage.tools.servermanager.utils.LicenseManager");
+			return true;
+		} catch (ClassNotFoundException e) {
+			return false;
+		}
+	}
+
+	@Override
+	public String toString() {
+		return "UserInformationDTO [userId=" + userId + ", fullName=" + fullName + ", isSuperadmin=" + isSuperadmin + ", defaultRole=" + defaultRole
+				+ ", attributes=" + attributes + ", organization=" + organization + ", organizationImageb64=" + organizationImageb64 + ", uniqueIdentifier="
+				+ uniqueIdentifier + ", email=" + email + ", locale=" + locale + ", userUniqueIdentifier=" + userUniqueIdentifier + ", roles=" + roles
+				+ ", functionalities=" + functionalities + ", enterprise=" + enterprise + "enterpriseValid=" + enterpriseValid + "]";
 	}
 
 }

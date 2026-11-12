@@ -22,12 +22,15 @@ import static java.util.stream.Collectors.toList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
+import it.eng.knowage.boot.error.InvalidHtmlPayloadException;
+import it.eng.knowage.boot.error.KnowageBusinessException;
+import it.eng.knowage.boot.error.KnowageRuntimeException;
+import it.eng.knowage.boot.filter.XSSUtils;
 import it.eng.knowage.knowageapi.dao.dto.SbiCatalogFunction;
-import it.eng.knowage.knowageapi.error.KnowageBusinessException;
-import it.eng.knowage.knowageapi.error.KnowageRuntimeException;
 import it.eng.knowage.knowageapi.mapper.FunctionCompleteDTO2SbiCatalogFunction;
 import it.eng.knowage.knowageapi.mapper.SbiFunctionCatalog2FunctionCompleteDTO;
 import it.eng.knowage.knowageapi.mapper.SbiFunctionCatalog2FunctionDTO;
@@ -45,6 +48,20 @@ public class FunctionCatalogAPIImpl implements FunctionCatalogAPI {
 	private static final SbiFunctionCatalog2FunctionCompleteDTO TO_FUNCTION_COMPLETE_DTO = new SbiFunctionCatalog2FunctionCompleteDTO();
 	private static final FunctionCompleteDTO2SbiCatalogFunction TO_SBI_CATALOG_FUNCTION = new FunctionCompleteDTO2SbiCatalogFunction();
 
+	private XSSUtils xssUtils = new XSSUtils();
+	private final UnaryOperator<FunctionCompleteDTO> sanitizeFunctionCompleteDTO = e -> {
+		String description = e.getDescription();
+		String benchmark = e.getBenchmark();
+
+		description = xssUtils.sanitize(description);
+		benchmark = xssUtils.sanitize(benchmark);
+
+		e.setDescription(description);
+		e.setBenchmark(benchmark);
+
+		return e;
+	};
+
 	@Autowired
 	private SbiCatalogFunctionRepository repository;
 
@@ -57,14 +74,32 @@ public class FunctionCatalogAPIImpl implements FunctionCatalogAPI {
 	}
 
 	@Override
-	public FunctionCompleteDTO get(UUID id) {
-		return Optional.ofNullable(repository.find(id.toString()))
+	public List<FunctionCompleteDTO> findComplete(String searchStr) {
+		return repository.findAll(searchStr)
+				.stream()
 				.map(TO_FUNCTION_COMPLETE_DTO)
+				.map(sanitizeFunctionCompleteDTO)
+				.collect(toList());
+	}
+
+	@Override
+	public FunctionCompleteDTO get(UUID id) {
+		return Optional.ofNullable(repository.find(id.toString())).map(TO_FUNCTION_COMPLETE_DTO)
 				.orElseThrow(() -> new KnowageRuntimeException("Function with id " + id + " not found"));
 	}
 
 	@Override
 	public FunctionCompleteDTO create(FunctionCompleteDTO function) {
+
+		String description = function.getDescription();
+		String benchmark = function.getBenchmark();
+
+		description = sanitizeXSS(description);
+		benchmark = sanitizeXSS(benchmark);
+
+		function.setDescription(description);
+		function.setBenchmark(benchmark);
+
 		SbiCatalogFunction beFunction = Optional.ofNullable(function)
 				.map(TO_SBI_CATALOG_FUNCTION)
 				.orElseThrow(() -> new KnowageRuntimeException("Function cannot be null"));
@@ -76,17 +111,38 @@ public class FunctionCatalogAPIImpl implements FunctionCatalogAPI {
 
 	@Override
 	public FunctionCompleteDTO update(FunctionCompleteDTO function) {
+
+		String description = function.getDescription();
+		String benchmark = function.getBenchmark();
+
+		description = sanitizeXSS(description);
+		benchmark = sanitizeXSS(benchmark);
+
+		function.setDescription(description);
+		function.setBenchmark(benchmark);
+
 		SbiCatalogFunction beFunction = Optional.ofNullable(function)
 				.map(TO_SBI_CATALOG_FUNCTION)
 				.orElseThrow(() -> new KnowageRuntimeException("Function cannot be null"));
 
 		return Optional.ofNullable(repository.update(beFunction))
 				.map(TO_FUNCTION_COMPLETE_DTO)
-				.get();	}
+				.get();
+	}
 
 	@Override
 	public void delete(UUID id) throws KnowageBusinessException {
 		repository.delete(id.toString());
+	}
+
+	private String sanitizeXSS(String input) {
+		boolean isSafe = xssUtils.isSafe(input);
+
+		if (!isSafe) {
+			throw new InvalidHtmlPayloadException(input);
+		}
+
+		return xssUtils.sanitize(input);
 	}
 
 }

@@ -20,13 +20,11 @@
 package it.eng.spagobi.tools.dataset.strategy;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -43,7 +41,7 @@ import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IField;
 import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
 import it.eng.spagobi.tools.dataset.common.datastore.Record;
-import it.eng.spagobi.tools.dataset.common.metadata.FieldMetadata;
+import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import it.eng.spagobi.tools.dataset.metasql.query.item.AbstractSelectionField;
 import it.eng.spagobi.tools.dataset.metasql.query.item.DataStoreCalculatedField;
@@ -56,15 +54,13 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 class SolrEvaluationStrategy extends AbstractSolrStrategy {
 
-	private static final Logger logger = Logger.getLogger(SolrEvaluationStrategy.class);
-
 	public SolrEvaluationStrategy(IDataSet dataSet) {
 		super(dataSet);
 	}
 
 	@Override
 	protected IDataStore execute(List<AbstractSelectionField> projections, Filter filter, List<AbstractSelectionField> groups, List<Sorting> sortings,
-			List<List<AbstractSelectionField>> summaryRowProjections, int offset, int fetchSize, int maxRowCount, Set<String> indexes) {
+			List<List<AbstractSelectionField>> summaryRowProjections, int offset, int fetchSize, int maxRowCount, Set<String> indexes, boolean useGroupBy) {
 		SolrDataSet solrDataSet = dataSet.getImplementation(SolrDataSet.class);
 		solrDataSet.setSolrQueryParameters(solrDataSet.getSolrQuery(), solrDataSet.getParamsMap());
 		SolrQuery solrQuery;
@@ -152,12 +148,12 @@ class SolrEvaluationStrategy extends AbstractSolrStrategy {
 			SolrDataStore datastoresToAdd = new SolrDataStore(originalDTS.getFacets());
 			IMetaData pagedMetaData = pagedDataStore.getMetaData();
 			Integer idIndex = null;
-			ArrayList<FieldMetadata> metas = (ArrayList<FieldMetadata>) pagedMetaData.getFieldsMeta();
+			List<IFieldMetaData> metas = pagedMetaData.getFieldsMeta();
 			boolean hasIdOnMeta = false;
 			for (int i = 0; i < metas.size(); i++) {
 
 				if (metas.get(i).getName().equalsIgnoreCase("id")) {
-					idIndex = new Integer(i);
+					idIndex = i;
 					hasIdOnMeta = true;
 				}
 			}
@@ -177,8 +173,7 @@ class SolrEvaluationStrategy extends AbstractSolrStrategy {
 				datastoresToAdd.setMetaData(pagedMetaData);
 
 				for (int projectionIndex = 0; projectionIndex < pagedDataStore.getRecordsCount(); projectionIndex++) {
-					Record newRecord = new Record();
-					newRecord = (Record) pagedDataStore.getRecordAt(projectionIndex);
+					Record newRecord = (Record) pagedDataStore.getRecordAt(projectionIndex);
 					newRecord.removeFieldAt(idIndex);
 
 					datastoresToAdd.appendRecord(newRecord);

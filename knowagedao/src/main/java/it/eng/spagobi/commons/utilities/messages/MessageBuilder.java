@@ -19,26 +19,20 @@ package it.eng.spagobi.commons.utilities.messages;
 
 import java.util.Locale;
 import java.util.Locale.Builder;
+import java.util.Map;
+import java.util.MissingResourceException;
+import java.util.ResourceBundle;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.servlet.http.HttpServletRequest;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 
-import it.eng.spago.base.RequestContainer;
-import it.eng.spago.base.RequestContainerAccess;
-import it.eng.spago.base.RequestContainerPortletAccess;
-import it.eng.spago.base.SessionContainer;
 import it.eng.spago.error.EMFUserError;
-import it.eng.spago.message.MessageBundle;
-import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.SingletonConfig;
-import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
-import it.eng.spagobi.commons.utilities.PortletUtilities;
-import it.eng.spagobi.commons.utilities.StringUtilities;
 import it.eng.spagobi.i18n.dao.I18NMessagesDAO;
 import it.eng.spagobi.utilities.messages.IEngineMessageBuilder;
 
@@ -55,7 +49,12 @@ import it.eng.spagobi.utilities.messages.IEngineMessageBuilder;
 public class MessageBuilder implements IMessageBuilder, IEngineMessageBuilder {
 
 	private static Logger logger = Logger.getLogger(MessageBuilder.class);
+
 	private static final String MESSAGES_FOLDER = "MessageFiles.";
+	private static final String DEFAULT_BUNDLE = "messages";
+	
+	// Cache per i ResourceBundle caricati
+	private static final Map<String, ResourceBundle> bundleCache = new ConcurrentHashMap<>();
 
 	public MessageBuilder() {
 	}
@@ -78,7 +77,7 @@ public class MessageBuilder implements IMessageBuilder, IEngineMessageBuilder {
 				logger.warn((new StringBuilder("Cannot find resource ")).append(resourceName).toString());
 				resIs = classLoad.getResourceAsStream(resourceName);
 			}
-			byte resBytes[] = GeneralUtilities.getByteArrayFromInputStream(resIs);
+			byte[] resBytes = GeneralUtilities.getByteArrayFromInputStream(resIs);
 			message = new String(resBytes);
 		} catch (Exception e) {
 			message = "";
@@ -152,118 +151,111 @@ public class MessageBuilder implements IMessageBuilder, IEngineMessageBuilder {
 		logger.debug((new StringBuilder("IN-code:")).append(code).toString());
 		logger.debug((new StringBuilder("bundle:")).append(bundle).toString());
 		logger.debug((new StringBuilder("locale:")).append(locale).toString());
+		
 		String message = null;
-		if (bundle == null) {
-			message = MessageBundle.getMessage(code, locale);
-		} else {
-			message = MessageBundle.getMessage(code, MESSAGES_FOLDER + bundle, locale);
+		String bundleName = (bundle == null) ? DEFAULT_BUNDLE : bundle;
+		String fullBundleName = MESSAGES_FOLDER + bundleName;
+		
+		try {
+			// Crea la chiave per la cache combinando bundle name e locale
+			String cacheKey = fullBundleName + "_" + locale.toString();
+			
+			// Cerca nella cache
+			ResourceBundle resourceBundle = bundleCache.get(cacheKey);
+			
+			// Se non trovato nella cache, carica il ResourceBundle
+			if (resourceBundle == null) {
+				try {
+					resourceBundle = ResourceBundle.getBundle(fullBundleName, locale);
+					// Metti in cache
+					bundleCache.put(cacheKey, resourceBundle);
+					logger.debug("Loaded and cached ResourceBundle: " + cacheKey);
+				} catch (MissingResourceException e) {
+					logger.warn("Cannot find ResourceBundle for: " + fullBundleName + " with locale: " + locale, e);
+					// Prova con il bundle di default se quello richiesto non esiste
+					if (!bundleName.equals(DEFAULT_BUNDLE)) {
+						fullBundleName = MESSAGES_FOLDER + DEFAULT_BUNDLE;
+						cacheKey = fullBundleName + "_" + locale.toString();
+						resourceBundle = bundleCache.get(cacheKey);
+						if (resourceBundle == null) {
+							try {
+								resourceBundle = ResourceBundle.getBundle(fullBundleName, locale);
+								bundleCache.put(cacheKey, resourceBundle);
+								logger.debug("Loaded and cached default ResourceBundle: " + cacheKey);
+							} catch (MissingResourceException e2) {
+								logger.error("Cannot find default ResourceBundle: " + fullBundleName, e2);
+							}
+						}
+					}
+				}
+			}
+			
+			// Recupera il messaggio dal ResourceBundle
+			if (resourceBundle != null) {
+				try {
+					message = resourceBundle.getString(code);
+				} catch (MissingResourceException e) {
+					logger.debug("Message key '" + code + "' not found in bundle: " + fullBundleName);
+				}
+			}
+		} catch (Exception e) {
+			logger.error("Error retrieving message for code: " + code, e);
 		}
+		
+		// Se il messaggio non è stato trovato, ritorna il codice stesso
 		if (message == null || message.trim().equals("")) {
 			message = code;
 		}
+		
 		logger.debug((new StringBuilder("OUT-message:")).append(message).toString());
 		return message;
 	}
-
-	public static Locale getBrowserLocaleFromSpago() {
-		logger.debug("IN");
-		Locale browserLocale = null;
-		RequestContainer reqCont = RequestContainer.getRequestContainer();
-		if (reqCont != null) {
-			Object obj = reqCont.getInternalRequest();
-			if (obj != null && (obj instanceof HttpServletRequest)) {
-				HttpServletRequest request = (HttpServletRequest) obj;
-				Locale reqLocale = request.getLocale();
-				String language = reqLocale.getLanguage();
-				String country = GeneralUtilities.getCountry(language);
-				browserLocale = new Locale(language, country);
-
-			}
-		}
-		if (browserLocale == null) {
-			browserLocale = GeneralUtilities.getDefaultLocale();
-		}
-		logger.debug("OUT");
-		return browserLocale;
+	
+	/**
+	 * Metodo helper per pulire la cache dei ResourceBundle (utile per test o ricaricamenti)
+	 */
+	public static void clearBundleCache() {
+		bundleCache.clear();
+		logger.info("ResourceBundle cache cleared");
 	}
 
 	private Locale getBrowserLocale(HttpServletRequest request) {
 		logger.debug("IN");
-		Locale browserLocale = null;
-		Locale reqLocale = request.getLocale();
-		String language = reqLocale.getLanguage();
-		String country = GeneralUtilities.getCountry(language);
 
-		String script = reqLocale.getScript();
-		Builder tmpLocale = new Builder().setLanguage(language).setRegion(country);
-		if (StringUtils.isNotBlank(script)) {
-			tmpLocale.setScript(script);
-		}
-		browserLocale = tmpLocale.build();
+		try {
+			Locale browserLocale = null;
+			Locale reqLocale = request.getLocale();
+			String language = reqLocale.getLanguage();
+			String country = GeneralUtilities.getCountry(language);
 
-		if (browserLocale == null) {
-			browserLocale = GeneralUtilities.getDefaultLocale();
+			String script = reqLocale.getScript();
+			Builder tmpLocale = new Builder().setLanguage(language).setRegion(country);
+			if (StringUtils.isNotBlank(script)) {
+				tmpLocale.setScript(script);
+			}
+			browserLocale = tmpLocale.build();
+
+			if (browserLocale == null) {
+				browserLocale = GeneralUtilities.getDefaultLocale();
+			}
+			logger.debug("OUT");
+			return browserLocale;
+		} catch (Exception e) {
+			logger.warn("Warning getBrowserLocale request is null");
+			return GeneralUtilities.getDefaultLocale();
 		}
-		logger.debug("OUT");
-		return browserLocale;
 	}
 
 	public Locale getLocale(HttpServletRequest request) {
 		logger.debug("IN");
-		String sbiMode = getSpagoBIMode(request);
-		UserProfile profile = null;
-		Locale locale = null;
-		if (sbiMode.equalsIgnoreCase("WEB")) {
-			String language = null;
-			String country = null;
-			String script = null;
 
-			RequestContainer reqCont = RequestContainer.getRequestContainer();
-			if (reqCont != null) {
-				SessionContainer sessCont = reqCont.getSessionContainer();
-				SessionContainer permSess = sessCont.getPermanentContainer();
-				language = (String) permSess.getAttribute("AF_LANGUAGE");
-				country = (String) permSess.getAttribute("AF_COUNTRY");
-				script = (String) permSess.getAttribute("AF_SCRIPT");
-				profile = (UserProfile) permSess.getAttribute(IEngUserProfile.ENG_USER_PROFILE);
-			}
+		Locale locale = getBrowserLocale(request);
 
-			if (country == null) {
-				country = "";
-			}
-
-			if (script == null) {
-				script = "";
-			}
-
-			if (profile != null && !profile.getUserId().equals(SpagoBIConstants.PUBLIC_USER_ID) && language != null) {
-				// check preference from user attributes if presents
-//				try {
-//					String userLocale = (String) profile.getUserAttribute("language");
-//					if (StringUtils.isNotBlank(userLocale)) {
-//						language = userLocale.substring(0, userLocale.indexOf("_"));
-//						country = userLocale.substring(userLocale.indexOf("_") + 1);
-//						logger.info("User attribute language: " + language);
-//						logger.info("User attribute country: " + country);
-//					}
-//				} catch (Exception e) {
-//					logger.debug("Error on reading user attribute language: " + e);
-//				}
-
-				locale = new Builder().setLanguage(language).setRegion(country).setScript(script).build();
-			} else if (request == null) {
-				locale = getBrowserLocaleFromSpago();
-			} else {
-				locale = getBrowserLocale(request);
-			}
-		} else if (sbiMode.equalsIgnoreCase("PORTLET")) {
-			locale = PortletUtilities.getPortalLocale();
-		}
 		if (!isValidLocale(locale)) {
 			logger.warn((new StringBuilder("Request locale ")).append(locale).append(" not valid since it is not configured.").toString());
 			locale = GeneralUtilities.getDefaultLocale();
 			logger.debug((new StringBuilder("Using default locale ")).append(locale).append(".").toString());
-		} else if (StringUtilities.isEmpty(locale.getCountry())) {
+		} else if (StringUtils.isEmpty(locale.getCountry())) {
 			logger.warn((new StringBuilder("Request locale ")).append(locale)
 					.append(" not contain the country value. The one specified in configuration will be used").toString());
 //			SingletonConfig spagobiConfig = SingletonConfig.getInstance();
@@ -281,14 +273,15 @@ public class MessageBuilder implements IMessageBuilder, IEngineMessageBuilder {
 		String language;
 		String country;
 
-		if (locale == null)
+		if (locale == null) {
 			return false;
+		}
 
 		try {
 			language = locale.getLanguage();
 			country = locale.getCountry();
 
-			if (StringUtilities.isEmpty(locale.getCountry())) {
+			if (StringUtils.isEmpty(locale.getCountry())) {
 				return true;
 			} else if (locale.getCountry().equalsIgnoreCase(country)) {
 				String script = GeneralUtilities.getScript(language);
@@ -310,17 +303,7 @@ public class MessageBuilder implements IMessageBuilder, IEngineMessageBuilder {
 		logger.debug("IN");
 		String sbiMode = null;
 		if (request != null) {
-			RequestContainer aRequestContainer = null;
-			aRequestContainer = RequestContainerPortletAccess.getRequestContainer(request);
-			if (aRequestContainer == null) {
-				aRequestContainer = RequestContainerAccess.getRequestContainer(request);
-			}
-			String channelType = aRequestContainer.getChannelType();
-			if ("PORTLET".equalsIgnoreCase(channelType)) {
-				sbiMode = "PORTLET";
-			} else {
-				sbiMode = "WEB";
-			}
+			sbiMode = "WEB";
 		} else {
 			sbiMode = SingletonConfig.getInstance().getConfigValue("SPAGOBI.SPAGOBI-MODE.mode");
 			if (sbiMode == null) {
@@ -353,8 +336,9 @@ public class MessageBuilder implements IMessageBuilder, IEngineMessageBuilder {
 	public String getI18nMessage(Locale locale, String code) {
 		logger.debug("IN");
 		String toreturn = null;
-		if (code == null)
+		if (code == null) {
 			return null;
+		}
 		if (locale != null) {
 			if (code.startsWith("i18n_") || code.startsWith("I18N_")) {
 				try {

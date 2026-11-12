@@ -42,25 +42,25 @@ import it.eng.spagobi.utilities.assertion.Assert;
  * @author Antonella Giachino
  */
 public class InLineFunctionsDAOFileImpl implements IInLineFunctionsDAO {
-	HashMap<String, InLineFunction> mapInLineFunctions = new HashMap<String, InLineFunction>();
+	HashMap<String, InLineFunction> mapInLineFunctions = new HashMap<>();
 
-	public static transient Logger logger = Logger.getLogger(ViewsDAOFileImpl.class);
+	public static final Logger logger = Logger.getLogger(ViewsDAOFileImpl.class);
 
 	public static final String FUNCTIONS_FILE_NAME = "functions.xml";
-	public final static String ROOT_TAG = "INLINE_FUNCTIONS";
-	public final static String FIELD_TAG = "FUNCTION";
-	public final static String FIELD_TAG_GROUP_ATTR = "group";
-	public final static String FIELD_TAG_NAME_ATTR = "name";
-	public final static String FIELD_TAG_DESC_ATTR = "desc";
-	public final static String FIELD_TAG_NPARAMS_ATTR = "nParams";
-	public final static String FIELD_TAG_TYPE_ATTR = "type";
-	public final static String FIELD_TAG_MYSQL_DIALECT = "MySQLInnoDBDialect";
-	public final static String FIELD_TAG_ORACLE_DIALECT = "OracleDialect";
-	public final static String FIELD_TAG_INGRES_DIALECT = "IngresDialect";
-	public final static String FIELD_TAG_POSTGRES_DIALECT = "PostgreSQLDialect";
-	public final static String FIELD_TAG_HQL_DIALECT = "HSQLDialect";
-	public final static String FIELD_TAG_SQLSERVER_DIALECT = "SQLServerDialect";
-	public final static String FIELD_TAG_CODE_ATTR = "code";
+	public static final String ROOT_TAG = "INLINE_FUNCTIONS";
+	public static final String FIELD_TAG = "FUNCTION";
+	public static final String FIELD_TAG_GROUP_ATTR = "group";
+	public static final String FIELD_TAG_NAME_ATTR = "name";
+	public static final String FIELD_TAG_DESC_ATTR = "desc";
+	public static final String FIELD_TAG_NPARAMS_ATTR = "nParams";
+	public static final String FIELD_TAG_TYPE_ATTR = "type";
+	public static final String FIELD_TAG_MYSQL_DIALECT = "MySQLInnoDBDialect";
+	public static final String FIELD_TAG_ORACLE_DIALECT = "OracleDialect";
+	public static final String FIELD_TAG_INGRES_DIALECT = "IngresDialect";
+	public static final String FIELD_TAG_POSTGRES_DIALECT = "PostgreSQLDialect";
+	public static final String FIELD_TAG_HQL_DIALECT = "HSQLDialect";
+	public static final String FIELD_TAG_SQLSERVER_DIALECT = "SQLServerDialect";
+	public static final String FIELD_TAG_CODE_ATTR = "code";
 
 	// =============================================================================
 	// LOAD
@@ -148,10 +148,10 @@ public class InLineFunctionsDAOFileImpl implements IInLineFunctionsDAO {
 				logger.debug("Function [" + mapInLineFunctions.get(func.name) + "] loaded succesfully");
 			}
 
-		} catch (Throwable t) {
-			if (t instanceof DAOException)
-				throw (DAOException) t;
-			throw new DAOException("An unpredicted error occurred while loading functions on file [" + FUNCTIONS_FILE_NAME + "]", t);
+		} catch (Exception e) {
+			if (e instanceof DAOException)
+				throw (DAOException) e;
+			throw new DAOException("An unpredicted error occurred while loading functions on file [" + FUNCTIONS_FILE_NAME + "]", e);
 		} finally {
 			if (in != null) {
 				try {
@@ -176,6 +176,8 @@ public class InLineFunctionsDAOFileImpl implements IInLineFunctionsDAO {
 
 		try {
 			reader = new SAXReader();
+			reader.setFeature("http://xml.org/sax/features/external-general-entities", false);	
+			reader.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
 			try {
 				document = reader.read(in);
 			} catch (DocumentException de) {
@@ -184,10 +186,10 @@ public class InLineFunctionsDAOFileImpl implements IInLineFunctionsDAO {
 				throw e;
 			}
 			Assert.assertNotNull(document, "Document cannot be null");
-		} catch (Throwable t) {
-			if (t instanceof DAOException)
-				throw (DAOException) t;
-			throw new DAOException("An unpredicetd error occurred while reading from inputStream: ", t);
+		} catch (Exception e) {
+			if (e instanceof DAOException)
+				throw (DAOException) e;
+			throw new DAOException("An unpredicetd error occurred while reading from inputStream: ", e);
 		} finally {
 			if (in != null) {
 				try {

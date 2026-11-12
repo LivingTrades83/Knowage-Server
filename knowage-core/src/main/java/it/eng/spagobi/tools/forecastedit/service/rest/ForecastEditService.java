@@ -51,7 +51,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 
 @Path("/forecast")
 public class ForecastEditService {
-	static private Logger logger = Logger.getLogger(ForecastEditService.class);
+	private static Logger logger = Logger.getLogger(ForecastEditService.class);
 
 	@POST
 	@Produces(MediaType.TEXT_HTML)
@@ -77,7 +77,7 @@ public class ForecastEditService {
 				String accountName = req.getParameter("par_account_nm");
 
 				Enumeration paramNames = req.getParameterNames();
-				Map<String, ForecastValue> values = new HashMap<String, ForecastValue>();
+				Map<String, ForecastValue> values = new HashMap<>();
 				while (paramNames.hasMoreElements()) {
 					String paramName = (String) paramNames.nextElement();
 					// skip parameters values

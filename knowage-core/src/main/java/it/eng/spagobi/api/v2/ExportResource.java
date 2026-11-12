@@ -17,6 +17,8 @@
  */
 package it.eng.spagobi.api.v2;
 
+import static org.quartz.JobBuilder.newJob;
+
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -49,6 +51,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
+import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.impl.StdSchedulerFactory;
@@ -61,13 +64,17 @@ import it.eng.spagobi.api.v2.export.ExportPathBuilder;
 import it.eng.spagobi.api.v2.export.cockpit.CockpitDataExportJobBuilder;
 import it.eng.spagobi.api.v2.export.cockpit.DocumentExportConf;
 import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
+import it.eng.spagobi.services.rest.annotations.UserConstraint;
+import it.eng.spagobi.tools.dataset.DatasetManagementAPI;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
 import it.eng.spagobi.tools.dataset.dao.IDataSetDAO;
 import it.eng.spagobi.tools.dataset.resource.export.Utilities;
 import it.eng.spagobi.tools.dataset.utils.DataSetUtilities;
 import it.eng.spagobi.user.UserProfileManager;
+import it.eng.spagobi.utilities.exceptions.ActionNotPermittedException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
@@ -78,11 +85,9 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 @Path("/2.0/export")
 public class ExportResource {
 
+	private static final Logger LOGGER = Logger.getLogger(ExportResource.class);
 	private static final String BODY_ATTR_PARAMETERS = "parameters";
-
 	private static final String BODY_ATTR_DRIVERS = "drivers";
-
-	private static final Logger logger = Logger.getLogger(ExportResource.class);
 
 	@Context
 	protected HttpServletRequest request;
@@ -108,12 +113,12 @@ public class ExportResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	public List<Entry> dataset(@DefaultValue("false") @QueryParam("showAll") boolean showAll) throws IOException {
 
-		logger.debug("IN");
-		Utilities exportResourceUtilities = new Utilities();
+		LOGGER.debug("IN");
+		Utilities exportResourceUtilities = Utilities.getInstance();
 
 		List<Entry> ret = exportResourceUtilities.getAllExportedFiles(showAll);
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 
 		return ret;
 	}
@@ -129,9 +134,10 @@ public class ExportResource {
 	@Path("/dataset/{dataSetId}/csv")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.TEXT_PLAIN)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public Response datasetAsCsv(@PathParam("dataSetId") Integer dataSetId, String body) {
 
-		logger.debug("IN - Exporting dataset " + String.valueOf(dataSetId) + " in CSV");
+		LOGGER.debug("IN - Exporting dataset " + dataSetId + " in CSV");
 
 		JSONObject driversJson = null;
 		JSONArray paramsJson = null;
@@ -142,7 +148,7 @@ public class ExportResource {
 			paramsJson = data.has(BODY_ATTR_PARAMETERS) ? data.getJSONArray(BODY_ATTR_PARAMETERS) : null;
 		} catch (JSONException e) {
 			String msg = String.format("Body data is invalid: %s", body);
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			return Response.serverError().build();
 		}
 
@@ -150,7 +156,16 @@ public class ExportResource {
 		Locale locale = request.getLocale();
 		UserProfile userProfile = UserProfileManager.getProfile();
 		IDataSetDAO dsDAO = DAOFactory.getDataSetDAO();
+		dsDAO.setUserProfile(userProfile);
 		IDataSet dataSet = dsDAO.loadDataSetById(dataSetId);
+		if (dataSet == null) {
+			return Response.status(Status.NOT_FOUND).build();
+		}
+		try {
+			new DatasetManagementAPI(userProfile).canSee(dataSet);
+		} catch (ActionNotPermittedException e) {
+			return Response.status(Status.FORBIDDEN).build();
+		}
 		JSONObject jsonObject;
 		try {
 			jsonObject = DataSetUtilities.parametersJSONArray2JSONObject(dataSet, paramsJson);
@@ -167,19 +182,20 @@ public class ExportResource {
 					.withParameters(params).withLocale(locale).build();
 
 			scheduler.addJob(exportJob, true);
-			scheduler.triggerJob(exportJob.getName(), exportJob.getGroup());
+			JobKey key = exportJob.getKey();
+			scheduler.triggerJob(key);
 
-			ret = Response.ok().entity(exportJob.getName()).build();
+			ret = Response.ok().entity(key.getName()).build();
 
 			scheduleCleanUp();
 
 		} catch (SchedulerException e) {
 			String msg = String.format("Error during scheduling of export job for dataset %d", dataSetId);
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			ret = Response.serverError().build();
 		}
 
-		logger.debug("OUT - Exporting dataset \" + String.valueOf(dataSetId) + \" in CSV");
+		LOGGER.debug("OUT - Exporting dataset \" + String.valueOf(dataSetId) + \" in CSV");
 
 		return ret;
 	}
@@ -195,9 +211,10 @@ public class ExportResource {
 	@Path("/dataset/{dataSetId}/xls")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.TEXT_PLAIN)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public Response datasetAsXls(@PathParam("dataSetId") Integer dataSetId, String body) {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		JSONObject driversJson = null;
 		JSONArray paramsJson = null;
@@ -208,7 +225,7 @@ public class ExportResource {
 			paramsJson = data.has(BODY_ATTR_PARAMETERS) ? data.getJSONArray(BODY_ATTR_PARAMETERS) : null;
 		} catch (JSONException e) {
 			String msg = String.format("Body data is invalid: %s", body);
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			return Response.serverError().build();
 		}
 
@@ -216,7 +233,16 @@ public class ExportResource {
 		Locale locale = request.getLocale();
 		UserProfile userProfile = UserProfileManager.getProfile();
 		IDataSetDAO dsDAO = DAOFactory.getDataSetDAO();
+		dsDAO.setUserProfile(userProfile);
 		IDataSet dataSet = dsDAO.loadDataSetById(dataSetId);
+		if (dataSet == null) {
+			return Response.status(Status.NOT_FOUND).build();
+		}
+		try {
+			new DatasetManagementAPI(userProfile).canSee(dataSet);
+		} catch (ActionNotPermittedException e) {
+			return Response.status(Status.FORBIDDEN).build();
+		}
 		JSONObject jsonObject;
 		try {
 			jsonObject = DataSetUtilities.parametersJSONArray2JSONObject(dataSet, paramsJson);
@@ -229,23 +255,24 @@ public class ExportResource {
 		try {
 			Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
 
-			JobDetail exportJob = ExportJobBuilder.fromDataSetIdAndUserProfile(dataSetId, userProfile).withTypeOfXls().withDrivers(drivers)
+			JobDetail exportJob = ExportJobBuilder.fromDataSetIdAndUserProfile(dataSetId, userProfile).withTypeOfXlsx().withDrivers(drivers)
 					.withParameters(params).withLocale(locale).build();
 
 			scheduler.addJob(exportJob, true);
-			scheduler.triggerJob(exportJob.getName(), exportJob.getGroup());
+			JobKey key = exportJob.getKey();
+			scheduler.triggerJob(key);
 
-			ret = Response.ok().entity(exportJob.getName()).build();
+			ret = Response.ok().entity(key.getName()).build();
 
 			scheduleCleanUp();
 
 		} catch (SchedulerException e) {
 			String msg = String.format("Error during scheduling of export job for dataset %d", dataSetId);
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			ret = Response.serverError().build();
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 
 		return ret;
 	}
@@ -256,7 +283,7 @@ public class ExportResource {
 	@DELETE
 	@Path("/")
 	public void deleteAll() {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		UserProfile userProfile = UserProfileManager.getProfile();
 		String resoursePath = SpagoBIUtilities.getResourcePath();
@@ -282,17 +309,17 @@ public class ExportResource {
 				}
 			});
 		} catch (Exception e) {
-			logger.error("Error during downloadable resources deletion", e);
+			LOGGER.error("Error during downloadable resources deletion", e);
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 	@GET
 	@Path("/dataset/{id}")
 	public Response get(@PathParam("id") UUID id) throws IOException {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		Response ret = Response.status(Status.NOT_FOUND).build();
 
@@ -318,7 +345,7 @@ public class ExportResource {
 					.type(metadata.getMimeType()).build();
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 
 		return ret;
 	}
@@ -327,29 +354,32 @@ public class ExportResource {
 	@Path("/cockpitData")
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response exportCockpitDocumentWidgetData(DocumentExportConf documentExportConf) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
-		logger.debug(String.format("document id: %s", documentExportConf.getDocumentId()));
-		logger.debug(String.format("document label: %s", documentExportConf.getDocumentLabel()));
-		logger.debug(String.format("export type: %s", documentExportConf.getExportType()));
-		logger.debug(String.format("parameters: %s", documentExportConf.getParameters()));
+		LOGGER.debug(String.format("document id: %s", documentExportConf.getDocumentId()));
+		LOGGER.debug(String.format("document label: %s", documentExportConf.getDocumentLabel()));
+		LOGGER.debug(String.format("export type: %s", documentExportConf.getExportType()));
+		LOGGER.debug(String.format("parameters: %s", documentExportConf.getParameters()));
 
 		JobDetail exportJob = new CockpitDataExportJobBuilder().setDocumentExportConf(documentExportConf).setLocale(request.getLocale())
 				.setUserProfile(UserProfileManager.getProfile()).build();
-		logger.debug("Created export job");
+		LOGGER.debug("Created export job");
+
+		JobKey key = null;
 
 		try {
 			Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
 			scheduler.addJob(exportJob, true);
-			scheduler.triggerJob(exportJob.getName(), exportJob.getGroup());
-			logger.debug("Export job triggered ");
+			key = exportJob.getKey();
+			scheduler.triggerJob(key);
+			LOGGER.debug("Export job triggered ");
 		} catch (SchedulerException e) {
-			String msg = String.format("Error during scheduling of export job for cokcpit document %d", documentExportConf.getDocumentLabel());
-			logger.error(msg, e);
+			String msg = String.format("Error during scheduling of export job for cokcpit document %s", documentExportConf.getDocumentLabel());
+			LOGGER.error(msg, e);
 			throw new SpagoBIRuntimeException(msg);
 		}
-		logger.debug("OUT");
-		return Response.ok().entity(exportJob.getName()).build();
+		LOGGER.debug("OUT");
+		return Response.ok().entity(key.getName()).build();
 
 	}
 
@@ -372,15 +402,14 @@ public class ExportResource {
 		jobDataMap.put(ExportDeleteOldJob.MAP_KEY_RESOURCE_PATH, resoursePath);
 		jobDataMap.put(ExportDeleteOldJob.MAP_KEY_USER_PROFILE, userProfile);
 
-		JobDetail job = new JobDetail(jobName, jobGroup, ExportDeleteOldJob.class);
-
-		job.setDescription(jobDescription);
-		job.setJobDataMap(jobDataMap);
+		JobDetail job = newJob(ExportDeleteOldJob.class).withIdentity(jobName, jobGroup).withDescription(jobDescription).usingJobData(jobDataMap)
+				.storeDurably(true).build();
+		JobKey key = job.getKey();
 
 		Scheduler scheduler = StdSchedulerFactory.getDefaultScheduler();
 
 		scheduler.addJob(job, true);
-		scheduler.triggerJob(job.getName(), job.getGroup());
+		scheduler.triggerJob(key);
 
 	}
 }

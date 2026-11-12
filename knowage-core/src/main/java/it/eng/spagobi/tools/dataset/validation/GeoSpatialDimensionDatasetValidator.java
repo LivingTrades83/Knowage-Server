@@ -32,8 +32,6 @@ import it.eng.spagobi.metamodel.SiblingsFileWrapper;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IField;
 import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
-import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
-import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import it.eng.spagobi.tools.dataset.measurecatalogue.MeasureCatalogue;
 import it.eng.spagobi.tools.dataset.measurecatalogue.MeasureCatalogueSingleton;
 
@@ -94,8 +92,8 @@ public class GeoSpatialDimensionDatasetValidator  extends AbstractDatasetValidat
 					    			int columnIndex = dataStore.getMetaData().getFieldIndex(columnName); 
 					    			int rowNumber = 0;
 					    			while( it.hasNext() ) {
-					    	    		IRecord record = (IRecord)it.next();
-					    	    		IField field = record.getFieldAt(columnIndex);
+					    	    		IRecord currRecord = (IRecord)it.next();
+					    	    		IField field = currRecord.getFieldAt(columnIndex);
 					    	    		Object fieldValue = field.getValue(); 
 					    	    		if(fieldValue != null)  {
 					    	    			if (fieldValue instanceof String){
@@ -178,8 +176,8 @@ public class GeoSpatialDimensionDatasetValidator  extends AbstractDatasetValidat
 		Iterator it = datastoreToValidate.iterator();
 		int columnIndex = datastoreToValidate.getMetaData().getFieldIndex(columnNameOnDataset); 
 		while( it.hasNext() ) {
-	   		IRecord record = (IRecord)it.next();
-	    	IField field = record.getFieldAt(columnIndex);
+	   		IRecord currRecord = (IRecord)it.next();
+	    	IField field = currRecord.getFieldAt(columnIndex);
 	    	fieldValue = field.getValue();   	
 	    	if (fieldValue != null){
 	    		if (fieldValue instanceof String){

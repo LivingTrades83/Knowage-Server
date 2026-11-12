@@ -51,7 +51,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
  */
 public class QbeDriver extends AbstractEngineDriver implements IEngineDriver {
 
-	static private Logger logger = Logger.getLogger(QbeDriver.class);
+	private static Logger logger = Logger.getLogger(QbeDriver.class);
 
 	/**
 	 * Returns a map of parameters which will be send in the request to the engine application.
@@ -277,8 +277,8 @@ public class QbeDriver extends AbstractEngineDriver implements IEngineDriver {
 		throw new InvalidOperationRequest();
 	}
 
-	public final static String PARAM_SERVICE_NAME = "ACTION_NAME";
-	public final static String PARAM_NEW_SESSION = "NEW_SESSION";
+	public static final String PARAM_SERVICE_NAME = "ACTION_NAME";
+	public static final String PARAM_NEW_SESSION = "NEW_SESSION";
 
 	private Map applyService(Map parameters, BIObject biObject) {
 		ObjTemplate template;

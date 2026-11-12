@@ -33,9 +33,10 @@ import javax.persistence.criteria.Root;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import it.eng.knowage.knowageapi.context.BusinessRequestContext;
+import it.eng.knowage.boot.context.BusinessRequestContext;
+import it.eng.knowage.boot.dao.AbstractDaoImpl;
+import it.eng.knowage.boot.error.KnowageBusinessException;
 import it.eng.knowage.knowageapi.dao.dto.SbiCatalogFunction;
-import it.eng.knowage.knowageapi.error.KnowageBusinessException;
 
 /**
  * @author Marco Libanori
@@ -117,6 +118,10 @@ public class SbiCatalogFunctionDaoImpl extends AbstractDaoImpl implements SbiCat
 		function.getId().setOrganization(businessRequestContext.getOrganization());
 
 		preUpdate(function);
+		function.getInputColumns().forEach(this::preInsert);
+		function.getInputVariables().forEach(this::preInsert);
+		function.getOutputColumns().forEach(this::preInsert);
+
 		function.getInputColumns().forEach(this::preUpdate);
 		function.getInputVariables().forEach(this::preUpdate);
 		function.getOutputColumns().forEach(this::preUpdate);

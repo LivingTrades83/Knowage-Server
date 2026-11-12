@@ -17,6 +17,10 @@
  */
 package it.eng.knowage.meta.initializer.name;
 
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import it.eng.knowage.meta.model.ModelFactory;
 import it.eng.knowage.meta.model.ModelObject;
 import it.eng.knowage.meta.model.business.BusinessIdentifier;
@@ -26,11 +30,7 @@ import it.eng.knowage.meta.model.business.BusinessTable;
 import it.eng.knowage.meta.model.business.BusinessView;
 import it.eng.knowage.meta.model.business.CalculatedBusinessColumn;
 import it.eng.knowage.meta.model.business.SimpleBusinessColumn;
-
-import org.apache.commons.lang.StringUtils;
-import org.junit.Assert;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import it.eng.spagobi.utilities.assertion.Assert;
 
 /**
  * @author Andrea Gioia
@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
  */
 public class BusinessModelNamesInitializer {
 
-	static public ModelFactory FACTORY = ModelFactory.eINSTANCE;
+	public static ModelFactory FACTORY = ModelFactory.eINSTANCE;
 
 	private static Logger logger = LoggerFactory.getLogger(BusinessModelNamesInitializer.class);
 
@@ -89,7 +89,8 @@ public class BusinessModelNamesInitializer {
 		try {
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			logger.error("",e);		
 		}
 
 	}
@@ -99,7 +100,8 @@ public class BusinessModelNamesInitializer {
 		try {
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			logger.error("",e);
 		}
 
 	}
@@ -110,16 +112,17 @@ public class BusinessModelNamesInitializer {
 
 	// name
 	public void setTableName(BusinessTable businessTable) {
-		Assert.assertNotNull("Input parameter [businessTable] cannot be null", businessTable);
-		Assert.assertNotNull("Input parameter [businessTable] is not associated to any physical table", businessTable.getPhysicalTable());
+		Assert.assertNotNull(businessTable, "Input parameter [businessTable] cannot be null");
+		Assert.assertNotNull(businessTable.getPhysicalTable(),
+				"Input parameter [businessTable] is not associated to any physical table");
 		String physicalTableName = businessTable.getPhysicalTable().getName();
 		String baseName = StringUtils.capitalize(physicalTableName.replace("_", " "));
 		setTableName(businessTable, baseName);
 	}
 
 	public void setTableName(BusinessTable businessTable, String baseName) {
-		Assert.assertNotNull("Input parameter [businessTable] cannot be null", businessTable);
-		Assert.assertNotNull("Input parameter [baseName] cannot be null", baseName);
+		Assert.assertNotNull(businessTable, "Input parameter [businessTable] cannot be null");
+		Assert.assertNotNull(baseName, "Input parameter [baseName] cannot be null");
 		BusinessModel businessModel = businessTable.getModel();
 		if (businessModel == null) {
 			businessModel = businessTable.getPhysicalTable().getModel().getParentModel().getBusinessModels().get(0);
@@ -134,8 +137,9 @@ public class BusinessModelNamesInitializer {
 
 	// unique name
 	public void setTableUniqueName(BusinessTable businessTable) {
-		Assert.assertNotNull("Input parameter [businessTable] cannot be null", businessTable);
-		Assert.assertNotNull("Input parameter [businessTable] is not associated to any physical table", businessTable.getPhysicalTable());
+		Assert.assertNotNull(businessTable, "Input parameter [businessTable] cannot be null");
+		Assert.assertNotNull(businessTable.getPhysicalTable(),
+				"Input parameter [businessTable] is not associated to any physical table");
 
 		String physicalTableName = businessTable.getPhysicalTable().getName();
 		String baseUniqueName = physicalTableName.replace("_", " ");
@@ -146,8 +150,8 @@ public class BusinessModelNamesInitializer {
 	}
 
 	public void setTableUniqueName(BusinessTable businessTable, String baseUniqueName) {
-		Assert.assertNotNull("Input parameter [businessTable] cannot be null", businessTable);
-		Assert.assertNotNull("Input parameter [baseName] cannot be null", baseUniqueName);
+		Assert.assertNotNull(businessTable, "Input parameter [businessTable] cannot be null");
+		Assert.assertNotNull(baseUniqueName, "Input parameter [baseName] cannot be null");
 		BusinessModel businessModel = businessTable.getModel();
 		if (businessModel == null) {
 			businessModel = businessTable.getPhysicalTable().getModel().getParentModel().getBusinessModels().get(0);
@@ -173,7 +177,8 @@ public class BusinessModelNamesInitializer {
 		try {
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			logger.error("",e);
 		}
 	}
 
@@ -200,7 +205,8 @@ public class BusinessModelNamesInitializer {
 			}
 			businessColumn.setUniqueName(uniqueName);
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			logger.error("set",e);
 		}
 
 	}
@@ -218,7 +224,8 @@ public class BusinessModelNamesInitializer {
 		try {
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			logger.error("",e);
 		}
 
 	}
@@ -239,7 +246,8 @@ public class BusinessModelNamesInitializer {
 		try {
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			//e.printStackTrace();
+			logger.error("",e);
 		}
 	}
 }

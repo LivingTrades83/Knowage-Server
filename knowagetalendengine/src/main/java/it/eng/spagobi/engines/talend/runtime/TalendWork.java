@@ -26,7 +26,7 @@ import it.eng.spagobi.utilities.engines.EngineConstants;
 
 public class TalendWork implements Work {
 
-	private static transient Logger logger = Logger.getLogger(TalendWork.class);
+	private static final Logger logger = Logger.getLogger(TalendWork.class);
 
 	public static final String TALEND_ROLES_HANDLER_CLASS_NAME = "it.eng.spagobi.engines.drivers.talend.TalendRolesHandler";
 	public static final String START_EVENT_ID = "startEventId";
@@ -176,7 +176,7 @@ public class TalendWork implements Work {
 				try {
 					input.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					logger.error("input",e);
 				}
 			}
 		}
@@ -245,7 +245,7 @@ public class TalendWork implements Work {
 				}
 
 			} catch (IOException ioe) {
-				ioe.printStackTrace();
+				logger.error("InputStreamReader",ioe);
 			}
 		}
 	}

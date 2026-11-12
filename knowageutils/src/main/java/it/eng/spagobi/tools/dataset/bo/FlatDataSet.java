@@ -18,15 +18,23 @@
 
 package it.eng.spagobi.tools.dataset.bo;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+
 import org.apache.log4j.Logger;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import it.eng.spagobi.container.ObjectUtils;
 import it.eng.spagobi.services.dataset.bo.SpagoBiDataSet;
+import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
+import it.eng.spagobi.tools.dataset.common.iterator.ResultSetIterator;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import it.eng.spagobi.tools.dataset.utils.DatasetMetadataParser;
 import it.eng.spagobi.tools.datasource.bo.DataSourceFactory;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
+import it.eng.spagobi.utilities.engines.SpagoBIEngineRuntimeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.json.JSONUtils;
 
@@ -36,26 +44,24 @@ import it.eng.spagobi.utilities.json.JSONUtils;
  */
 public class FlatDataSet extends ConfigurableDataSet {
 
-	public static String DS_TYPE = "SbiFlatDataSet";
+	private static final Logger LOGGER = Logger.getLogger(FlatDataSet.class);
+
+	public static final String DS_TYPE = "SbiFlatDataSet";
 
 	public static final String FLAT_TABLE_NAME = "flatTableName";
 	public static final String DATA_SOURCE = "dataSourceFlat";
 	public static final String OLD_DATA_SOURCE = "dataSource";
 
-	private static transient Logger logger = Logger.getLogger(FlatDataSet.class);
-
 	private String tableName = null;
 	private IDataSource dataSource = null;
-	private IMetaData metadata;
 
 	public FlatDataSet() {
-		super();
 	}
 
 	public FlatDataSet(SpagoBiDataSet dataSetConfig) {
 		super(dataSetConfig);
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
 			this.setDataSource(DataSourceFactory.getDataSource(dataSetConfig.getDataSource()));
@@ -67,11 +73,11 @@ public class FlatDataSet extends ConfigurableDataSet {
 			JSONObject jsonConf = ObjectUtils.toJSONObject(config);
 			this.setTableName((jsonConf.get(FLAT_TABLE_NAME) != null) ? jsonConf.get(FLAT_TABLE_NAME).toString() : "");
 		} catch (Exception e) {
-			logger.error("Error while reading dataset configuration. Error:", e);
+			LOGGER.error("Error while reading dataset configuration. Error:", e);
 			throw new SpagoBIRuntimeException("Error while reading dataset configuration", e);
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 	}
 
 	public String getTableName() {
@@ -88,13 +94,16 @@ public class FlatDataSet extends ConfigurableDataSet {
 	}
 
 	@Override
-	public void setMetadata(IMetaData metadata) {
-		this.metadata = metadata;
-	}
-
-	@Override
 	public IMetaData getMetadata() {
-		return this.metadata;
+		IMetaData currMetadata = null;
+		try {
+			DatasetMetadataParser dsp = new DatasetMetadataParser();
+			currMetadata = dsp.xmlToMetadata(getDsMetadata());
+		} catch (Exception e) {
+			LOGGER.error("Error loading the metadata", e);
+			throw new SpagoBIEngineRuntimeException("Error loading the metadata", e);
+		}
+		return currMetadata;
 	}
 
 	@Override
@@ -118,7 +127,7 @@ public class FlatDataSet extends ConfigurableDataSet {
 			jsonConf.put(DATA_SOURCE, (this.getDataSource() == null) ? "" : this.getDataSource().getLabel());
 			toReturn.setConfiguration(jsonConf.toString());
 		} catch (Exception e) {
-			logger.error("Error while defining dataset configuration. Error:", e);
+			LOGGER.error("Error while defining dataset configuration. Error:", e);
 			throw new SpagoBIRuntimeException("Error while defining dataset configuration. Error:", e);
 		}
 
@@ -139,11 +148,37 @@ public class FlatDataSet extends ConfigurableDataSet {
 				jsonConf.remove(OLD_DATA_SOURCE);
 				configuration = jsonConf.toString();
 			} catch (JSONException e) {
-				throw new RuntimeException(e);
+				throw new SpagoBIRuntimeException(e);
 			}
 		}
 
 		super.setConfiguration(configuration);
+	}
+
+	@Override
+	public DataIterator iterator() {
+		LOGGER.debug("IN");
+		try {
+			IMetaData currMetadata = getMetadata();
+			String query = String.format("select * from %s", this.getTableName());
+			Connection connection = dataSource.getConnection();
+			Statement stmt = connection.createStatement();
+
+			connection.setAutoCommit(false); // PostgreSQL requires disabling auto-commit for setFetchSize to work
+			stmt.setFetchSize(5000);
+
+			ResultSet rs = stmt.executeQuery(query);
+			return new ResultSetIterator(connection, stmt, rs, currMetadata);
+		} catch (Exception e) {
+			throw new SpagoBIRuntimeException(e);
+		} finally {
+			LOGGER.debug("OUT");
+		}
+	}
+
+	@Override
+	public DataIterator iterator(IMetaData dsMetadata) {
+		return null;
 	}
 
 	@Override

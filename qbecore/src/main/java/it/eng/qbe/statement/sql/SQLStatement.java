@@ -33,7 +33,7 @@ import it.eng.qbe.model.structure.IModelEntity;
 import it.eng.qbe.query.Query;
 import it.eng.qbe.statement.AbstractStatement;
 import it.eng.spagobi.tools.dataset.bo.AbstractJDBCDataset;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
@@ -43,9 +43,9 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 public class SQLStatement extends AbstractStatement {
 
-	protected IDataSource dataSource;
-
 	public static transient Logger logger = Logger.getLogger(SQLStatement.class);
+
+	private String initialDatasetQuery;
 
 	protected SQLStatement(IDataSource dataSource) {
 		super(dataSource);
@@ -61,13 +61,13 @@ public class SQLStatement extends AbstractStatement {
 
 		// one map of entity aliases for each queries (master query + subqueries)
 		// each map is indexed by the query id
-		Map<String, Map<String, String>> entityAliasesMaps = new HashMap<String, Map<String, String>>();
+		Map<String, Map<String, String>> entityAliasesMaps = new HashMap<>();
 
 		queryStr = compose(getQuery(), entityAliasesMaps);
 
 		if (getParameters() != null) {
 			try {
-				queryStr = StringUtils.replaceParameters(queryStr.trim(), "P", getParameters());
+				queryStr = KnowageStringUtils.replaceParameters(queryStr.trim(), "P", getParameters());
 			} catch (IOException e) {
 				throw new SpagoBIRuntimeException("Impossible to set parameters in query", e);
 			}
@@ -95,7 +95,7 @@ public class SQLStatement extends AbstractStatement {
 		Assert.assertTrue(!query.isEmpty(), "Input query cannot be empty (i.e. with no selected fields)");
 
 		// let's start with the query at hand
-		entityAliasesMaps.put(query.getId(), new HashMap<String, String>());
+		entityAliasesMaps.put(query.getId(), new HashMap<>());
 
 		selectClause = SQLStatementSelectClause.build(this, query, entityAliasesMaps, true);
 		whereClause = SQLStatementWhereClause.build(this, query, entityAliasesMaps);
@@ -105,13 +105,13 @@ public class SQLStatement extends AbstractStatement {
 
 		whereClause = SQLStatementWhereClause.injectAutoJoins(this, whereClause, query, entityAliasesMaps);
 
-		fromClause = SQLStatementFromClause.build(this, query, entityAliasesMaps);
+		fromClause = SQLStatementFromClause.build(this, query, entityAliasesMaps, initialDatasetQuery);
 
 		queryStr = selectClause + " " + fromClause + " " + whereClause + " " + groupByClause + " " + havingClause + " " + orderByClause;
 
 		Set subqueryIds;
 		try {
-			subqueryIds = StringUtils.getParameters(queryStr, "Q");
+			subqueryIds = KnowageStringUtils.getParameters(queryStr, "Q");
 		} catch (IOException e) {
 			throw new SpagoBIRuntimeException("Impossible to set parameters in query", e);
 		}
@@ -143,10 +143,10 @@ public class SQLStatement extends AbstractStatement {
 
 		// one map of entity aliases for each queries (master query + subqueries)
 		// each map is indexed by the query id
-		entityAliasesMaps = new HashMap<String, Map<String, String>>();
+		entityAliasesMaps = new HashMap<>();
 
 		// let's start with the query at hand
-		entityAliasesMaps.put(getQuery().getId(), new HashMap<String, String>());
+		entityAliasesMaps.put(getQuery().getId(), new HashMap<>());
 
 		SQLStatementGroupByClause.build(this, getQuery(), entityAliasesMaps);
 
@@ -167,6 +167,16 @@ public class SQLStatement extends AbstractStatement {
 		}
 
 		return super.getQueryString();
+	}
+
+	@Override
+	public String getQuerySQLString(String initialDatasetQuery) {
+		if (initialDatasetQuery != null) {
+			this.setInitialDatasetQuery(initialDatasetQuery);
+			this.prepare();
+		}
+		return super.getQueryString();
+
 	}
 
 	@Override
@@ -193,6 +203,14 @@ public class SQLStatement extends AbstractStatement {
 		DataSetDataSource datasetDatasource = (DataSetDataSource) this.getDataSource();
 		it.eng.spagobi.tools.datasource.bo.IDataSource datasourceForReading = datasetDatasource.getDataSourceForReading();
 		return rootEntityAlias + "." + AbstractJDBCDataset.encapsulateColumnName(queryName, datasourceForReading);
+	}
+
+	public String getInitialDatasetQuery() {
+		return initialDatasetQuery;
+	}
+
+	public void setInitialDatasetQuery(String initialDatasetQuery) {
+		this.initialDatasetQuery = initialDatasetQuery;
 	}
 
 }

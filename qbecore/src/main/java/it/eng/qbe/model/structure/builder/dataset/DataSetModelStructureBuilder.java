@@ -18,6 +18,11 @@
 
 package it.eng.qbe.model.structure.builder.dataset;
 
+import java.util.List;
+import java.util.Map;
+
+import org.apache.log4j.Logger;
+
 import it.eng.qbe.datasource.dataset.DataSetDataSource;
 import it.eng.qbe.model.properties.initializer.IModelStructurePropertiesInitializer;
 import it.eng.qbe.model.properties.initializer.SimpleModelStructurePropertiesInitializer;
@@ -32,17 +37,12 @@ import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import it.eng.spagobi.utilities.assertion.Assert;
 
-import java.util.List;
-import java.util.Map;
-
-import org.apache.log4j.Logger;
-
 /**
  * @author Alberto Ghedin (alberto.ghedin@eng.it)
  */
 public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder {
 	private static final String FIELD_TYPE_PROPERTY = "type";
-	private static transient Logger logger = Logger.getLogger(DataSetModelStructureBuilder.class);
+	private static final Logger LOGGER = Logger.getLogger(DataSetModelStructureBuilder.class);
 
 	IModelStructurePropertiesInitializer propertiesInitializer;
 
@@ -59,7 +59,7 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 		ModelStructure modelStructure;
 		String modelName;
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		try {
 			modelStructure = new ModelStructure();
@@ -74,28 +74,28 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 			}
 
 			List<IDataSet> rootentities = getDataSource().getRootEntities();
-			logger.debug("The root entity names are [" + rootentities + "] ");
+			LOGGER.debug("The root entity names are [" + rootentities + "] ");
 
 			for (int i = 0; i < rootentities.size(); i++) {
 				IDataSet entity = rootentities.get(i);
-				logger.debug("Adding entity type [" + entity.getName() + "] to model structure");
+				LOGGER.debug("Adding entity type [" + entity.getName() + "] to model structure");
 				addEntity(modelStructure, modelName, entity);
-				logger.info("Entity type [" + entity.getName() + "] succesfully added to model structure");
+				LOGGER.info("Entity type [" + entity.getName() + "] succesfully added to model structure");
 			}
 
 			addRelationshipsBetweenRootEntities(modelStructure);
 
-			logger.info("Model structure for model [" + modelName + "] succesfully built");
+			LOGGER.info("Model structure for model [" + modelName + "] succesfully built");
 
 			return modelStructure;
 		} catch (Exception e) {
-			logger.debug("Impossible to build model structure", e);
+			LOGGER.debug("Impossible to build model structure", e);
 			throw new RuntimeException("Impossible to build model structure", e);
 		} catch (Throwable t) {
 			throw new RuntimeException("Impossible to build model structure", t);
 
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
@@ -103,7 +103,6 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 
 		String entityLabel = entity.getName();
 		String tableName = entity.getTableNameForReading();
-		String dsType = entity.getDsType();
 
 		IModelEntity dataMartEntity = modelStructure.addRootEntity(modelName, entityLabel, null, null, entityLabel);
 		dataMartEntity.getProperties().put("label", entityLabel);
@@ -125,11 +124,10 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 	/**
 	 * This method adds the normal fields to the datamart entry structure
 	 *
-	 * @param dataMartEntity
-	 *            : the datamart structure to complete
+	 * @param dataMartEntity : the datamart structure to complete
 	 */
 	public void addNormalFields(IModelEntity dataMartEntity, IDataSet entity) {
-		logger.debug("Adding the field " + dataMartEntity.getName());
+		LOGGER.debug("Adding the field " + dataMartEntity.getName());
 
 		IMetaData datasetMetadata = entity.getMetadata();
 
@@ -138,7 +136,7 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 			addField(fieldMetadata, dataMartEntity, "", entity);
 		}
 
-		logger.debug("Field " + dataMartEntity.getName() + " added");
+		LOGGER.debug("Field " + dataMartEntity.getName() + " added");
 	}
 
 	private void addField(IFieldMetaData fieldMetadata, IModelEntity dataMartEntity, String keyPrefix, IDataSet entity) {
@@ -184,12 +182,15 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 		propertiesInitializer.addProperties(datamartField);
 		if (fieldMetadata.getFieldType() != null) {
 			datamartField.getProperties().put(FIELD_TYPE_PROPERTY, (fieldMetadata.getFieldType().name()).toLowerCase());
+			if (datamartField.getType().equals("oracle.sql.TIMESTAMP")) {
+				datamartField.getProperties().put("format", "LLLL");
+			}
 		}
 
 	}
 
 	private void addCalculatedFields(IModelEntity dataMartEntity) {
-		logger.debug("Adding the calculated field " + dataMartEntity.getName());
+		LOGGER.debug("Adding the calculated field " + dataMartEntity.getName());
 		List calculatedFileds;
 		ModelCalculatedField calculatedField;
 
@@ -201,7 +202,7 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 				propertiesInitializer.addProperties(calculatedField);
 			}
 		}
-		logger.debug("Added the calculated field " + dataMartEntity.getName());
+		LOGGER.debug("Added the calculated field " + dataMartEntity.getName());
 	}
 
 	/**
@@ -212,8 +213,7 @@ public class DataSetModelStructureBuilder extends AbstractModelStructureBuilder 
 	}
 
 	/**
-	 * @param DataSetDataSource
-	 *            the datasource to set
+	 * @param DataSetDataSource the datasource to set
 	 */
 	public void setDataSource(DataSetDataSource dataSource) {
 		this.dataSource = dataSource;

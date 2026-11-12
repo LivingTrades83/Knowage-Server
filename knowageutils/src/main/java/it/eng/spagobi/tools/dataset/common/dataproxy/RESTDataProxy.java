@@ -23,6 +23,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.commons.httpclient.HttpStatus;
@@ -56,7 +57,7 @@ public class RESTDataProxy extends AbstractDataProxy {
 
 	private String unparametrizedRequestBody;
 	private String unparametrizedAddress;
-	private final Map<String, String> unparametrizedRequestHeaders = new HashMap<String, String>();
+	private final Map<String, String> unparametrizedRequestHeaders = new HashMap<>();
 
 	protected final HttpMethod method;
 
@@ -92,7 +93,7 @@ public class RESTDataProxy extends AbstractDataProxy {
 
 		this.requestBody = requestBody;
 		this.address = address;
-		this.requestHeaders = new HashMap<String, String>(requestHeaders);
+		this.requestHeaders = new HashMap<>(requestHeaders);
 
 		/*
 		 * Initialize with same values. The parameters replacement will happen
@@ -149,7 +150,7 @@ public class RESTDataProxy extends AbstractDataProxy {
 	}
 
 	protected List<NameValuePair> getQuery() {
-		List<NameValuePair> res = new ArrayList<NameValuePair>();
+		List<NameValuePair> res = new ArrayList<>();
 		if (offsetParam != null) {
 			if (offset != OFFSET_NOT_DEFINED) {
 				res.add(new NameValuePair(offsetParam, Integer.toString(offset)));
@@ -177,7 +178,6 @@ public class RESTDataProxy extends AbstractDataProxy {
 				if (val instanceof String) {
 					if (val != null && !val.equals("") && !val.equals("''")) {
 						String curval = (String) val;
-						curval = curval.replaceAll("'", "");
 						res.add(new NameValuePair(key, curval));
 					}
 				}
@@ -266,11 +266,14 @@ public class RESTDataProxy extends AbstractDataProxy {
 			for (Entry<String, String> entry : entrySet) {
 				String key = entry.getKey();
 				String value = entry.getValue();
-				value = value.replaceAll("^'", "").replaceAll("'$", "");
+				value = Optional.ofNullable(value)
+						.orElse("" /* TODO "" or "null" ??? */)
+						.replaceAll("^'", "")
+						.replaceAll("'$", "");
 				String keyPlaceholderRegex = "\\$P\\{" + key  + "\\}";
 
 				unparametrizedAddress = unparametrizedAddress.replaceAll(keyPlaceholderRegex, /* TODO : needs some escapes? */ value);
-				unparametrizedRequestBody = unparametrizedRequestBody.replaceAll(keyPlaceholderRegex, value);
+				unparametrizedRequestBody = Optional.ofNullable(unparametrizedRequestBody).orElse("").replaceAll(keyPlaceholderRegex, value);
 
 				Set<Entry<String, String>> headersEntrySet = unparametrizedRequestHeaders.entrySet();
 				for (Entry<String, String> headerEntry : headersEntrySet) {

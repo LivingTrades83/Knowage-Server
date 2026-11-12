@@ -18,12 +18,12 @@
 package it.eng.spagobi.kpi;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.text.MessageFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,9 +32,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -51,8 +54,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.quartz.JobExecutionException;
 
-import com.fasterxml.jackson.core.JsonGenerationException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import it.eng.spago.error.EMFErrorSeverity;
@@ -60,7 +61,7 @@ import it.eng.spago.error.EMFInternalError;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.dao.ISpagoBIDao;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
@@ -95,7 +96,7 @@ import it.eng.spagobi.tools.dataset.common.datawriter.JSONDataWriter;
 import it.eng.spagobi.tools.dataset.constants.DataSetConstants;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.utilities.JSError;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
@@ -132,7 +133,7 @@ public class KpiService {
 
 	@POST
 	@Path("/buildCardinalityMatrix")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response buildCardinalityMatrix(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("buildCardinalityMatrix IN");
 		Response out;
@@ -161,7 +162,7 @@ public class KpiService {
 
 	@POST
 	@Path("/listPlaceholderByMeasures")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response listPlaceholderByMeasures(@Context HttpServletRequest req) throws EMFUserError {
 		Response out;
 		try {
@@ -187,13 +188,13 @@ public class KpiService {
 
 	@POST
 	@Path("/listPlaceholderByKpi")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response listPlaceholderByKpi(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("listPlaceholderByKpi IN");
 		Response out;
 		try {
 			JSONArray arrayOfKpi = RestUtilities.readBodyAsJSONArray(req);
-			List<Kpi> kpiLst = new ArrayList<>();
+			final List<Kpi> kpiLst = new ArrayList<>();
 			for (int i = 0; i < arrayOfKpi.length(); i++) {
 				JSONObject kpiKey = arrayOfKpi.getJSONObject(i);
 				kpiLst.add(new Kpi(kpiKey.getInt("id"), kpiKey.getInt("version")));
@@ -201,7 +202,7 @@ public class KpiService {
 			Map<String, String> result = new HashMap<>();
 
 			IKpiDAO dao = getKpiDAO(req);
-			if (kpiLst != null && !kpiLst.isEmpty()) {
+			if (!kpiLst.isEmpty()) {
 				Map<Kpi, List<String>> lst = dao.listPlaceholderByKpiList(kpiLst);
 
 				for (Entry<Kpi, List<String>> keyValue : lst.entrySet()) {
@@ -233,7 +234,7 @@ public class KpiService {
 
 	@GET
 	@Path("/listPlaceholder")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response listPlaceholder(@Context HttpServletRequest req) throws EMFUserError {
 		Response out;
 		logger.debug("listPlaceholder IN");
@@ -245,9 +246,9 @@ public class KpiService {
 
 	@GET
 	@Path("/listMeasure")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response listMeasure(@Context HttpServletRequest req, @QueryParam("orderProperty") String orderProperty, @QueryParam("orderType") String orderType)
-			throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response listMeasure(@Context HttpServletRequest req, @QueryParam("orderProperty") String orderProperty,
+			@QueryParam("orderType") String orderType) throws EMFUserError {
 		Response out;
 		logger.debug("listMeasure IN");
 		IKpiDAO dao = getKpiDAO(req);
@@ -260,7 +261,7 @@ public class KpiService {
 
 	@GET
 	@Path("/{name}/existsMeasure")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public String existsMeasure(@PathParam("name") String name, @Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("existsMeasure IN");
 		Response out;
@@ -272,8 +273,9 @@ public class KpiService {
 
 	@GET
 	@Path("/{id}/{number}/logExecutionList")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response logExecutionList(@PathParam("id") Integer id, @PathParam("number") Integer number, @Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response logExecutionList(@PathParam("id") Integer id, @PathParam("number") Integer number,
+			@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("logExecutionList IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
@@ -285,8 +287,9 @@ public class KpiService {
 
 	@GET
 	@Path("/{id}/logExecutionListOutputContent")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response logExecutionListOutputContent(@PathParam("id") Integer id, @Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response logExecutionListOutputContent(@PathParam("id") Integer id, @Context HttpServletRequest req)
+			throws EMFUserError {
 		logger.debug("logExecutionListOutputContent IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
@@ -298,8 +301,9 @@ public class KpiService {
 
 	@GET
 	@Path("/{id}/{version}/loadRule")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response loadRule(@PathParam("id") Integer id, @PathParam("version") Integer version, @Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response loadRule(@PathParam("id") Integer id, @PathParam("version") Integer version,
+			@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("loadRule IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
@@ -311,9 +315,9 @@ public class KpiService {
 
 	@GET
 	@Path("/{thresholdId}/loadThreshold")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response loadThreshold(@PathParam("thresholdId") Integer id, @QueryParam("kpiId") Integer kpiId, @Context HttpServletRequest req)
-			throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response loadThreshold(@PathParam("thresholdId") Integer id, @QueryParam("kpiId") Integer kpiId,
+			@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("loadThreshold IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
@@ -328,7 +332,7 @@ public class KpiService {
 
 	@GET
 	@Path("/listAlias")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response listAlias(@Context HttpServletRequest req) throws EMFUserError {
 		Response out;
 		logger.debug("listAlias IN");
@@ -341,8 +345,9 @@ public class KpiService {
 
 	@GET
 	@Path("/listAvailableAlias")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response listAvailableAlias(@QueryParam("ruleId") Integer ruleId, @QueryParam("ruleVersion") Integer ruleVersion, @Context HttpServletRequest req)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response listAvailableAlias(@QueryParam("ruleId") Integer ruleId,
+			@QueryParam("ruleVersion") Integer ruleVersion, @Context HttpServletRequest req)
 			throws EMFUserError, JSONException {
 		logger.debug("IN");
 		Response out;
@@ -371,7 +376,7 @@ public class KpiService {
 	 */
 	@POST
 	@Path("/queryPreview")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response queryPreview(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("queryPreview IN");
 		Response out;
@@ -397,7 +402,8 @@ public class KpiService {
 
 		} catch (IOException | JSONException | EMFInternalError e) {
 			logger.error("queryPreview  ");
-			logger.error("dataSourceId[" + dataSourceId + "] query[" + query + "] maxItem[" + maxItem + "] placeholders[" + placeholders + "]");
+			logger.error("dataSourceId[" + dataSourceId + "] query[" + query + "] maxItem[" + maxItem
+					+ "] placeholders[" + placeholders + "]");
 			logger.error(req.getPathInfo(), e);
 		}
 		out = Response.ok().build();
@@ -424,7 +430,7 @@ public class KpiService {
 
 	@GET
 	@Path("/findKpiValuesTest")
-	public Response findKpiValuesTest() throws EMFUserError, JsonGenerationException, JsonMappingException, IOException {
+	public Response findKpiValuesTest() throws IOException {
 		logger.debug("findKpiValuesTest IN");
 		Response out;
 		IKpiDAO kpiDao = DAOFactory.getKpiDAO();
@@ -442,7 +448,7 @@ public class KpiService {
 
 	@POST
 	@Path("/preSaveRule")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response preSave(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("preSaveRule IN");
 		Response out;
@@ -460,7 +466,8 @@ public class KpiService {
 			JSError jsError = new JSError();
 			if (!aliasErrorMap.isEmpty()) {
 				for (Entry<String, List<String>> error : aliasErrorMap.entrySet()) {
-					jsError.addErrorKey(error.getKey(), new JSONArray(error.getValue()).toString().replaceAll("[\\[\\]]", ""));
+					jsError.addErrorKey(error.getKey(),
+							new JSONArray(error.getValue()).toString().replaceAll("[\\[\\]]", ""));
 				}
 			}
 			if (rule.getId() != null) {
@@ -493,7 +500,8 @@ public class KpiService {
 						// 2 - Number of records should not exceed the size of the selected hierarchy
 						boolean toManyValues = checkValuesNumberForTemporalAttributes(req, rule, query, ruleOut);
 						if (toManyValues) {
-							jsError.addErrorKey("Error: too many values for temporal attribute", "Error: too many values for temporal attribute");
+							jsError.addErrorKey("Error: too many values for temporal attribute",
+									"Error: too many values for temporal attribute");
 							out = Response.ok(jsError.toString()).build();
 							logger.debug("Error: too many values for temporal attribute");
 							break;
@@ -502,8 +510,8 @@ public class KpiService {
 						// 3 - All the records should be coherent with the selected temporal level
 						boolean isValid = checkValuesFormatForTemporalAttributes(req, rule, query, ruleOut);
 						if (!isValid) {
-							String errMsg = "Error on temporal attributes " + ruleOut.getAlias() + " contains not allowed data for type: "
-									+ ruleOut.getHierarchy().getValueCd();
+							String errMsg = "Error on temporal attributes " + ruleOut.getAlias()
+									+ " contains not allowed data for type: " + ruleOut.getHierarchy().getValueCd();
 							jsError.addErrorKey(errMsg, errMsg);
 							out = Response.ok(jsError.toString()).build();
 							logger.debug(errMsg);
@@ -521,11 +529,12 @@ public class KpiService {
 		}
 	}
 
-	private boolean checkValuesFormatForTemporalAttributes(HttpServletRequest req, Rule rule, String query, RuleOutput ruleOut)
-			throws EMFUserError, EMFInternalError, JSONException {
+	private boolean checkValuesFormatForTemporalAttributes(HttpServletRequest req, Rule rule, String query,
+			RuleOutput ruleOut) throws EMFUserError, EMFInternalError, JSONException {
 		boolean isValid = true;
 		String distinctQuery = "SELECT DISTINCT " + ruleOut.getAlias() + " FROM ( " + query + ") a_l_i_a_s";
-		JSONObject distinctResult = executeQuery(rule.getDataSourceId(), distinctQuery, 0, rule.getPlaceholders(), getProfile(req));
+		JSONObject distinctResult = executeQuery(rule.getDataSourceId(), distinctQuery, 0, rule.getPlaceholders(),
+				getProfile(req));
 		// check Temporal Attribute...
 		String columnName = "";
 		JSONArray distinctResultColumns = distinctResult.getJSONArray("columns");
@@ -543,7 +552,8 @@ public class KpiService {
 			for (int j = 0; j < distinctResultRows.length(); j++) {
 				Integer testingValue = null;
 				try {
-					testingValue = new Integer(distinctResultRows.getJSONObject(j).getString(columnName));
+					String value = distinctResultRows.getJSONObject(j).getString(columnName);
+					testingValue = new BigDecimal(value).toBigInteger().intValue();
 				} catch (NumberFormatException e) {
 					isValid = false;
 					break;
@@ -581,10 +591,12 @@ public class KpiService {
 		return isValid;
 	}
 
-	private boolean checkValuesNumberForTemporalAttributes(HttpServletRequest req, Rule rule, String query, RuleOutput ruleOut)
-			throws JSONException, EMFUserError, EMFInternalError {
-		String countQuery = "SELECT count(distinct " + ruleOut.getAlias() + ") as totRows  FROM ( " + query + ") a_l_i_a_s";
-		JSONObject countResult = executeQuery(rule.getDataSourceId(), countQuery, 0, rule.getPlaceholders(), getProfile(req));
+	private boolean checkValuesNumberForTemporalAttributes(HttpServletRequest req, Rule rule, String query,
+			RuleOutput ruleOut) throws JSONException, EMFUserError, EMFInternalError {
+		String countQuery = "SELECT count(distinct " + ruleOut.getAlias() + ") as totRows  FROM ( " + query
+				+ ") a_l_i_a_s";
+		JSONObject countResult = executeQuery(rule.getDataSourceId(), countQuery, 0, rule.getPlaceholders(),
+				getProfile(req));
 		Integer maxSize = 0;
 
 		switch (ruleOut.getHierarchy().getValueCd()) {
@@ -610,7 +622,7 @@ public class KpiService {
 
 	@POST
 	@Path("/saveRule")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response saveRule(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("saveRule IN");
 		Response out;
@@ -666,7 +678,8 @@ public class KpiService {
 
 	@GET
 	@Path("/listKpi")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT, SpagoBIConstants.CREATE_DOCUMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT,
+			CommunityFunctionalityConstants.CREATE_DOCUMENT })
 	public Response listKpi(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("listKpi IN");
 		Response out;
@@ -680,7 +693,7 @@ public class KpiService {
 
 	@GET
 	@Path("/listKpiWithResult")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response listKpiWithResult(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("listKpiWithResult IN");
 		Response out;
@@ -693,8 +706,9 @@ public class KpiService {
 
 	@GET
 	@Path("/{id}/{version}/loadKpi")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response loadKpi(@PathParam("id") Integer id, @PathParam("version") Integer version, @Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response loadKpi(@PathParam("id") Integer id, @PathParam("version") Integer version,
+			@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("ID VERSION loadKpi  IN");
 		Response out;
 		Kpi kpi = getKpiDAO(req).loadKpi(id, version);
@@ -705,7 +719,7 @@ public class KpiService {
 
 	@GET
 	@Path("/listThreshold")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response listThreshold(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("listThreshold IN");
 		Response out;
@@ -718,8 +732,8 @@ public class KpiService {
 
 	@POST
 	@Path("/saveKpi")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response saveKpi(@Context HttpServletRequest req) throws EMFUserError, EMFInternalError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response saveKpi(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("saveKpi IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
@@ -773,8 +787,9 @@ public class KpiService {
 
 	@DELETE
 	@Path("/{id}/{version}/deleteKpi")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response deleteKpi(@PathParam("id") Integer id, @PathParam("version") Integer version, @Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response deleteKpi(@PathParam("id") Integer id, @PathParam("version") Integer version,
+			@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("deleteKpi IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
@@ -793,8 +808,9 @@ public class KpiService {
 
 	@DELETE
 	@Path("/{id}/{version}/deleteRule")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response deleteRule(@PathParam("id") Integer id, @PathParam("version") Integer version, @Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response deleteRule(@PathParam("id") Integer id, @PathParam("version") Integer version,
+			@Context HttpServletRequest req) throws EMFUserError {
 		// Rule can only be removed logically
 		logger.debug("deleteRule IN");
 		Response out;
@@ -810,7 +826,9 @@ public class KpiService {
 					kpiNames.append(" ,");
 				}
 			}
-			out = Response.ok(new JSError().addErrorKey("newKpi.rule.usedByKpi.delete.error", kpiNames.toString()).toString()).build();
+			out = Response
+					.ok(new JSError().addErrorKey("newKpi.rule.usedByKpi.delete.error", kpiNames.toString()).toString())
+					.build();
 			logger.debug("deleteRule OUT");
 			return out;
 		}
@@ -823,8 +841,9 @@ public class KpiService {
 
 	@DELETE
 	@Path("/{id}/deleteKpiScheduler")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
-	public Response deleteKpiScheduler(@PathParam("id") Integer id, @Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public Response deleteKpiScheduler(@PathParam("id") Integer id, @Context HttpServletRequest req)
+			throws EMFUserError {
 		logger.debug("deleteKpiScheduler IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
@@ -836,20 +855,20 @@ public class KpiService {
 
 	@GET
 	@Path("/listSchedulerKPI")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response listSchedulerKPI(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("listSchedulerKPI IN");
 		Response out;
 		IKpiDAO dao = getKpiDAO(req);
 		List<KpiScheduler> schedulerList = dao.listKpiScheduler();
-		out = Response.ok(JsonConverter.objectToJson(schedulerList, schedulerList.getClass()).toString()).build();
+		out = Response.ok(JsonConverter.objectToJson(schedulerList, schedulerList.getClass())).build();
 		logger.debug("listSchedulerKPI OUT");
 		return out;
 	}
 
 	@POST
 	@Path("/saveSchedulerKPI")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response saveSchedulerKPI(@Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("saveSchedulerKPI IN");
 		Response out;
@@ -884,11 +903,10 @@ public class KpiService {
 
 	@POST
 	@Path("/editKpiValue")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT, SpagoBIConstants.MANAGE_KPI_VALUE })
-	public void editKpiValue(@Context HttpServletRequest req) throws EMFUserError {
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
+	public void editKpiValue(@Context HttpServletRequest req) {
 		logger.debug("editKpiValue IN");
 		Response out;
-		JSONArray array = new JSONArray();
 		UserProfile profile = (UserProfile) req.getSession().getAttribute(IEngUserProfile.ENG_USER_PROFILE);
 		try {
 			JSONObject requestVal = RestUtilities.readBodyAsJSONObject(req);
@@ -911,7 +929,8 @@ public class KpiService {
 				DAOFactory.getKpiDAO().editKpiValue(kpiValue.getInt("id"), -999, comment);
 
 			} else {
-				DAOFactory.getKpiDAO().editKpiValue(kpiValue.getInt("id"), requestVal.getDouble("manualValue"), comment);
+				DAOFactory.getKpiDAO().editKpiValue(kpiValue.getInt("id"), requestVal.getDouble("manualValue"),
+						comment);
 
 			}
 
@@ -927,7 +946,7 @@ public class KpiService {
 
 	@GET
 	@Path("/{id}/loadSchedulerKPI")
-	@UserConstraint(functionalities = { SpagoBIConstants.KPI_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.KPI_MANAGEMENT })
 	public Response loadSchedulerKPI(@PathParam("id") Integer id, @Context HttpServletRequest req) throws EMFUserError {
 		logger.debug("loadSchedulerKPI IN");
 		Response out;
@@ -942,7 +961,7 @@ public class KpiService {
 	 * *** Private methods ***
 	 */
 
-	private void checkConflictsWithKpi(JSError jsError, Rule rule, Map<Kpi, List<String>> kpimap, IKpiDAO kpiDao) throws EMFUserError {
+	private void checkConflictsWithKpi(JSError jsError, Rule rule, Map<Kpi, List<String>> kpimap, IKpiDAO kpiDao) {
 		if (rule.getId() != null && rule.getVersion() != null) {
 
 			// Checking if any removed measure is linked to a kpi (if so we cannot save this rule)
@@ -965,7 +984,7 @@ public class KpiService {
 				}
 			}
 			if (!measureAndKpi.isEmpty()) {
-				jsError.addErrorKey("newKpi.rule.usedByKpi.save.error", StringUtils.join(measureAndKpi, ", "));
+				jsError.addErrorKey("newKpi.rule.usedByKpi.save.error", KnowageStringUtils.join(measureAndKpi, ", "));
 			}
 
 			// Checking if any removed attribute is linked to a kpi (if so we cannot save this rule)
@@ -976,18 +995,23 @@ public class KpiService {
 					try {
 						JSONArray measures = new JSONObject(kpi.getCardinality()).getJSONArray("measureList");
 						for (int i = 0; i < measures.length(); i++) {
-							Iterator<String> attributesIterator = measures.getJSONObject(i).getJSONObject("attributes").keys();
-							while (attributesIterator.hasNext()) {
-								String attribute = attributesIterator.next();
-								usedAttributes.add(attribute);
-								if (kpis.get(kpi.getName()) == null) {
-									kpis.put(kpi.getName(), new ArrayList<String>());
+
+							JSONObject measure = measures.getJSONObject(i);
+							if (measure.getString("ruleName").equals(rule.getName())) {
+								Iterator<String> attributesIterator = measure.getJSONObject("attributes").keys();
+								while (attributesIterator.hasNext()) {
+									String attribute = attributesIterator.next();
+									usedAttributes.add(attribute);
+									if (kpis.get(kpi.getName()) == null) {
+										kpis.put(kpi.getName(), new ArrayList<>());
+									}
+									kpis.get(kpi.getName()).add(attribute);
 								}
-								kpis.get(kpi.getName()).add(attribute);
 							}
 						}
 					} catch (JSONException e) {
-						logger.error("Error while trying to read measureList/attributes from kpi [id=" + kpi.getId() + "|version=" + kpi.getVersion() + "]", e);
+						logger.error("Error while trying to read measureList/attributes from kpi [id=" + kpi.getId()
+								+ "|version=" + kpi.getVersion() + "]", e);
 					}
 				}
 				if (!usedAttributes.isEmpty()) {
@@ -1002,7 +1026,8 @@ public class KpiService {
 						}
 					}
 					if (!attributesError.isEmpty()) {
-						jsError.addErrorKey("newKpi.rule.attributeUsedByKpi.save.error", StringUtils.join(attributesError, ", "));
+						jsError.addErrorKey("newKpi.rule.attributeUsedByKpi.save.error",
+								KnowageStringUtils.join(attributesError, ", "));
 					}
 				}
 			}
@@ -1017,20 +1042,21 @@ public class KpiService {
 				List<String> kpiNames = new ArrayList<>();
 				boolean anyScheduler = false;
 				for (Kpi kpi : kpimap.keySet()) {
-					List<KpiScheduler> schedulerList = kpiDao.listSchedulerAndFiltersByKpi(kpi.getId(), kpi.getVersion(), true);
+					List<KpiScheduler> schedulerList = kpiDao.listSchedulerAndFiltersByKpi(kpi.getId(),
+							kpi.getVersion(), true);
 					for (KpiScheduler kpiScheduler : schedulerList) {
 						for (SchedulerFilter filter : kpiScheduler.getFilters()) {
 							placeholderNames.remove(filter.getPlaceholderName());
 						}
 					}
 					kpiNames.add(kpi.getName());
-					if (schedulerList.size() > 0) {
+					if (!schedulerList.isEmpty()) {
 						anyScheduler = true;
 					}
 				}
 				if (!placeholderNames.isEmpty() && anyScheduler) {
-					jsError.addWarningKey("newKpi.rule.placeholdersMustBeSet.save.error", StringUtils.join(placeholderNames, ", "),
-							StringUtils.join(kpiNames, ", "));
+					jsError.addWarningKey("newKpi.rule.placeholdersMustBeSet.save.error",
+							KnowageStringUtils.join(placeholderNames, ", "), KnowageStringUtils.join(kpiNames, ", "));
 				}
 			}
 		}
@@ -1080,7 +1106,8 @@ public class KpiService {
 	private void checkValidity(KpiScheduler scheduler) throws SpagoBIException {
 		String fieldValue = null;
 		String fieldName = null;
-		if (!scheduler.getFrequency().getEndTime().isEmpty() && !scheduler.getFrequency().getStartTime().matches("\\d{2}:\\d{2}")) {
+		if (!scheduler.getFrequency().getEndTime().isEmpty()
+				&& !scheduler.getFrequency().getStartTime().matches("\\d{2}:\\d{2}")) {
 			fieldName = "StartTime";
 			fieldValue = scheduler.getFrequency().getStartTime();
 		}
@@ -1106,8 +1133,6 @@ public class KpiService {
 			fieldName = "StartDate";
 		} else if (scheduler.getFrequency().getCron() == null) {
 			fieldName = "Crono";
-		} else if (scheduler.getDelta() == null) {
-			fieldName = "Delta";
 		} else if (scheduler.getKpis() == null || scheduler.getKpis().isEmpty()) {
 			fieldName = "Kpi list";
 		} else if (scheduler.getFrequency().getStartTime() == null) {
@@ -1116,7 +1141,8 @@ public class KpiService {
 		if (scheduler.getFilters() != null && !scheduler.getFilters().isEmpty()) {
 			for (SchedulerFilter filter : scheduler.getFilters()) {
 				if (filter.getPlaceholderName() == null || filter.getValue() == null) {
-					fieldName = "PlaceholderName [" + filter.getPlaceholderName() + "] value [" + filter.getValue() + "]";
+					fieldName = "PlaceholderName [" + filter.getPlaceholderName() + "] value [" + filter.getValue()
+							+ "]";
 				}
 			}
 		}
@@ -1177,7 +1203,7 @@ public class KpiService {
 		List<String> selectedAttrs = new ArrayList<>();
 	}
 
-	private void checkCardinality(JSError errors, String cardinality, String definition) throws JSONException, EMFUserError {
+	private void checkCardinality(JSError errors, String cardinality, String definition) throws JSONException {
 		JSONArray measureArray = new JSONObject(cardinality).getJSONArray("measureList");
 		JSONArray measureOfFormulaArray = new JSONObject(definition).getJSONArray("measures");
 		if (measureArray.length() != measureOfFormulaArray.length()) {
@@ -1206,12 +1232,7 @@ public class KpiService {
 					}
 				}
 			}
-			Collections.sort(measureLst, new Comparator<Measure>() {
-				@Override
-				public int compare(Measure m1, Measure m2) {
-					return m1.selectedAttrs.size() - m2.selectedAttrs.size();
-				}
-			});
+			Collections.sort(measureLst, (m1, m2) -> m1.selectedAttrs.size() - m2.selectedAttrs.size());
 			for (int i = 1; i < measureLst.size(); i++) {
 				Measure prevMeasure = measureLst.get(i - 1);
 				Measure currMeasure = measureLst.get(i);
@@ -1229,7 +1250,7 @@ public class KpiService {
 		if (threshold.getType() == null && threshold.getTypeId() == null) {
 			errors.addErrorKey(NEW_KPI_THRESHOLD_TYPE_MANDATORY);
 		}
-		if (threshold.getThresholdValues() == null || threshold.getThresholdValues().size() == 0) {
+		if (threshold.getThresholdValues() == null || threshold.getThresholdValues().isEmpty()) {
 			errors.addErrorKey(NEW_KPI_THRESHOLD_VALUES_MANDATORY);
 		}
 	}
@@ -1265,7 +1286,7 @@ public class KpiService {
 			if (script.matches("[\\s\\+\\-\\*/\\d\\(\\)]+")) {
 				try {
 					engine.eval(script);
-				} catch (Throwable e) {
+				} catch (ScriptException | NullPointerException e) {
 					jsError.addErrorKey(NEW_KPI_DEFINITION_SYNTAXERROR);
 				}
 			} else {
@@ -1279,8 +1300,8 @@ public class KpiService {
 		}
 	}
 
-	private JSONObject executeQuery(Integer dataSourceId, String query, Integer maxItem, Set<Placeholder> placeholders, IEngUserProfile profile)
-			throws JSONException, EMFUserError, EMFInternalError {
+	private JSONObject executeQuery(Integer dataSourceId, String query, Integer maxItem, Set<Placeholder> placeholders,
+			IEngUserProfile profile) throws JSONException, EMFUserError, EMFInternalError {
 
 		Map<String, String> parameterMap = new HashMap<>();
 
@@ -1294,8 +1315,11 @@ public class KpiService {
 				parameterMap.put(placeholder.getName(), placeholder.getValue());
 			}
 			// Replacing parameters from "@name" to "$P{name}" notation as expected by IDataSet
+
 			for (String paramName : parameterMap.keySet()) {
-				query = query.replaceAll("\\@\\b" + paramName + "\\b", "\\$P{" + paramName + "}");
+				String regex = "@" + Pattern.quote(paramName); // regex features preserved; paramName is literal
+				String replacement = Matcher.quoteReplacement("$P{" + paramName + "}"); // escape $ and \
+				query = query.replaceAll(regex, replacement);
 			}
 		}
 
@@ -1322,7 +1346,8 @@ public class KpiService {
 			((ConfigurableDataSet) dataSet).setQueryScript(queryScript);
 			((ConfigurableDataSet) dataSet).setQueryScriptLanguage(queryScriptLanguage);
 		} else {
-			throw new EMFInternalError(EMFErrorSeverity.BLOCKING, "A datasource with id " + dataSourceId + " could not be found");
+			throw new EMFInternalError(EMFErrorSeverity.BLOCKING,
+					"A datasource with id " + dataSourceId + " could not be found");
 		}
 
 		dataSet.setConfiguration(jsonDsConfig.toString());

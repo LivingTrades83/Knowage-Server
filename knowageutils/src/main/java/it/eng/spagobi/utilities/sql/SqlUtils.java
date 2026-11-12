@@ -44,15 +44,17 @@ public class SqlUtils {
 	public static final String DIALECT_SQLSERVER = "org.hibernate.dialect.SQLServerDialect";
 	public static final String DIALECT_INGRES = "org.hibernate.dialect.IngresDialect";
 
-	private static Set<String> hiveLikeDatabases = new HashSet<>(Arrays.asList("hive", "cassandra", "neo4j", "spark", "impala"));
+	private static Set<String> hiveLikeDatabases = new HashSet<>(
+			Arrays.asList("hive", "cassandra", "neo4j", "spark", "impala"));
 
-	static protected Logger logger = Logger.getLogger(SqlUtils.class);
+	protected static Logger logger = Logger.getLogger(SqlUtils.class);
 
 	public static boolean isSelectSOrWithStatement(String query) {
 		boolean isSelectOrWith = false;
 		if (query == null)
 			return false;
-		isSelectOrWith = query.toUpperCase().trim().startsWith("SELECT") || query.toUpperCase().trim().startsWith("WITH");
+		isSelectOrWith = query.toUpperCase().trim().startsWith("SELECT")
+				|| query.toUpperCase().trim().startsWith("WITH");
 		return isSelectOrWith;
 	}
 
@@ -80,8 +82,7 @@ public class SqlUtils {
 	 * Get the select fields of a query
 	 *
 	 * @param query
-	 * @param withAliasSeparator
-	 *            if true remove the quotes at the beginning and end of the alias
+	 * @param withAliasSeparator if true remove the quotes at the beginning and end of the alias
 	 * @return a list of String[2] arrays. Where array[0] is the name of the field, array[1] is the alias
 	 */
 	public static List getSelectFields(String query, boolean withAliasSeparator) {
@@ -133,21 +134,6 @@ public class SqlUtils {
 		return selectFields;
 	}
 
-	public static final void main(String args[]) {
-		List<String[]> results;
-
-		String query = "   select colonna1, " + "colonna2 as Colonna2, " + "colonna3 as 'Colonna 3', " + "colonna4 as \"Colonna 4\", "
-				+ "\"colonna5\" as \"Colonna 4\", " + "'colonna6' as 'Colonna 4', " + "'colonna7', " + "\"colonna8\", " + "colonna9 Colonna9, "
-				+ "colonna10 'Colonna 10', " + "colonna11 \"Colonna 11\", " + "\"colonna12\" \"Colonna 12\", " + "'colonna13' 'Colonna 13' "
-				+ "from table1 where colonna9 = 'pippo'";
-
-		results = getSelectFields(query);
-		for (int i = 0; i < results.size(); i++) {
-			logger.debug(results.get(i)[0] + " - " + results.get(i)[1]);
-		}
-
-	}
-
 	public static String fromObjectToString(Object obj, String dialect) {
 
 		String toReturn = obj.toString();
@@ -183,7 +169,8 @@ public class SqlUtils {
 
 		if (toReturn != null && toReturn.length() > 1) {
 			for (int i = 0; i < quoteSimbols.length; i++) {
-				if (toReturn.charAt(0) == quoteSimbols[i] && toReturn.charAt(toReturn.length() - 1) == quoteSimbols[i]) {
+				if (toReturn.charAt(0) == quoteSimbols[i]
+						&& toReturn.charAt(toReturn.length() - 1) == quoteSimbols[i]) {
 					return toReturn.substring(1, toReturn.length() - 1);
 				}
 			}

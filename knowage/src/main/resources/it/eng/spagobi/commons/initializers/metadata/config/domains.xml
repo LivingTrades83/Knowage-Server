@@ -28,6 +28,8 @@
 		domainNm="BI Object types" valueDs="sbidomains.ds.etl" />
 	<DOMAIN valueCd="DOCUMENT_COMPOSITE" valueNm="sbidomains.nm.document_composite"
 		domainCd="BIOBJ_TYPE" domainNm="BI Object types" valueDs="sbidomains.ds.document_composite" />
+	<DOMAIN valueCd="DASHBOARD" valueNm="sbidomains.nm.dashboard"
+		domainCd="BIOBJ_TYPE" domainNm="BI Object types" valueDs="sbidomains.ds.dashboard" />
 	<DOMAIN valueCd="KPI" valueNm="Kpi" domainCd="BIOBJ_TYPE"
 		domainNm="BI Object types" valueDs="Kpi business indicator" />
 	<DOMAIN valueCd="SMART_FILTER" valueNm="sbidomains.nm.smart_filter"
@@ -205,40 +207,7 @@
 		domainCd="MODEL_ROOT" domainNm="Model root type" valueDs="sbidomains.ds.Generic_root" />
 	<DOMAIN valueCd="GENERIC_NODE" valueNm="sbidomains.nm.Generic_Node"
 		domainCd="MODEL_NODE" domainNm="Model node type" valueDs="sbidomains.ds.Generic_Node" />
-	<DOMAIN valueCd="PIVOT_TRANSFOMER" valueNm="sbidomains.nm.pivot_transformer"
-		domainCd="TRANSFORMER_TYPE" domainNm="Transformer types" valueDs="sbidomains.ds.pivot_transformer" />
-	<DOMAIN valueCd="PDF" valueNm="PDF" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="XLS" valueNm="XLS" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="CSV" valueNm="CSV" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="XML" valueNm="XML" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="TXT" valueNm="TXT" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="JPG" valueNm="JPG" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="PPT" valueNm="PPT" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="RTF" valueNm="RTF" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="GRAPHML" valueNm="GRAPHML" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="PNG" valueNm="PNG" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="JRXML" valueNm="JRXML" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="XLSX" valueNm="XLSX" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="PPTX" valueNm="PPTX" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="DOC" valueNm="DOC" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="DOCX" valueNm="DOCX" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />
-	<DOMAIN valueCd="JSON" valueNm="JSON" domainCd="EXPORT_TYPE"
-		domainNm="Exporters type" valueDs="Export type" />		
+
 	<DOMAIN valueCd="Basic" valueNm="Basic" domainCd="KPI_TYPE"
 		domainNm="Kpi Type" valueDs="" />
 	<DOMAIN valueCd="Derived" valueNm="Derived" domainCd="KPI_TYPE"
@@ -322,16 +291,9 @@
 		domainNm="Data Set Type" valueDs="SbiCustomDataSet" />
 	<DOMAIN valueCd="Flat" valueNm="SbiFlatDataSet" domainCd="DATA_SET_TYPE"
 		domainNm="Data Set Type" valueDs="SbiFlatDataSet" />
-	<DOMAIN valueCd="Ckan" valueNm="SbiCkanDataSet" domainCd="DATA_SET_TYPE"
-		domainNm="Data Set Type" valueDs="SbiCkanDataSet" />
 	<DOMAIN valueCd="Federated" valueNm="SbiFederatedDataSet" domainCd="DATA_SET_TYPE"
 		domainNm="Data Set Type" valueDs="SbiFederatedDataSet" />
 		
-	<DOMAIN valueCd="SPARQL" valueNm="SbiSPARQLDataSet" domainCd="DATA_SET_TYPE"
-		domainNm="Data Set Type" valueDs="SbiSPARQLDataSet" />
-		
-	<DOMAIN valueCd="Default Dataset Category" valueNm="Default Dataset Category" domainCd="CATEGORY_TYPE"
-		domainNm="Category Type" valueDs="Default Dataset Category" />
 	<DOMAIN valueCd="DEVELOPMENT" valueNm="sbidomains.permissiononfolder.nm.dev"
 		domainCd="PERMISSION_ON_FOLDER" domainNm="Permission on folder"
 		valueDs="sbidomains.permissiononfolder.ds.dev" />
@@ -371,6 +333,8 @@
 		domainNm="Language tag code" valueDs="Turkish (TR)" />
 	<DOMAIN valueCd="zh-Hans-CN" valueNm="Chinese (CH)" domainCd="LANG"
 		domainNm="Language tag code" valueDs="Chinese (CH)" />
+	<DOMAIN valueCd="sk-SK" valueNm="Slovak" domainCd="LANG"
+		domainNm="Language tag code" valueDs="Slovak" />
 
 	<DOMAIN valueCd="fieldType" valueNm="fieldType" domainCd="DS_META_PROPERTY"
 		domainNm="Data Set Metadata Property" valueDs="Data Set Metadata Property" />
@@ -394,8 +358,6 @@
 		domainNm="Data Set Metadata Value" valueDs="Data Set Metadata Value" />
 	<DOMAIN valueCd="Timestamp" valueNm="Timestamp" domainCd="DS_META_VALUE"
 		domainNm="Data Set Metadata Value" valueDs="Data Set Metadata Value" />				
-	<DOMAIN valueCd="Default Model Category" valueNm="Default Model Category"
-		domainCd="BM_CATEGORY" domainNm="Category Meta Model" valueDs="Default Model Category" />
 
 	<DOMAIN valueCd="hierarchy" valueNm="hierarchy" domainCd="DS_META_PROPERTY"
 		domainNm="Data Set Metadata Property" valueDs="Data Set Metadata Property" />
@@ -489,7 +451,11 @@
 	
 	<DOMAIN valueCd="Solr" valueNm="SbiSolrDataSet" domainCd="DATA_SET_TYPE" domainNm="Data Set Type" valueDs="SbiSolrDataSet"/>
 	
-	<DOMAIN valueCd="Python/R" valueNm="SbiPythonDataSet" domainCd="DATA_SET_TYPE" domainNm="Data Set Type" valueDs="SbiPythonDataSet"/>
+	<DOMAIN valueCd="Python" valueNm="SbiPythonDataSet" domainCd="DATA_SET_TYPE" domainNm="Data Set Type" valueDs="SbiPythonDataSet"/>
+	
+	<DOMAIN valueCd="Prepared" valueNm="SbiPreparedDataSet" domainCd="DATA_SET_TYPE" domainNm="Data Set Type" valueDs="SbiPreparedDataSet"/>
+	
+	<DOMAIN valueCd="Derived" valueNm="SbiDerivedDataSet" domainCd="DATA_SET_TYPE" domainNm="Data Set Type" valueDs="SbiDerivedDataSet"/>
 	
 	<DOMAIN valueCd="org.hibernate.dialect.RedShiftDialect"
 		valueNm="sbidomains.nm.redshift" domainCd="DIALECT_HIB"
@@ -506,6 +472,10 @@
 	<DOMAIN valueCd="org.hibernate.dialect.SpannerDialect"
 		valueNm="sbidomains.nm.spanner" domainCd="DIALECT_HIB"
 		domainNm="Predefined hibernate dialect" valueDs="sbidomains.ds.spanner" />
+		
+	<DOMAIN valueCd="doris"
+		valueNm="sbidomains.nm.doris" domainCd="DIALECT_HIB"
+		domainNm="Predefined hibernate dialect" valueDs="sbidomains.ds.doris" />
 		
 	<DOMAIN valueCd="MEASURE" valueNm="sbidomains.nm.measure"
 		domainCd="KPI_RULEOUTPUT_TYPE" domainNm="KPI Rule Output types" valueDs="sbidomains.ds.measure" />
@@ -598,13 +568,6 @@
 			
 	<DOMAIN valueCd="All" valueNm="All"
 		domainCd="FUNCTION_TYPE" domainNm="All kind of functions" valueDs="all.png" />				
-			
-	<DOMAIN valueCd="APDF" valueNm="APDF"
-		domainCd="EXPORT_TYPE" domainNm="Exporters types" valueDs="Export type" />				
-		
-	<DOMAIN valueCd="Default Layer Category" valueNm="Default Layer Category" domainCd="GEO_CATEGORY"
-		domainNm="Layer Category" valueDs="Default Layer Category" />
-			
 
 	<DOMAIN valueCd="Announcement" valueNm="sbidomains.news.announcement" 
 		domainCd="NEWS_TYPE" domainNm="News Type" valueDs="sbidomains.news.announcement"></DOMAIN>
@@ -614,6 +577,5 @@
 		
 	<DOMAIN valueCd="Warning" valueNm="sbidomains.news.warning" 
 		domainCd="NEWS_TYPE" domainNm="News Type" valueDs="sbidomains.news.warning"></DOMAIN>
-			
-			
+
 </DOMAINS>

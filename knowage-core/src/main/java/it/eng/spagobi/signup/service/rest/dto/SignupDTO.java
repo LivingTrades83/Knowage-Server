@@ -24,30 +24,32 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import it.eng.spagobi.services.validation.EmailValidation;
 import it.eng.spagobi.services.validation.ExtendedAlphanumeric;
 import it.eng.spagobi.services.validation.NoPunctation;
+import it.eng.spagobi.services.validation.PasswordValidation;
 import it.eng.spagobi.services.validation.Xss;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SignupDTO {
 
 	@NoPunctation
-	@NotNull
 	@Xss
 	private String name;
+
 	@NoPunctation
-	@NotNull
 	@Xss
 	private String surname;
-	@ExtendedAlphanumeric
+
+	@PasswordValidation
 	@NotNull
 	@Xss
 	private String password;
+
 	@EmailValidation
 	@Xss
 	private String email;
 
 	// properties for creation only
 
-	@ExtendedAlphanumeric
+	@PasswordValidation
 	@NotNull
 	private String confirmPassword;
 
@@ -58,6 +60,7 @@ public class SignupDTO {
 	private String language;
 	private String useCaptcha;
 	private String captcha;
+	private String content;
 
 	@ExtendedAlphanumeric
 	@NotNull
@@ -176,6 +179,14 @@ public class SignupDTO {
 
 	public void setUseCaptcha(String useCaptcha) {
 		this.useCaptcha = useCaptcha;
+	}
+
+	public String getContent() {
+		return content;
+	}
+
+	public void setContent(String content) {
+		this.content = content;
 	}
 
 }

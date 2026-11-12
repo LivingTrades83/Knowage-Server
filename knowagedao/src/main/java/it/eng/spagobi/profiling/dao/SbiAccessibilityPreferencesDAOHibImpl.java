@@ -1,12 +1,5 @@
 package it.eng.spagobi.profiling.dao;
 
-import it.eng.spago.error.EMFErrorSeverity;
-import it.eng.spago.error.EMFUserError;
-import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.profiling.bean.SbiAccessibilityPreferences;
-import it.eng.spagobi.profiling.bean.SbiUser;
-
 import org.apache.log4j.Logger;
 import org.hibernate.Criteria;
 import org.hibernate.HibernateException;
@@ -15,8 +8,16 @@ import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.criterion.Restrictions;
 
-public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO implements ISbiAccessibilityPreferencesDAO {
-	static private Logger logger = Logger.getLogger(SbiAccessibilityPreferencesDAOHibImpl.class);
+import it.eng.spago.error.EMFErrorSeverity;
+import it.eng.spago.error.EMFUserError;
+import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.profiling.bean.SbiAccessibilityPreferences;
+import it.eng.spagobi.profiling.bean.SbiUser;
+
+public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO
+		implements ISbiAccessibilityPreferencesDAO {
+	private static Logger logger = Logger.getLogger(SbiAccessibilityPreferencesDAOHibImpl.class);
 
 	@Override
 	public SbiAccessibilityPreferences readUserAccessibilityPreferences(String userId) throws EMFUserError {
@@ -40,14 +41,10 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 			tx.commit();
 		} catch (HibernateException he) {
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 
@@ -55,8 +52,8 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 	}
 
 	@Override
-	public void saveOrUpdatePreferencesControls(String userId, boolean enableUIO, boolean enableRobobrailles, boolean enableVoice,
-			boolean enableGraphSonification) throws EMFUserError {
+	public void saveOrUpdatePreferencesControls(String userId, boolean enableUIO, boolean enableRobobrailles,
+			boolean enableVoice, boolean enableGraphSonification) throws EMFUserError {
 		SbiAccessibilityPreferences ap = this.readUserAccessibilityPreferences(userId);
 		ISbiUserDAO userDao;
 
@@ -73,7 +70,8 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 
 		} else {
 
-			this.saveAccessibilityPreferences(userId, enableUIO, enableRobobrailles, enableVoice, enableGraphSonification, null);
+			this.saveAccessibilityPreferences(userId, enableUIO, enableRobobrailles, enableVoice,
+					enableGraphSonification, null);
 		}
 
 	}
@@ -96,14 +94,15 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 	}
 
 	@Override
-	public Integer saveAccessibilityPreferences(String userId, boolean enableUIO, boolean enableRobobrailles, boolean enableVoice,
-			boolean enableGraphSonification, String preferences) throws EMFUserError {
+	public Integer saveAccessibilityPreferences(String userId, boolean enableUIO, boolean enableRobobrailles,
+			boolean enableVoice, boolean enableGraphSonification, String preferences) throws EMFUserError {
 		Session aSession = null;
 		Transaction tx = null;
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			Query q = aSession.createQuery("FROM SbiUser as user where user.userId ='" + userId + "'");
+			Query q = aSession.createQuery("FROM SbiUser as user where user.userId = :userId");
+			q.setParameter("userId", userId);
 			SbiUser user = (SbiUser) q.uniqueResult();
 
 			SbiAccessibilityPreferences ap = new SbiAccessibilityPreferences();
@@ -120,14 +119,10 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 
 		} catch (HibernateException he) {
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}
@@ -145,14 +140,10 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 
 		} catch (HibernateException he) {
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}
@@ -163,7 +154,8 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			Query q = aSession.createQuery("FROM SbiUser as user where user.userId ='" + userId + "'");
+			Query q = aSession.createQuery("FROM SbiUser as user where user.userId = :userId");
+			q.setParameter("userId", userId);
 			SbiUser user = (SbiUser) q.uniqueResult();
 
 			Criteria criteria = aSession.createCriteria(SbiAccessibilityPreferences.class);
@@ -185,14 +177,10 @@ public class SbiAccessibilityPreferencesDAOHibImpl extends AbstractHibernateDAO 
 
 		} catch (HibernateException he) {
 			logger.error(he.getMessage(), he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 

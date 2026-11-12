@@ -3,7 +3,7 @@ package it.eng.spagobi.kpi.bo;
 import java.util.Date;
 
 // TODO: remove the old class it.eng.spagobi.kpi.bo.config.KpiValue
-public class KpiValue implements Cloneable {
+public final class KpiValue implements Cloneable {
 
 	private int id;
 	private int kpiId;
@@ -132,5 +132,18 @@ public class KpiValue implements Cloneable {
 	public void setManualNote(String manualNote) {
 		this.manualNote = manualNote;
 	}
-
+	
+	@Override
+    public final Object clone()  {
+	  KpiValue ben = null;
+	  try {
+		ben = (KpiValue) super.clone();
+		if(timeRun != null) {
+			ben.timeRun = (Date)timeRun.clone();
+			// the other fields are primitives or immutable objects
+		}
+	  } catch (CloneNotSupportedException e) {} // won't happen KpiValue implements Cloneable
+	  return ben;
+	}
+	
 }

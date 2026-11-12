@@ -17,6 +17,8 @@
  */
 package it.eng.qbe.statement.jpa;
 
+import static java.util.Objects.nonNull;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
@@ -31,19 +33,25 @@ import java.util.Set;
 
 import javax.persistence.EntityManager;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.hibernate.Filter;
 import org.hibernate.Session;
 import org.hibernate.type.Type;
 
 import it.eng.qbe.datasource.jpa.IJpaDataSource;
+import it.eng.qbe.datasource.jpa.JPADataSource;
 import it.eng.qbe.model.accessmodality.IModelAccessModality;
+import it.eng.qbe.query.serializer.json.QuerySerializationConstants;
 import it.eng.qbe.statement.AbstractQbeDataSet;
+import it.eng.qbe.statement.AbstractStatement;
 import it.eng.qbe.statement.IStatement;
 import it.eng.spagobi.commons.SingletonConfig;
+import it.eng.spagobi.tools.dataset.bo.JDBCDataSet;
+import it.eng.spagobi.tools.dataset.bo.JDBCDatasetFactory;
 import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
-import it.eng.spagobi.tools.dataset.common.iterator.JpaQueryIterator;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
+import it.eng.spagobi.tools.dataset.utils.DatasetMetadataParser;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
@@ -54,7 +62,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 public class JPQLDataSet extends AbstractQbeDataSet {
 
 	/** Logger component. */
-	public static transient Logger logger = Logger.getLogger(JPQLDataSet.class);
+	private static final Logger LOGGER = LogManager.getLogger(JPQLDataSet.class);
 
 	public JPQLDataSet(JPQLStatement statement) {
 		super(statement);
@@ -64,8 +72,8 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 	public void loadData(int offset, int fetchSize, int maxResults) {
 		try {
 			loadDataPersistenceProvider(offset, fetchSize, maxResults);
-		} catch (Throwable t) {
-			throw new RuntimeException("Impossible to load data", t);
+		} catch (Exception e) {
+			throw new SpagoBIRuntimeException("Impossible to load data", e);
 		}
 	}
 
@@ -75,9 +83,9 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 	}
 
 	private IStatement getLoadingStatement(EntityManager entityManager) {
-		logger.debug("Getting filtered statement...");
+		LOGGER.debug("Getting filtered statement...");
 		IStatement filteredStatement = getFilteredStatement();
-		logger.debug("Filtered statement retrieved");
+		LOGGER.debug("Filtered statement retrieved");
 
 		it.eng.qbe.query.Query query = getFilteredStatement().getQuery();
 		Map params = this.getParamsMap();
@@ -91,18 +99,16 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 		boolean overflow = false;
 		int resultNumber = -1;
 
-		EntityManager entityManager = getEntityMananger();
-		Session session = entityManager.unwrap(Session.class);
-		enableFilters(session);
+		enableFilters();
 
 		IStatement filteredStatement = this.getStatement();
 		String statementStr = filteredStatement.getQueryString();
-		logger.debug("Compiling query statement [" + statementStr + "]");
-		javax.persistence.Query jpqlQuery = entityManager.createQuery(statementStr);
+		LOGGER.debug("Compiling query statement [{}]", statementStr);
+		javax.persistence.Query jpqlQuery = getEntityMananger().createQuery(statementStr);
 
 		if (this.isCalculateResultNumberOnLoadEnabled()) {
 			resultNumber = getResultNumber(filteredStatement);
-			logger.info("Number of fetched records: " + resultNumber + " for query " + filteredStatement.getQueryString());
+			LOGGER.info("Number of fetched records: {} for query {}", resultNumber, filteredStatement.getQueryString());
 			overflow = (maxResults > 0) && (resultNumber >= maxResults);
 		}
 
@@ -116,7 +122,7 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 			if (maxResults > 0) {
 				fetchSize = (fetchSize > 0) ? Math.min(fetchSize, maxResults) : maxResults;
 			}
-			logger.debug("Executing query " + filteredStatement.getQueryString() + " with offset = " + offset + " and fetch size = " + fetchSize);
+			LOGGER.debug("Executing query {} with offset = {} and fetch size = {}", filteredStatement.getQueryString(), offset, fetchSize);
 			jpqlQuery.setFirstResult(offset);
 			if (fetchSize > 0) {
 				jpqlQuery.setMaxResults(fetchSize);
@@ -124,22 +130,28 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 
 			try {
 				result = jpqlQuery.getResultList();
-			} catch (Throwable t) {
-				throw new RuntimeException("Impossible to execute statement [" + statementStr + "]", t);
+			} catch (Exception e) {
+				throw new SpagoBIRuntimeException("Impossible to execute statement [" + statementStr + "]", e);
 			}
 
-			logger.debug("Query " + filteredStatement.getQueryString() + " with offset = " + offset + " and fetch size = " + fetchSize + " executed");
+			LOGGER.debug("Query {} with offset = {} and fetch size = {} executed", filteredStatement.getQueryString(), offset, fetchSize);
 		}
 
-		dataStore = toDataStore(result, getDataStoreMeta(statement.getQuery()));
+		dataStore = toDataStore(result, ((AbstractStatement) statement).getDataStoreMeta());
 
 		if (this.isCalculateResultNumberOnLoadEnabled()) {
 			dataStore.getMetaData().setProperty("resultNumber", resultNumber);
 		}
 
-		if (hasDataStoreTransformer()) {
-			getDataStoreTransformer().transform(dataStore);
+		if (hasDataStoreTransformers()) {
+			executeDataStoreTransformers(dataStore);
 		}
+	}
+
+	protected void enableFilters() {
+		EntityManager entityManager = getEntityMananger();
+		Session session = entityManager.unwrap(Session.class);
+		enableFilters(session);
 	}
 
 	/**
@@ -148,35 +160,42 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 	 */
 	private void enableFilters(Session session) {
 		Map<String, Object> drivers = this.getDrivers();
-		if (drivers != null) {
-			if (drivers.isEmpty() == false) {
-				Filter filter = null;
-				Set<String> filterNames = session.getSessionFactory().getDefinedFilterNames();
-				Iterator<String> it = filterNames.iterator();
+		LOGGER.info("Drivers: {}", drivers);
+		if (drivers != null && !drivers.isEmpty()) {
+			Filter filter = null;
+			Set<String> filterNames = session.getSessionFactory().getDefinedFilterNames();
+			Iterator<String> it = filterNames.iterator();
 
-				while (it.hasNext()) {
-					String filterName = it.next();
-					filter = session.enableFilter(filterName);
-					Map<String, Type> parametersTypes = filter.getFilterDefinition().getParameterTypes();
-					for (Entry<String, Type> entry : parametersTypes.entrySet()) {
-						String parameterName = entry.getKey();
-						Type parameterType = entry.getValue();
-						String driverName = parameterName.toString();
-						Object value = null;
-						Object valueAfterConversion = null;
-						Class<?> wantedClass = parameterType.getReturnedClass();
-						try {
-							List<?> valueList = (List<?>) drivers.get(driverName);
+			while (it.hasNext()) {
+				String filterName = it.next();
+				filter = session.enableFilter(filterName);
+				Map<String, Type> parametersTypes = filter.getFilterDefinition().getParameterTypes();
+				for (Entry<String, Type> entry : parametersTypes.entrySet()) {
+					String parameterName = entry.getKey();
+					Type parameterType = entry.getValue();
+					String driverName = parameterName;
+					Object value = null;
+					Object valueAfterConversion = null;
+					Class<?> wantedClass = parameterType.getReturnedClass();
+					try {
+						List<?> valueList = (List<?>) drivers.get(driverName);
+						LOGGER.info("Values for driver name {} of type {} ({}): {}", parameterName, parameterType, wantedClass, valueList);
+						if (valueList != null) {
 							if (valueList.size() == 1) {
 								Map<?, ?> valueDescriptionMap = (Map<?, ?>) valueList.get(0);
 								if (!valueDescriptionMap.isEmpty()) {
 									value = valueDescriptionMap.get("value");
 									valueAfterConversion = mapValueToRequiredType(wantedClass, value);
-									filter.setParameter(driverName, valueAfterConversion);
+									if (valueAfterConversion instanceof List) {
+										filter.setParameterList(driverName, (List) valueAfterConversion);
+									} else {
+										filter.setParameter(driverName, valueAfterConversion);
+									}
+									LOGGER.info("Actual value for driver name {} of type {} ({}): {}", parameterName, parameterType, wantedClass,
+											valueAfterConversion);
 								}
-							}
-							if (valueList.size() > 1) {
-								List<Object> multivalueList = new ArrayList<Object>();
+							} else if (valueList.size() > 1) {
+								List<Object> multivalueList = new ArrayList<>();
 								for (int i = 0; i < valueList.size(); i++) {
 									Map<?, ?> valueDescriptionMap = (Map<?, ?>) valueList.get(i);
 									value = valueDescriptionMap.get("value");
@@ -184,15 +203,17 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 									multivalueList.add(valueAfterConversion);
 								}
 								filter.setParameterList(driverName, multivalueList);
+								LOGGER.info("Actual value for driver name {} of type {} ({}): {}", parameterName, parameterType, wantedClass,
+										multivalueList);
 							}
-							value = null;
-							valueAfterConversion = null;
-						} catch (Exception e) {
-							String msg = String.format("Error during conversion for driver %s from value %s of class %s to %s of class %s", driverName, value,
-									value != null ? value.getClass().getName() : "N.D.", valueAfterConversion, wantedClass.getName());
-							logger.error(msg, e);
-							throw new SpagoBIRuntimeException(msg, e);
 						}
+						value = null;
+						valueAfterConversion = null;
+					} catch (Exception e) {
+						String msg = String.format("Error during conversion for driver %s from value %s of class %s to %s of class %s", driverName, value,
+								value != null ? value.getClass().getName() : "N.D.", valueAfterConversion, wantedClass.getName());
+						LOGGER.error(msg, e);
+						throw new SpagoBIRuntimeException(msg, e);
 					}
 				}
 			}
@@ -202,49 +223,80 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 	/**
 	 * Map value from driver to the required value from Hibernate's filter.
 	 *
-	 * @param wantedClass
-	 *            Type wanted by Hibernate
-	 * @param value
-	 *            Actual value
+	 * @param wantedClass Type wanted by Hibernate
+	 * @param value       Actual value
 	 * @return The mapped value
 	 *
-	 * @throws NoSuchMethodException
-	 *             When the wanted class has no constructor with only one string as parameter
-	 * @throws SecurityException
-	 *             When constructor with only one string as parameter is private
-	 * @throws InstantiationException
-	 *             When you can't instantiate the required class
-	 * @throws IllegalAccessException
-	 *             When you can't access the required constructor
-	 * @throws IllegalArgumentException
-	 *             Shouldn't happen
-	 * @throws InvocationTargetException
-	 *             Shouldn't happen
-	 * @throws ParseException
-	 *             When the date string is invalid
+	 * @throws NoSuchMethodException     When the wanted class has no constructor with only one string as parameter
+	 * @throws SecurityException         When constructor with only one string as parameter is private
+	 * @throws InstantiationException    When you can't instantiate the required class
+	 * @throws IllegalAccessException    When you can't access the required constructor
+	 * @throws IllegalArgumentException  Shouldn't happen
+	 * @throws InvocationTargetException Shouldn't happen
+	 * @throws ParseException            When the date string is invalid
 	 */
 	private Object mapValueToRequiredType(Class<?> wantedClass, Object value) throws NoSuchMethodException, SecurityException, InstantiationException,
 			IllegalAccessException, IllegalArgumentException, InvocationTargetException, ParseException {
 		Object ret = null;
-		if (Date.class.equals(wantedClass)) {
-			String configValue = SingletonConfig.getInstance().getConfigValue("SPAGOBI.DATE-FORMAT-SERVER.format");
-			SimpleDateFormat simpleDateFormat = new SimpleDateFormat(configValue);
-			ret = simpleDateFormat.parse(value.toString());
+		if (value instanceof List) {
+			List<?> listOfValues = (List<?>) value;
+			List<Object> tmpRet = new ArrayList<>();
+
+			for (Object currValue : listOfValues) {
+				if (Date.class.equals(wantedClass)) {
+					String configValue = SingletonConfig.getInstance().getConfigValue("SPAGOBI.DATE-FORMAT-SERVER.format");
+					SimpleDateFormat simpleDateFormat = new SimpleDateFormat(configValue);
+					tmpRet.add(simpleDateFormat.parse(currValue.toString()));
+				} else {
+					Constructor<?> constructor = wantedClass.getConstructor(String.class);
+					tmpRet.add(constructor.newInstance(currValue.toString()));
+				}
+			}
+
+			ret = tmpRet;
 		} else {
-			Constructor<?> constructor = wantedClass.getConstructor(String.class);
-			ret = constructor.newInstance(value.toString());
+			if (Date.class.equals(wantedClass)) {
+				String configValue = SingletonConfig.getInstance().getConfigValue("SPAGOBI.DATE-FORMAT-SERVER.format");
+				SimpleDateFormat simpleDateFormat = new SimpleDateFormat(configValue);
+				ret = simpleDateFormat.parse(value.toString());
+			} else {
+				Constructor<?> constructor = wantedClass.getConstructor(String.class);
+				ret = constructor.newInstance(value.toString());
+			}
 		}
 		return ret;
 	}
 
 	private int getResultNumber(IStatement filteredStatement) {
 		int resultNumber = 0;
+		EntityManager em = null;
 		try {
 			String sqlQueryString = filteredStatement.getSqlQueryString();
-			Number singleResult = (Number) getEntityMananger().createNativeQuery("SELECT COUNT(*) FROM (" + sqlQueryString + ") COUNT_INLINE_VIEW").getSingleResult();
+			em = getEntityMananger();
+
+			/*
+			 * Workaround for KNOWAGE-6753.
+			 *
+			 * We had some concurrency problem here: I've fixed extracting a new connection to the database.
+			 */
+			em = em.getEntityManagerFactory().createEntityManager();
+
+			JPADataSource ds = ((JPADataSource) filteredStatement.getDataSource());
+			String dialect = ds.getToolsDataSource().getHibDialectClass();
+			int orderByIndexOf = sqlQueryString.toLowerCase().indexOf("order by");
+			if (dialect.equals(QuerySerializationConstants.DIALECT_SQLSERVER) && orderByIndexOf != -1) {
+				sqlQueryString = sqlQueryString.substring(0, orderByIndexOf);
+			}
+
+			String query = String.format("SELECT COUNT(*) FROM (%s) COUNT_INLINE_VIEW", sqlQueryString);
+			Number singleResult = (Number) em.createNativeQuery(query).getSingleResult();
 			resultNumber = singleResult.intValue();
 		} catch (Exception e) {
-			throw new RuntimeException("Impossible to get result number", e);
+			throw new SpagoBIRuntimeException("Impossible to get result number", e);
+		} finally {
+			if (nonNull(em)) {
+				em.close();
+			}
 		}
 		return resultNumber;
 	}
@@ -256,7 +308,7 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 	}
 
 	public IStatement getFilteredStatement() {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		// we create a new query adding filters defined by profile attributes
 		IModelAccessModality accessModality = this.getStatement().getDataSource().getModelAccessModality();
 		it.eng.qbe.query.Query query = accessModality.getFilteredStatement(this.getStatement().getQuery(), this.getStatement().getDataSource(),
@@ -265,13 +317,13 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 		IStatement filteredStatement = this.getStatement().getDataSource().createStatement(query);
 		filteredStatement.setParameters(params);
 		filteredStatement.setProfileAttributes(this.getStatement().getProfileAttributes());
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return filteredStatement;
 	}
 
 	@Override
 	public String getSQLQuery(boolean includeInjectedFilters) {
-		logger.debug("IN: includeInjectedFilters = " + includeInjectedFilters);
+		LOGGER.debug("IN: includeInjectedFilters = {}", includeInjectedFilters);
 		String toReturn = null;
 		if (includeInjectedFilters) {
 			IStatement filteredStatement = this.getFilteredStatement();
@@ -279,39 +331,36 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 		} else {
 			toReturn = statement.getSqlQueryString();
 		}
-		logger.debug("OUT: returning [" + toReturn + "]");
+		LOGGER.debug("OUT: returning [{}]", toReturn);
 		return toReturn;
 	}
 
 	@Override
 	public DataIterator iterator() {
-		logger.debug("IN");
-		try {
 
-			EntityManager entityManager = ((IJpaDataSource) statement.getDataSource()).getEntityManager();
+		enableFilters();
 
-			Session session = entityManager.unwrap(Session.class);
-			enableFilters(session);
+		IMetaData metadata = this.getMetadata();
 
-			IStatement filteredStatement = getStatement();
-			String statementStr = filteredStatement.getQueryString();
-			logger.debug("Compiling query statement [" + statementStr + "]");
+		DatasetMetadataParser dsp = new DatasetMetadataParser();
+		String metadataXMLString = dsp.metadataToXML(metadata);
 
-			javax.persistence.Query jpqlQuery = entityManager.createQuery(statementStr);
-			jpqlQuery.setMaxResults(JpaQueryIterator.FETCH_SIZE);
-
-			IMetaData metadata = getDataStoreMeta(statement.getQuery());
-
-			DataIterator iterator = new JpaQueryIterator(jpqlQuery, metadata);
-			return iterator;
-		} finally {
-			logger.debug("OUT");
-		}
+		String sqlQueryString = this.getSQLQuery(true);
+		LOGGER.debug("Executing query: {}", sqlQueryString);
+		JDBCDataSet jdbcDataset = (JDBCDataSet) JDBCDatasetFactory.getJDBCDataSet(this.getDataSource());
+		jdbcDataset.setDsMetadata(metadataXMLString);
+		jdbcDataset.setQuery(sqlQueryString);
+		return jdbcDataset.iterator();
 	}
 
 	@Override
 	public boolean isIterable() {
 		return true;
+	}
+
+	@Override
+	public DataIterator iterator(IMetaData dsMetadata) {
+		return null;
 	}
 
 	/*
@@ -333,9 +382,7 @@ public class JPQLDataSet extends AbstractQbeDataSet {
 	public void setDrivers(Map<String, Object> drivers) {
 		super.setDrivers(drivers);
 
-		EntityManager entityManager = getEntityMananger();
-		Session session = entityManager.unwrap(Session.class);
-		enableFilters(session);
+		enableFilters();
 	}
 
 }

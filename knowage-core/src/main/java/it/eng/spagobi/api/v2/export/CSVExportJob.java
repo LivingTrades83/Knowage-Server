@@ -28,7 +28,6 @@ import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
-import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.iterator.CsvStreamingOutput;
 
 /**
@@ -38,36 +37,26 @@ import it.eng.spagobi.tools.dataset.common.iterator.CsvStreamingOutput;
  */
 public class CSVExportJob extends AbstractExportJob {
 
-	private static final Logger logger = Logger.getLogger(CSVExportJob.class);
+	private static final Logger LOGGER = Logger.getLogger(CSVExportJob.class);
 
 	@Override
 	protected void export(JobExecutionContext context) throws JobExecutionException {
 
-		logger.debug("Start CSV export for dataSetId " + getDataSetId() + " with id " + getId() + " by user " + getUserProfile().getUserId());
+		LOGGER.debug("Start CSV export for dataSetId " + getDataSetId() + " with id " + getId() + " by user " + getUserProfile().getUserId());
 
-		OutputStream exportFileOS = getDataOutputStream();
-		try {
+		try(OutputStream exportFileOS = getDataOutputStream()) {
 			IDataSet dataSet = getDataSet();
 
-			IDataStore dataStore = null;
-			try {
-				logger.debug("Starting iteration to transfer data");
-				dataSet.loadData();
-				dataStore = dataSet.getDataStore();
-				StreamingOutput stream = new CsvStreamingOutput(dataStore);
-				stream.write(exportFileOS);
-			} finally {
-				if (exportFileOS != null) {
-					exportFileOS.close();
-				}
-			}
+			LOGGER.debug("Starting iteration to transfer data");
+			StreamingOutput stream = new CsvStreamingOutput(dataSet.iterator());
+			stream.write(exportFileOS);
 		} catch (IOException e) {
 			String msg = String.format("Error writing data file \"%s\"!", getDataFile());
-			logger.error(msg, e);
+			LOGGER.error(msg, e);
 			throw new JobExecutionException(e);
 		}
 
-		LogMF.info(logger, "CSV export completed for user {0}. DataSet is {1}. Final file: dimension (in bytes): {2,number}, path: [{3}], ",
+		LogMF.info(LOGGER, "CSV export completed for user {0}. DataSet is {1}. Final file: dimension (in bytes): {2,number}, path: [{3}], ",
 				this.getUserProfile().getUserId(), this.getDataSet().getLabel(), getDataFile().toFile().length(), getDataFile().toString());
 
 	}

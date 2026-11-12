@@ -5,31 +5,55 @@
 		xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
-		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-		version="3.1" >
+		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+		version="4.0" >
+
+	<distributable/>
 
 	<display-name>knowage</display-name>
 	<description>Main app of the Knowage Suite</description>
+	<distributable/>
 
+	<!-- 
+		Logger Setup Filter.
+		
+		Set the logger according the HTTP request data.
+	 -->
 	<filter>
-		<filter-name>EncodingFilter</filter-name>
-		<filter-class>it.eng.spagobi.utilities.filters.EncodingFilter</filter-class>
-		<init-param>
-			<param-name>encoding</param-name>
-			<param-value>UTF-8</param-value>
-		</init-param>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<filter-class>it.eng.knowage.utils.filters.LoggerSetupFilter</filter-class>
 	</filter>
-
 	<filter-mapping>
-		<filter-name>EncodingFilter</filter-name>
-		<url-pattern>/servlet/AdapterHTTP</url-pattern>
-		<url-pattern>/public/servlet/AdapterHTTP</url-pattern>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
 	</filter-mapping>
-
+	
+	<!--  ANTI CSRF FILTER  	-->
 	<filter>
-		<filter-name>SpagoBICoreCheckSessionFilter</filter-name>
-		<filter-class>it.eng.spagobi.commons.filters.SpagoBICoreCheckSessionFilter</filter-class>
-	</filter>
+      <filter-name>KnowageAntiCsrfFilter</filter-name> 
+      <filter-class>it.eng.spagobi.security.utils.AntiCsrfFilter</filter-class> 
+     </filter>
+     
+     <filter-mapping>
+		<filter-name>KnowageAntiCsrfFilter</filter-name>
+		<url-pattern>/restful-services/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
+	
+	<!--  CSP FILTER  	-->
+	<filter>
+      <filter-name>CspFilter</filter-name> 
+      <filter-class>it.eng.spagobi.security.utils.CspFilter</filter-class> 
+     </filter>
+     
+     <filter-mapping>
+		<filter-name>CspFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
 
 	<!--
 	<servlet>
@@ -88,31 +112,8 @@
 	</filter>
 	${enable.cas.start} END-CAS -->
 
-	<!-- START OAUTH 2
- 	<filter>
-		<filter-name>OAuthFilter</filter-name>
-		<filter-class>it.eng.spagobi.security.OAuth2.OAuth2Filter</filter-class>
-	</filter>
- 	END OAUTH 2 -->
 
 	<!-- This filter tries to create the user profile object before AdapterHTTP servlet execution -->
-	<filter>
-		<filter-name>ProfileFilter</filter-name>
-		<filter-class>it.eng.spagobi.commons.filters.ProfileFilter</filter-class>
-	</filter>
-
-	<filter>
-		<filter-name>AntiInjectionFilter</filter-name>
-		<filter-class>it.eng.spagobi.utilities.filters.AntiInjectionFilter</filter-class>
-	</filter>
-
-	<filter-mapping>
-		<filter-name>SpagoBICoreCheckSessionFilter</filter-name>
-		<url-pattern>/servlet/AdapterHTTP</url-pattern>
-		<url-pattern>/public/servlet/AdapterHTTP</url-pattern>
-		<url-pattern>/restful-services/publish</url-pattern>
-		<url-pattern>/public/restful-services/publish</url-pattern>
-	</filter-mapping>
 
 	<!-- START-CAS ${enable.cas.end}
 	<filter-mapping>
@@ -134,13 +135,6 @@
 	</filter-mapping>
 	${enable.cas.start} END-CAS -->
 
-	<!-- START OAUTH 2
-	<filter-mapping>
-		<filter-name>OAuthFilter</filter-name>
-		<url-pattern>/servlet/AdapterHTTP</url-pattern>
-	</filter-mapping>
- 	END OAUTH 2 -->
-
 	<!-- HmacLoginFilter -->
 	<filter>
 		<filter-name>HmacLoginFilter</filter-name>
@@ -150,24 +144,16 @@
 			<param-value>hmac_user_name</param-value>
 		</init-param>
 	</filter>
+
 	<filter-mapping>
 		<filter-name>HmacLoginFilter</filter-name>
 		<url-pattern>/restful-services/publish</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
 	</filter-mapping>
 
-	<filter-mapping>
-		<filter-name>ProfileFilter</filter-name>
-		<url-pattern>/servlet/AdapterHTTP</url-pattern>
-		<url-pattern>/restful-services/publish</url-pattern>
-		<url-pattern>/public/restful-services/publish</url-pattern>
-		<url-pattern>/public/servlet/AdapterHTTP</url-pattern>
-	</filter-mapping>
-
-	<filter-mapping>
-		<filter-name>AntiInjectionFilter</filter-name>
-		<url-pattern>/servlet/AdapterHTTP</url-pattern>
-	</filter-mapping>
-
+	
+	
 	<!-- If you want to enable HMAC filter:
 		Add the hmac key into server.xml :
 			<Environment description="HMAC key" name="hmacKey" type="java.lang.String" value="abc123"/>
@@ -186,6 +172,8 @@
 		<url-pattern>/restful-services/federateddataset/federation</url-pattern>
 		<url-pattern>/restful-services/federateddataset/insertNoDup</url-pattern>
 		<url-pattern>/restful-services/1.0/documents/saveChartTemplate</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
 	</filter-mapping>
 	<!-- HMAC filter ends -->
 
@@ -236,44 +224,6 @@
 		<servlet-class>it.eng.spagobi.commons.services.ChangePwdServlet</servlet-class>
 	</servlet>
 
-	<!-- Notifications and CometD servlets-->
-	<servlet>
-		<servlet-name>NotifierServlet</servlet-name>
-		<servlet-class>it.eng.spagobi.tools.dataset.notifier.NotifierServlet</servlet-class>
-
-		<init-param>
-			<param-name>notifyUrl</param-name>
-			<param-value>http://192.168.28.183:8080/knowage/datasetNotifier</param-value>
-		</init-param>
-		<load-on-startup>1</load-on-startup>
-	</servlet>
-	<servlet>
-		<servlet-name>cometDInitializer</servlet-name>
-		<servlet-class>it.eng.spagobi.tools.dataset.listener.CometDInitializer</servlet-class>
-		<load-on-startup>2</load-on-startup>
-	</servlet>
-	<servlet>
-		<servlet-name>cometd</servlet-name>
-		<servlet-class>org.cometd.server.CometDServlet</servlet-class>
-		<init-param>
-			<param-name>ws.cometdURLMapping</param-name>
-			<param-value>/cometd/*</param-value>
-		</init-param>
-		<load-on-startup>1</load-on-startup>
-		<async-supported>true</async-supported>
-	</servlet>
-
-	<servlet-mapping>
-		<servlet-name>cometd</servlet-name>
-		<url-pattern>/cometd/*</url-pattern>
-	</servlet-mapping>
-
-	<servlet-mapping>
-		<servlet-name>NotifierServlet</servlet-name>
-		<url-pattern>/datasetNotifier</url-pattern>
-	</servlet-mapping>
-	<!-- Notifications and CometD servlets end-->
-
 	<servlet>
 		<servlet-name>ExtendSessionServlet</servlet-name>
 		<servlet-class>it.eng.spagobi.utilities.servlet.session.ExtendSessionServlet</servlet-class>
@@ -292,19 +242,11 @@
 		</init-param>
 		<load-on-startup>1</load-on-startup>
 	</servlet>
-
+	
 	<servlet>
-		<servlet-name>ConfigServlet</servlet-name>
-		<servlet-class>it.eng.spago.configuration.ConfigServlet</servlet-class>
-		<init-param>
-			<param-name>AF_CONFIG_FILE</param-name>
-			<param-value>/WEB-INF/conf/master.xml</param-value>
-		</init-param>
+		<servlet-name>InitializerKnowageServlet</servlet-name>
+		<servlet-class>it.eng.spagobi.commons.services.InitializerKnowageServlet</servlet-class>
 		<load-on-startup>0</load-on-startup>
-	</servlet>
-	<servlet>
-		<servlet-name>AdapterHTTP</servlet-name>
-		<servlet-class>it.eng.spago.dispatching.httpchannel.AdapterHTTP</servlet-class>
 	</servlet>
 
 	<!-- This will start up all Admin4J Servlets with standard defaults.
@@ -348,32 +290,6 @@
 	</servlet>
 	EXO -->
 
-	<!-- start axis servlet -->
-	<servlet>
-		<servlet-name>AxisServlet</servlet-name>
-		<servlet-class>org.apache.axis.transport.http.AxisServlet</servlet-class>
-	</servlet>
-	<servlet>
-		<servlet-name>AdminServlet</servlet-name>
-		<servlet-class>org.apache.axis.transport.http.AdminServlet</servlet-class>
-		<load-on-startup>100</load-on-startup>
-	</servlet>
-	<!-- end axis servlet -->
-
-	<servlet>
-		<servlet-name>StickyCaptcha</servlet-name>
-		<servlet-class>it.eng.spagobi.commons.services.KnowageCaptchaServlet</servlet-class>
-		<init-param>
-			<param-name>captcha-width</param-name>
-			<param-value>250</param-value>
-		</init-param>
-		<init-param>
-			<param-name>captcha-height</param-name>
-			<param-value>75</param-value>
-		</init-param>
-
-	</servlet>
-
 	<!-- START SERVLET MAPPINGS -->
 
 	<!-- START-LIFERAY
@@ -384,11 +300,6 @@
 	END-LIFERAY -->
 
 	<servlet-mapping>
-		<servlet-name>StickyCaptcha</servlet-name>
-		<url-pattern>/stickyImg</url-pattern>
-	</servlet-mapping>
-
-	<servlet-mapping>
 		<servlet-name>ChangePwdServlet</servlet-name>
 		<url-pattern>/ChangePwdServlet</url-pattern>
 	</servlet-mapping>
@@ -397,38 +308,16 @@
 		<servlet-name>ExtendSessionServlet</servlet-name>
 		<url-pattern>/servlet/ExtendSession</url-pattern>
 	</servlet-mapping>
-	<servlet-mapping>
-		<servlet-name>AdapterHTTP</servlet-name>
-		<url-pattern>/servlet/AdapterHTTP</url-pattern>
-		<url-pattern>/public/servlet/AdapterHTTP</url-pattern>
-	</servlet-mapping>
-	<servlet-mapping>
-		<servlet-name>AxisServlet</servlet-name>
-		<url-pattern>/servlet/AxisServlet</url-pattern>
-	</servlet-mapping>
-	<servlet-mapping>
-		<servlet-name>AxisServlet</servlet-name>
-		<url-pattern>*.jws</url-pattern>
-	</servlet-mapping>
-	<servlet-mapping>
-		<servlet-name>AxisServlet</servlet-name>
-		<url-pattern>/services/*</url-pattern>
-	</servlet-mapping>
-	<servlet-mapping>
-		<servlet-name>AxisServlet</servlet-name>
-		<url-pattern>/sdk/*</url-pattern>
-	</servlet-mapping>
-	<servlet-mapping>
-		<servlet-name>AdminServlet</servlet-name>
-		<url-pattern>/servlet/AdminServlet</url-pattern>
-	</servlet-mapping>
-	<!-- end axis servlet -->
 
 	<!-- END SERVLET MAPPINGS -->
 
 	<!-- OTHER CONFIGURATIONS -->
 	<session-config>
 		<session-timeout>30</session-timeout>
+		  <cookie-config>
+     		<http-only>true</http-only>        
+     		<secure>true</secure>        
+  		</cookie-config>
 	</session-config>
 	<welcome-file-list>
 		<welcome-file>index.jsp</welcome-file>
@@ -528,15 +417,14 @@
 		<url-pattern>/services/SbiDocumentService</url-pattern>
 	</servlet-mapping>
 
-	<!-- START TOMCAT RES -->
-	<resource-ref id="knowageds_core">
-		<description>
-		</description>
-		<res-ref-name>knowageds</res-ref-name>
-		<res-type>javax.sql.DataSource</res-type>
-		<res-auth>Container</res-auth>
-		<res-sharing-scope>Shareable</res-sharing-scope>
-	</resource-ref>
-	<!-- END TOMCAT RES -->
+	<!-- 
+		This servlet comes from resteasy-jaxrs and is enabled by default mapped to "" URL. The empty string has
+		greater priority than "/": that is a big problem for us because our WARs have mixed resources, REST
+		services, JSPs, HTMLs, etc... The following disables this servlet.
+	 -->
+	<servlet-mapping>
+		<servlet-name>org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher</servlet-name>
+		<url-pattern>/restful-services-default</url-pattern>
+	</servlet-mapping>
 
 </web-app>

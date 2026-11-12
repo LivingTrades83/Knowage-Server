@@ -59,7 +59,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 public class JPQL2SQLStatementRewriter {
 
 	/** The entity manager. */
-	private EntityManager entityManager;
+	private final EntityManager entityManager;
 
 	/** Logger component. */
 	public static transient Logger logger = Logger.getLogger(JPQL2SQLStatementRewriter.class);
@@ -67,8 +67,7 @@ public class JPQL2SQLStatementRewriter {
 	/**
 	 * Instantiates a new hql to sql query rewriter.
 	 *
-	 * @param session
-	 *            the session
+	 * @param session the session
 	 */
 	public JPQL2SQLStatementRewriter(EntityManager em) {
 		this.entityManager = em;
@@ -98,8 +97,7 @@ public class JPQL2SQLStatementRewriter {
 	/**
 	 * Rewrite the JPQL query string in a SQL String (The persistence provider implementation in use is EclipseLink)
 	 *
-	 * @param query
-	 *            The String of the JPQL query
+	 * @param query The String of the JPQL query
 	 * @return the string of the JPQL query translated in SQL
 	 */
 	private String rewriteEclipseLink(String query) {
@@ -110,8 +108,7 @@ public class JPQL2SQLStatementRewriter {
 	/**
 	 * Rewrite the JPQL query in a SQL String (The persistence provider implementation in use is EclipseLink)
 	 *
-	 * @param query
-	 *            The JPQL query
+	 * @param query The JPQL query
 	 * @return the string of the JPQL query translated in SQL
 	 */
 	private String rewriteEclipseLink(Query query) {
@@ -123,7 +120,7 @@ public class JPQL2SQLStatementRewriter {
 
 		// ADD THE ALIAS in the select statement (necessary for the temporary table construction..)
 		int fromPosition = sqlString.indexOf("FROM");
-		StringBuffer sqlQuery2 = new StringBuffer();
+		StringBuilder sqlQuery2 = new StringBuilder();
 		String SelectStatement = sqlString.substring(0, fromPosition - 1);
 		StringTokenizer SelectStatementStk = new StringTokenizer(SelectStatement, ",");
 		int i = 0;
@@ -145,8 +142,7 @@ public class JPQL2SQLStatementRewriter {
 	/**
 	 * Rewrite the JPQL query string in a SQL String (The persistence provider implementation in use is Hibernate)
 	 *
-	 * @param query
-	 *            The String of the JPQL query
+	 * @param query The String of the JPQL query
 	 * @return the string of the JPQL query translated in SQL
 	 */
 	private String rewriteHibernate(String query) {
@@ -167,7 +163,7 @@ public class JPQL2SQLStatementRewriter {
 		/*
 		 * Replace parameters in query
 		 */
-		List<Object> values = new ArrayList<Object>();
+		List<Object> values = new ArrayList<>();
 		getFiltersValues(session, collectedParameterSpecifications, values);
 		fixQueryParameters(sessionFactory, values);
 		replaceQueryParameters(finalSqlStringBuilder, values);
@@ -180,7 +176,7 @@ public class JPQL2SQLStatementRewriter {
 		Iterator<Object> iterator = values.iterator();
 		while ((indexOf = finalSqlStringBuilder.indexOf("?")) != -1) {
 			Object value = iterator.next();
-			finalSqlStringBuilder.replace(indexOf, indexOf+1, value.toString());
+			finalSqlStringBuilder.replace(indexOf, indexOf + 1, value.toString());
 		}
 	}
 
@@ -190,9 +186,10 @@ public class JPQL2SQLStatementRewriter {
 		 */
 		Field filterNameField = null;
 		Field parameterNameField = null;
+		Class<?> clas = DynamicFilterParameterSpecification.class;
 		try {
-			filterNameField = DynamicFilterParameterSpecification.class.getDeclaredField("filterName");
-			parameterNameField = DynamicFilterParameterSpecification.class.getDeclaredField("parameterName");
+			filterNameField = clas.getDeclaredField("filterName");
+			parameterNameField = clas.getDeclaredField("parameterName");
 		} catch (Exception e) {
 			throw new SpagoBIRuntimeException(e);
 		}
@@ -206,11 +203,16 @@ public class JPQL2SQLStatementRewriter {
 			try {
 				String filterName = (String) filterNameField.get(currParameter);
 				String parameterName = (String) parameterNameField.get(currParameter);
-				Object value = session.getLoadQueryInfluencers().getFilterParameterValue( filterName + '.' + parameterName );
+				Object value = session.getLoadQueryInfluencers()
+						.getFilterParameterValue(filterName + '.' + parameterName);
+
 				if (value instanceof Collection) {
-					values.addAll((Collection<Object>) value);
+					Collection<?> coll = (Collection) value;
+					for (Object obj : coll) {
+						values.add(fix(obj));
+					}
 				} else {
-					values.add(value);
+					values.add(fix(value));
 				}
 			} catch (Exception e) {
 				throw new SpagoBIRuntimeException(e);
@@ -259,8 +261,7 @@ public class JPQL2SQLStatementRewriter {
 	/**
 	 * Rewrite the JPQL query in a SQL String (The persistence provider implementation in use is Hibernate)
 	 *
-	 * @param query
-	 *            The JPQL query
+	 * @param query The JPQL query
 	 * @return the string of the JPQL query translated in SQL
 	 */
 	private String rewriteHibernate(Query query) {
@@ -270,6 +271,31 @@ public class JPQL2SQLStatementRewriter {
 		HQL2SQLStatementRewriter queryRewriter = new HQL2SQLStatementRewriter(session);
 		String sqlQueryString = queryRewriter.rewrite(qi.getHibernateQuery().getQueryString());
 		return sqlQueryString;
+	}
+
+	/**
+	 * Fixes SQL values.
+	 *
+	 * WORKAROUND This code is present because of the way {@link it.eng.qbe.statement.jpa.JPQLDataSet} does the count TODO Remove this and fix the count in
+	 * {@link it.eng.qbe.statement.jpa.JPQLDataSet}6
+	 *
+	 * @param value Value to fix
+	 * @return Fixed value
+	 */
+	private Object fix(Object value) {
+		if (value instanceof String) {
+			String _value = (String) value;
+			value = escapeString(_value);
+		}
+		return value;
+	}
+
+	/**
+	 * WORKAROUND This code is present because of the way {@link it.eng.qbe.statement.jpa.JPQLDataSet} does the count TODO Remove this and fix the count in
+	 * {@link it.eng.qbe.statement.jpa.JPQLDataSet}6
+	 */
+	private String escapeString(String value) {
+		return value.toString().replace("'", "''");
 	}
 
 }

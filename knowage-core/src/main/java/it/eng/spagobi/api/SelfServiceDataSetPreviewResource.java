@@ -21,8 +21,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
-import java.util.Locale.Builder;
 import java.util.Map;
 import java.util.Set;
 
@@ -35,8 +33,8 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
+import org.jboss.resteasy.plugins.providers.html.View;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -44,7 +42,6 @@ import org.json.JSONObjectDeserializator;
 
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.commons.bo.UserProfile;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
 import it.eng.spagobi.tools.dataset.DatasetManagementAPI;
@@ -60,7 +57,6 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 import it.eng.spagobi.utilities.themes.ThemesManager;
-import it.eng.spagobi.wapp.services.ChangeTheme;
 
 @Path("/selfservicedatasetpreview")
 public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
@@ -68,7 +64,7 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 	private static final String DATASET_VALUE_SUCCESS_REQUEST_DISPATCHER_URL = "datasetview.jsp";
 	private static final int MAX_DATASET_PAGE_SIZE = 10;
 
-	static private Logger logger = Logger.getLogger(SelfServiceDataSetPreviewResource.class);
+	private static Logger logger = Logger.getLogger(SelfServiceDataSetPreviewResource.class);
 
 	@GET
 	@Path("/export/{label}")
@@ -81,18 +77,20 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/values/{label}")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public String loadData(@PathParam("label") String label, @Context HttpServletRequest req, @QueryParam("start") Integer start,
-			@QueryParam("limit") Integer limit, @QueryParam("page") Integer page, @QueryParam("dataSetParameters") String dataSetParameters,
-			@QueryParam("sort") JSONArray sortOptions, @QueryParam("valueFilter") String valueFilter, @QueryParam("columnsFilter") String columnsFilter,
-			@QueryParam("columnsFilterDescription") String columnsFilterDescription, @QueryParam("typeValueFilter") String typeValueFilter,
-			@QueryParam("typeFilter") String typeFilter, @QueryParam("DRIVERS") JSONObject driversMap) {
+	public String loadData(@PathParam("label") String label, @Context HttpServletRequest req,
+			@QueryParam("start") Integer start, @QueryParam("limit") Integer limit, @QueryParam("page") Integer page,
+			@QueryParam("dataSetParameters") String dataSetParameters, @QueryParam("sort") JSONArray sortOptions,
+			@QueryParam("valueFilter") String valueFilter, @QueryParam("columnsFilter") String columnsFilter,
+			@QueryParam("columnsFilterDescription") String columnsFilterDescription,
+			@QueryParam("typeValueFilter") String typeValueFilter, @QueryParam("typeFilter") String typeFilter,
+			@QueryParam("DRIVERS") JSONObject driversMap) {
 
 		logger.debug("Retriving data for the preview");
 
 		UserProfile profile = getUserProfile();
 
 		boolean isDatasetVisible = false;
-		Map<String, Object> parametersMap = new HashMap<String, Object>();
+		Map<String, Object> parametersMap = new HashMap<>();
 		Map<String, Object> driversRuntimeMap;
 		try {
 			driversRuntimeMap = JSONObjectDeserializator.getHashMapFromJSONObject(driversMap);
@@ -111,8 +109,8 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 		logger.debug("Loading the dataset");
 		if (label == null || label.length() == 0) {
 			logger.error("No dataset found with label ");
-			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.no.visible.dataset", buildLocaleFromSession(),
-					"No dataset found with label " + label);
+			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.no.visible.dataset",
+					getLocale(), "No dataset found with label " + label);
 		}
 		logger.debug("Dataset loaded");
 
@@ -136,8 +134,8 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 
 			if (ds == null) {
 				logger.error("No dataset found with label " + label);
-				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.no.visible.dataset", buildLocaleFromSession(),
-						"No dataset found with label " + label);
+				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.no.visible.dataset",
+						getLocale(), "No dataset found with label " + label);
 			}
 
 			logger.debug("Checking if the user can see the dataset");
@@ -153,17 +151,20 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 
 			if (!isDatasetVisible) {
 				logger.error("The dataset with label " + label + " is not visible to the user");
-				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.no.visible.dataset", buildLocaleFromSession(),
-						"The dataset with label " + label + " is not visible to the user");
+				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.no.visible.dataset",
+						getLocale(), "The dataset with label " + label + " is not visible to the user");
 
 			}
 
 			try {
-				new DatasetManagementAPI(profile).canLoadData(ds);
+				DatasetManagementAPI datasetManagementAPI = new DatasetManagementAPI(profile);
+				datasetManagementAPI.canSee(ds);
+				datasetManagementAPI.canLoadData(ds);
 			} catch (ActionNotPermittedException e) {
 				logger.error("User " + profile.getUserId() + " cannot preview the dataset with label " + label);
-				throw new SpagoBIRestServiceException(e.getI18NCode(), buildLocaleFromSession(),
-						"User " + profile.getUserId() + " cannot preview the dataset with label " + label, e, "MessageFiles.messages");
+				throw new SpagoBIRestServiceException(e.getI18NCode(), getLocale(),
+						"User " + profile.getUserId() + " cannot preview the dataset with label " + label, e,
+						"MessageFiles.messages");
 			}
 
 			logger.debug("The user can execute the dataset");
@@ -178,7 +179,8 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 			for (String driverName : driverUrlNames) {
 				Map mapOfValues = (Map) driversRuntimeMap.get(driverName);
 				if (mapOfValues.containsKey("value")) {
-					if (mapOfValues.get("value") instanceof List && mapOfValues.get("value") != null && !((List) mapOfValues.get("value")).isEmpty()
+					if (mapOfValues.get("value") instanceof List && mapOfValues.get("value") != null
+							&& !((List) mapOfValues.get("value")).isEmpty()
 							|| !(mapOfValues.get("value") instanceof List) && !"".equals(mapOfValues.get("value"))) {
 						logger.debug("Setting drivers");
 						ds.setDrivers(driversRuntimeMap);
@@ -191,9 +193,9 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 			logger.debug("Data loaded");
 
 			logger.debug("Writing the result set");
-			Map<String, Object> properties = new HashMap<String, Object>();
+			Map<String, Object> properties = new HashMap<>();
 			JSONDataWriter dataSetWriter = new JSONDataWriter(properties);
-			// dataSetWriter.setLocale(buildLocaleFromSession());
+			// dataSetWriter.setLocale(getLocale());
 			// JSONObject gridDataFeed = (JSONObject)
 			// dataSetWriter.write(ds.getDataStore());
 			JSONObject gridDataFeed = getDatasetTestResultList(ds, parametersMap, profile, start, limit);
@@ -205,12 +207,14 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 			throw e;
 		} catch (Exception e) {
 			logger.error("Error loading the dataset values ", e);
-			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", getLocale(),
+					e);
 		}
 
 	}
 
-	public JSONObject getDatasetTestResultList(IDataSet dataSet, Map<String, Object> parametersFilled, IEngUserProfile profile, int start, int limit) {
+	public JSONObject getDatasetTestResultList(IDataSet dataSet, Map<String, Object> parametersFilled,
+			IEngUserProfile profile, int start, int limit) {
 
 		JSONObject dataSetJSON;
 
@@ -230,41 +234,47 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 					dataStore = dataSet.test(start, limit, GeneralUtilities.getDatasetMaxResults());
 				}
 				if (dataStore == null) {
-					throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", buildLocaleFromSession(), "General error loading dataset");
+					throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror",
+							getLocale(), "General error loading dataset");
 				}
 			} catch (Throwable t) {
 				Throwable rootException = t;
 				while (rootException.getCause() != null) {
 					rootException = rootException.getCause();
 				}
-				String rootErrorMsg = rootException.getMessage() != null ? rootException.getMessage() : rootException.getClass().getName();
+				String rootErrorMsg = rootException.getMessage() != null ? rootException.getMessage()
+						: rootException.getClass().getName();
 				if (dataSet instanceof JDBCDataSet) {
 					JDBCDataSet jdbcDataSet = (JDBCDataSet) dataSet;
 					if (jdbcDataSet.getQueryScript() != null) {
-						QuerableBehaviour querableBehaviour = (QuerableBehaviour) jdbcDataSet.getBehaviour(QuerableBehaviour.class.getName());
+						QuerableBehaviour querableBehaviour = (QuerableBehaviour) jdbcDataSet
+								.getBehaviour(QuerableBehaviour.class.getName());
 						String statement = querableBehaviour.getStatement();
 						rootErrorMsg += "\nQuery statement: [" + statement + "]";
 					}
 				}
 
-				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", buildLocaleFromSession(), t);
+				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror",
+						getLocale(), t);
 			}
 
 			try {
 				JSONDataWriter dataSetWriter = new JSONDataWriter();
 				dataSetJSON = (JSONObject) dataSetWriter.write(dataStore);
 				if (dataSetJSON == null) {
-					throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", buildLocaleFromSession(),
-							"Impossible to read serialized resultset");
+					throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror",
+							getLocale(), "Impossible to read serialized resultset");
 				}
 			} catch (Exception t) {
-				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", buildLocaleFromSession(), t);
+				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror",
+						getLocale(), t);
 			}
 		} catch (Throwable t) {
 			if (t instanceof SpagoBIServiceException) {
 				throw (SpagoBIServiceException) t;
 			}
-			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", buildLocaleFromSession(), t);
+			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", getLocale(),
+					t);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -274,29 +284,28 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 
 	/**
 	 * Forward the request to the jsp
+	 *
+	 * @return
 	 */
 	@GET
 	@Path("/getdataset")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public void loadData() {
+	public View loadData() {
 
 		try {
 
 			/* FORWARD THE REQUEST */
 			logger.debug("Forwarding the request");
 
-			String theme_name = (String) request.getAttribute(ChangeTheme.THEME_NAME);
-			if (theme_name == null)
-				theme_name = ThemesManager.getDefaultTheme();
-
-			String url = "/themes/" + theme_name + "/jsp/";
+			String url = "/themes/" + ThemesManager.getDefaultTheme() + "/jsp/";
 			url = url + DATASET_VALUE_SUCCESS_REQUEST_DISPATCHER_URL;
 
-			getServletRequest().getRequestDispatcher(url).forward(getServletRequest(), getServletResponse());
+			return new View(url);
 
 		} catch (Exception e) {
 			logger.error("Error loading the dataset values ", e);
-			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", buildLocaleFromSession(), e);
+			throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.generalerror", getLocale(),
+					e);
 		}
 
 	}
@@ -317,14 +326,15 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 				parametersMap.put("sortParam", sortParam);
 			} catch (JSONException e) {
 				logger.error("Error loading the sort options ", e);
-				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.sort.error", buildLocaleFromSession(), e);
+				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.sort.error", getLocale(),
+						e);
 			}
 		}
 		logger.debug("Sort options: " + sortParam);
 	}
 
-	private void addFilterParam(String columnsFilterDescription, String typeValueFilter, String typeFilter, String valueFilter,
-			Map<String, Object> parametersMap) {
+	private void addFilterParam(String columnsFilterDescription, String typeValueFilter, String typeFilter,
+			String valueFilter, Map<String, Object> parametersMap) {
 		logger.debug("Getting the filter options");
 		String filter = "";
 
@@ -380,31 +390,11 @@ public class SelfServiceDataSetPreviewResource extends AbstractSpagoBIResource {
 				}
 			} catch (JSONException e) {
 				logger.error("Error loading the parameters ", e);
-				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.params.error", buildLocaleFromSession(), e);
+				throw new SpagoBIRestServiceException("sbi.tools.dataset.preview.params.error",
+						getLocale(), e);
 			}
 		}
 		logger.debug("Parameters fo the dataset loaded: " + parametersMap);
-	}
-
-	@Override
-	public Locale buildLocaleFromSession() {
-		Locale locale = null;
-
-		String currLanguage = (String) getHttpSession().getAttribute(SpagoBIConstants.AF_LANGUAGE);
-		String currCountry = (String) getHttpSession().getAttribute(SpagoBIConstants.AF_COUNTRY);
-		String currScript = (String) getHttpSession().getAttribute(SpagoBIConstants.AF_SCRIPT);
-		if (currLanguage != null && currCountry != null) {
-			Builder tmpLocale = new Locale.Builder().setLanguage(currLanguage).setRegion(currCountry);
-
-			if (StringUtils.isNotBlank(currScript)) {
-				tmpLocale.setScript(currScript);
-			}
-
-			locale = tmpLocale.build();
-		} else
-			locale = GeneralUtilities.getDefaultLocale();
-
-		return locale;
 	}
 
 	// private Map parseJsonDriversMap(JSONObject drivers) {

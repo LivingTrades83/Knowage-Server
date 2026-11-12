@@ -36,13 +36,12 @@ import it.eng.spagobi.tools.dataset.dao.IDataSetDAO;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 
 public class DataSourceSupplier {
-	static private Logger logger = Logger.getLogger(DataSourceSupplier.class);
+	private static Logger logger = Logger.getLogger(DataSourceSupplier.class);
 
 	/**
 	 * Gets the data source.
 	 *
-	 * @param documentId
-	 *            the document id
+	 * @param documentId the document id
 	 *
 	 * @return the data source
 	 */
@@ -107,8 +106,7 @@ public class DataSourceSupplier {
 	/**
 	 * Gets the data source by label.
 	 *
-	 * @param dsLabel
-	 *            the ds label
+	 * @param dsLabel the ds label
 	 *
 	 * @return the data source by label
 	 */
@@ -135,8 +133,7 @@ public class DataSourceSupplier {
 	/**
 	 * Gets the data source by label.
 	 *
-	 * @param dsLabel
-	 *            the ds label
+	 * @param dsLabel the ds label
 	 *
 	 * @return the data source by label
 	 */
@@ -177,6 +174,7 @@ public class DataSourceSupplier {
 		sbds.setHibDialectClass(doDialect.getValueCd());
 		sbds.setReadOnly(ds.checkIsReadOnly());
 		sbds.setWriteDefault(ds.checkIsWriteDefault());
+		sbds.setUseForDataprep(ds.checkUseForDataprep());
 		if (ds.getJdbcPoolConfiguration() != null) {
 			ObjectMapper mapper = new ObjectMapper();
 			String jdbcPoolConfiguration = mapper.writeValueAsString(ds.getJdbcPoolConfiguration());
@@ -218,5 +216,25 @@ public class DataSourceSupplier {
 		}
 		logger.debug("OUT");
 		return arDS;
+	}
+
+	/**
+	 * Gets data source for cache.
+	 *
+	 * @return the data source for cache
+	 */
+	public SpagoBiDataSource getDataSourceForCache() {
+		logger.debug("IN");
+		SpagoBiDataSource ret = null;
+
+		// gets all data source from database
+		try {
+			IDataSource ds = DAOFactory.getDataSourceDAO().loadDataSourceWriteDefault();
+			ret = toSpagoBiDataSource(ds);
+		} catch (Exception e) {
+			logger.error("The data sources are not correctly returned", e);
+		}
+		logger.debug("OUT");
+		return ret;
 	}
 }

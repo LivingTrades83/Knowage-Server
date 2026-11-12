@@ -27,11 +27,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 
-import it.eng.spagobi.services.validation.AlphanumericNoSpaces;
+import it.eng.knowage.boot.validation.AlphanumericNoSpaces;
+import it.eng.knowage.boot.validation.ListStringConstraint;
+import it.eng.knowage.boot.validation.UUIDAlphanumericNoSpaces;
+import it.eng.knowage.boot.validation.Xss;
 import it.eng.spagobi.services.validation.CodeConstraint;
-import it.eng.spagobi.services.validation.ListStringConstraint;
-import it.eng.spagobi.services.validation.UUIDAlphanumericNoSpaces;
-import it.eng.spagobi.services.validation.Xss;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(Include.NON_NULL)
@@ -47,13 +47,18 @@ public class WidgetGalleryDTO {
 	@Xss
 	private String name;
 
+	@AlphanumericNoSpaces
+	@NotNull
+	@Xss
+	private String label;
+
 	@Xss
 	private String description;
 
 	private String type;
 
 	@ListStringConstraint(message = "One or more tag is not valid")
-	private List<String> tags = new ArrayList<String>();
+	private List<String> tags = new ArrayList<>();
 
 	private String image = null;
 
@@ -95,6 +100,14 @@ public class WidgetGalleryDTO {
 		this.name = name;
 	}
 
+	public String getLabel() {
+		return label;
+	}
+
+	public void setLabel(String label) {
+		this.label = label;
+	}
+
 	public String getType() {
 		return type;
 	}
@@ -123,9 +136,8 @@ public class WidgetGalleryDTO {
 		this.description = description;
 	}
 
-	public WidgetGalleryDTO(String id, String author, String name, String type, List<String> tags, String html, String javaScript, String python, String css,
-			byte[] image) {
-		super();
+	public WidgetGalleryDTO(String id, String author, String name, String type, List<String> tags, String html,
+			String javaScript, String python, String css, byte[] image) {
 		this.id = id;
 		this.author = author;
 		this.name = name;
@@ -140,7 +152,6 @@ public class WidgetGalleryDTO {
 	}
 
 	public WidgetGalleryDTO() {
-		super();
 	}
 
 	public String getImage() {

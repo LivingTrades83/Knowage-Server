@@ -17,15 +17,6 @@
  */
 package it.eng.spagobi.metadata.dao;
 
-import it.eng.spago.error.EMFErrorSeverity;
-import it.eng.spago.error.EMFUserError;
-import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.metadata.metadata.SbiMetaJob;
-import it.eng.spagobi.metadata.metadata.SbiMetaJobTable;
-import it.eng.spagobi.metadata.metadata.SbiMetaJobTableId;
-import it.eng.spagobi.metadata.metadata.SbiMetaTable;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,13 +27,22 @@ import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 
+import it.eng.spago.error.EMFErrorSeverity;
+import it.eng.spago.error.EMFUserError;
+import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.metadata.metadata.SbiMetaJob;
+import it.eng.spagobi.metadata.metadata.SbiMetaJobTable;
+import it.eng.spagobi.metadata.metadata.SbiMetaJobTableId;
+import it.eng.spagobi.metadata.metadata.SbiMetaTable;
+
 /**
  * @author Antonella Giachino (antonella.giachino@eng.it)
  *
  */
 public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJobTableDAO {
 
-	static private Logger logger = Logger.getLogger(SbiJobTableDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(SbiJobTableDAOHibImpl.class);
 
 	@Override
 	public List<SbiMetaJob> loadJobsByTableId(Integer tableId) throws EMFUserError {
@@ -72,17 +72,10 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return toReturn;
@@ -108,7 +101,8 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 			Iterator it = hibList.iterator();
 			while (it.hasNext()) {
 				SbiMetaJobTable tmpRel = (SbiMetaJobTable) it.next();
-				SbiMetaTable tmpJob = DAOFactory.getSbiMetaTableDAO().loadTableByID(new Integer(tmpRel.getId().getTableId()));
+				SbiMetaTable tmpJob = DAOFactory.getSbiMetaTableDAO()
+						.loadTableByID(new Integer(tmpRel.getId().getTableId()));
 
 				if (tmpJob != null)
 					toReturn.add(tmpJob);
@@ -116,17 +110,10 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 		return toReturn;
@@ -175,26 +162,16 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			SbiMetaJobTableId hibId = new SbiMetaJobTableId();
-			hibId.setTableId(aMetaJobTable.getId().getTableId());
-			hibId.setJobId(aMetaJobTable.getId().getJobId());
+			SbiMetaJobTableId hibId = new SbiMetaJobTableId(aMetaJobTable.getId().getJobId(),aMetaJobTable.getId().getTableId());
 
 			updateSbiCommonInfo4Update(hibId);
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 	}
@@ -212,17 +189,10 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		logger.debug("OUT");
 
@@ -236,9 +206,8 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 
 		try {
 
-			SbiMetaJobTableId hibId = new SbiMetaJobTableId();
-			hibId.setTableId(aMetaJobTable.getSbiMetaTable().getTableId());
-			hibId.setJobId(aMetaJobTable.getSbiMetaJob().getJobId());
+			SbiMetaJobTableId hibId = new SbiMetaJobTableId(aMetaJobTable.getSbiMetaJob().getJobId(),aMetaJobTable.getSbiMetaTable().getTableId());
+
 			aMetaJobTable.setId(hibId);
 
 			updateSbiCommonInfo4Insert(aMetaJobTable);
@@ -262,9 +231,7 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			SbiMetaJobTableId hibId = new SbiMetaJobTableId();
-			hibId.setTableId(aMetaJobTable.getId().getTableId());
-			hibId.setJobId(aMetaJobTable.getId().getJobId());
+			SbiMetaJobTableId hibId = new SbiMetaJobTableId(aMetaJobTable.getId().getJobId(),aMetaJobTable.getId().getTableId());
 
 			SbiMetaJobTable hib = (SbiMetaJobTable) aSession.load(SbiMetaJobTable.class, hibId);
 
@@ -272,17 +239,10 @@ public class SbiJobTableDAOHibImpl extends AbstractHibernateDAO implements ISbiJ
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}

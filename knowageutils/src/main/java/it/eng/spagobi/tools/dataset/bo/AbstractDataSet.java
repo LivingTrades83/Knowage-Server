@@ -14,6 +14,8 @@ package it.eng.spagobi.tools.dataset.bo;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,7 +41,6 @@ import it.eng.spagobi.tools.dataset.common.datastore.IDataStoreFilter;
 import it.eng.spagobi.tools.dataset.common.iterator.DataIterator;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
 import it.eng.spagobi.tools.dataset.common.transformer.IDataStoreTransformer;
-import it.eng.spagobi.tools.dataset.common.transformer.PivotDataSetTransformer;
 import it.eng.spagobi.tools.dataset.exceptions.ParametersNotValorizedException;
 import it.eng.spagobi.tools.dataset.federation.FederationDefinition;
 import it.eng.spagobi.tools.dataset.metasql.query.DatabaseDialect;
@@ -51,7 +52,7 @@ import it.eng.spagobi.tools.dataset.utils.DatasetMetadataParser;
 import it.eng.spagobi.tools.datasource.bo.DataSourceFactory;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.user.UserProfileManager;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 import it.eng.spagobi.utilities.database.temporarytable.TemporaryTableManager;
 import it.eng.spagobi.utilities.engines.SpagoBIEngineRuntimeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
@@ -64,6 +65,7 @@ import it.eng.spagobi.utilities.sql.SQLStatementConditionalOperators.IConditiona
 public abstract class AbstractDataSet implements IDataSet {
 
 	private int id;
+
 	private String name;
 	private String description;
 	private String label;
@@ -80,10 +82,6 @@ public abstract class AbstractDataSet implements IDataSet {
 	// They should be stored only into dataSetTransformer (see above)
 	protected Integer transformerId;
 	protected String transformerCd;
-	protected String pivotColumnName;
-	protected String pivotRowName;
-	protected String pivotColumnValue;
-	protected boolean numRows;
 	protected String organization;
 
 	protected String startDateField;
@@ -92,8 +90,6 @@ public abstract class AbstractDataSet implements IDataSet {
 
 	protected IDataSource datasourceForWriting;
 	protected IDataSource datasourceForReading;
-
-	protected IDataStoreTransformer dataSetTransformer;
 
 	// hook for extension points
 	private final Map behaviours;
@@ -130,10 +126,11 @@ public abstract class AbstractDataSet implements IDataSet {
 
 	private Set tags;
 
-	private static transient Logger logger = Logger.getLogger(AbstractDataSet.class);
+	protected final List<IDataStoreTransformer> dataStoreTransformers = new ArrayList<>();
+
+	private static Logger logger = Logger.getLogger(AbstractDataSet.class);
 
 	public AbstractDataSet() {
-		super();
 		behaviours = new HashMap();
 		tags = new HashSet();
 	}
@@ -159,7 +156,6 @@ public abstract class AbstractDataSet implements IDataSet {
 	}
 
 	public AbstractDataSet(SpagoBiDataSet dataSet) {
-		super();
 		setId(dataSet.getDsId());
 		setName(dataSet.getName());
 		setLabel(dataSet.getLabel());
@@ -170,23 +166,16 @@ public abstract class AbstractDataSet implements IDataSet {
 		setParameters(dataSet.getParameters());
 
 		setTransformerId(dataSet.getTransformerId());
-		setPivotColumnName(dataSet.getPivotColumnName());
-		setPivotRowName(dataSet.getPivotRowName());
-		setPivotColumnValue(dataSet.getPivotColumnValue());
-		setNumRows(dataSet.isNumRows());
 		setDsMetadata(dataSet.getDsMetadata());
 		setPersisted(dataSet.isPersisted());
 		setPersistTableName(dataSet.getPersistTableName());
 		setScheduled(dataSet.isScheduled());
 		SpagoBiDataSource dsDataSourceForReading = dataSet.getDataSourceForReading();
-		setDataSourceForReading(dsDataSourceForReading != null ? DataSourceFactory.getDataSource(dsDataSourceForReading) : null);
+		setDataSourceForReading(
+				dsDataSourceForReading != null ? DataSourceFactory.getDataSource(dsDataSourceForReading) : null);
 		setScopeId(dataSet.getScopeId());
 		setScopeCd(dataSet.getScopeCd());
 		setOwner(dataSet.getOwner());
-
-		if (this.getPivotColumnName() != null && this.getPivotColumnValue() != null && this.getPivotRowName() != null) {
-			setDataStoreTransformer(new PivotDataSetTransformer(getPivotColumnName(), getPivotColumnValue(), getPivotRowName(), isNumRows()));
-		}
 
 		behaviours = new HashMap();
 	}
@@ -205,10 +194,6 @@ public abstract class AbstractDataSet implements IDataSet {
 		sbd.setConfiguration(getConfiguration());
 
 		sbd.setTransformerId(getTransformerId());
-		sbd.setPivotColumnName(getPivotColumnName());
-		sbd.setPivotRowName(getPivotRowName());
-		sbd.setPivotColumnValue(getPivotColumnValue());
-		sbd.setNumRows(isNumRows());
 		sbd.setPersisted(isPersisted());
 		sbd.setPersistTableName(getPersistTableName());
 		sbd.setScheduled(isScheduled());
@@ -293,7 +278,7 @@ public abstract class AbstractDataSet implements IDataSet {
 	}
 
 	public boolean hasMetadata() {
-		return (getDsMetadata() != null && getDsMetadata().trim().equals("") == false);
+		return (getDsMetadata() != null && !getDsMetadata().trim().equals(""));
 	}
 
 	@Override
@@ -310,7 +295,7 @@ public abstract class AbstractDataSet implements IDataSet {
 	public IMetaData getMetadata() {
 		IMetaData toReturn = null;
 		String xmlMetadata = this.getDsMetadata();
-		if (xmlMetadata == null || xmlMetadata.trim().equals("")) {
+		if (xmlMetadata == null || xmlMetadata.trim().equals("") || xmlMetadata.trim().equals("[]") || xmlMetadata.trim().startsWith("{")) {
 			logger.error("This dataset has no metadata");
 			throw new SpagoBIRuntimeException("This dataset has no metadata");
 		}
@@ -350,14 +335,12 @@ public abstract class AbstractDataSet implements IDataSet {
 
 	@Override
 	public Map getParamsMap() {
-		DataSetUtilities.fillDefaultValues(this, this.paramsMap);
 		return paramsMap;
 	}
 
 	@Override
 	public void setParamsMap(Map paramsMap) {
 		this.paramsMap = paramsMap;
-		DataSetUtilities.fillDefaultValues(this, this.paramsMap);
 	}
 
 	@Override
@@ -365,7 +348,8 @@ public abstract class AbstractDataSet implements IDataSet {
 		List<JSONObject> parameters = getDataSetParameters();
 		if (parameters.size() > paramValues.size()) {
 			String parameterNotValorizedStr = getParametersNotValorized(parameters, paramValues);
-			throw new ParametersNotValorizedException("The following parameters have no value [" + parameterNotValorizedStr + "]");
+			throw new ParametersNotValorizedException(
+					"The following parameters have no value [" + parameterNotValorizedStr + "]");
 		}
 
 		if (paramValues.size() > 0) {
@@ -389,7 +373,7 @@ public abstract class AbstractDataSet implements IDataSet {
 		String paramValue = paramValues.get(paramName);
 		String[] values = null;
 		if (isMultiValue) {
-			List<String> list = new ArrayList<String>();
+			List<String> list = new ArrayList<>();
 			boolean paramValueConsumed = false;
 			try {
 				JSONArray jsonArray = new JSONArray(paramValue);
@@ -455,13 +439,15 @@ public abstract class AbstractDataSet implements IDataSet {
 						String newValuesFromArray = "";
 						for (int i = 0; i < valuesArray.length; i++) {
 							String temp = valuesArray[i];
-							if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim))
+							if (!delim.isEmpty() && temp.startsWith(delim) && temp.endsWith(delim)) {
 								temp = temp.substring(1, temp.length() - 1);
+							}
 							temp = temp.replaceAll("'", "''");
-							if (i == 0)
+							if (i == 0) {
 								newValuesFromArray = (delim + temp + delim);
-							else
+							} else {
 								newValuesFromArray = newValuesFromArray + "," + (delim + temp + delim);
+							}
 
 						}
 						newValues.add(newValuesFromArray);
@@ -503,7 +489,9 @@ public abstract class AbstractDataSet implements IDataSet {
 					SourceBean sbRow = (SourceBean) iterator.next();
 					String namePar = sbRow.getAttribute(NAME) != null ? sbRow.getAttribute(NAME).toString() : null;
 					String typePar = sbRow.getAttribute(TYPE) != null ? sbRow.getAttribute(TYPE).toString() : null;
-					boolean multiValue = sbRow.getAttribute(MULTIVALUE) != null ? Boolean.valueOf(sbRow.getAttribute(MULTIVALUE).toString()) : false;
+					boolean multiValue = sbRow.getAttribute(MULTIVALUE) != null
+							? Boolean.valueOf(sbRow.getAttribute(MULTIVALUE).toString())
+							: false;
 
 					if (typePar != null && typePar.startsWith("class")) {
 						typePar = typePar.substring(6);
@@ -533,7 +521,8 @@ public abstract class AbstractDataSet implements IDataSet {
 		}
 	}
 
-	private static String getParametersNotValorized(List<JSONObject> parameters, Map<String, String> parametersValues) throws JSONException {
+	private static String getParametersNotValorized(List<JSONObject> parameters, Map<String, String> parametersValues)
+			throws JSONException {
 		String toReturn = "";
 
 		for (Iterator<JSONObject> iterator = parameters.iterator(); iterator.hasNext();) {
@@ -604,66 +593,6 @@ public abstract class AbstractDataSet implements IDataSet {
 	@Override
 	public void setTransformerCd(String transformerCd) {
 		this.transformerCd = transformerCd;
-	}
-
-	@Override
-	public String getPivotColumnName() {
-		return pivotColumnName;
-	}
-
-	@Override
-	public void setPivotColumnName(String pivotColumnName) {
-		this.pivotColumnName = pivotColumnName;
-	}
-
-	@Override
-	public String getPivotRowName() {
-		return pivotRowName;
-	}
-
-	@Override
-	public void setPivotRowName(String pivotRowName) {
-		this.pivotRowName = pivotRowName;
-	}
-
-	@Override
-	public String getPivotColumnValue() {
-		return pivotColumnValue;
-	}
-
-	@Override
-	public void setPivotColumnValue(String pivotColumnValue) {
-		this.pivotColumnValue = pivotColumnValue;
-	}
-
-	@Override
-	public boolean isNumRows() {
-		return numRows;
-	}
-
-	@Override
-	public void setNumRows(boolean numRows) {
-		this.numRows = numRows;
-	}
-
-	@Override
-	public boolean hasDataStoreTransformer() {
-		return getDataStoreTransformer() != null;
-	}
-
-	@Override
-	public void removeDataStoreTransformer() {
-		setDataStoreTransformer(null);
-	}
-
-	@Override
-	public void setDataStoreTransformer(IDataStoreTransformer dataSetTransformer) {
-		this.dataSetTransformer = dataSetTransformer;
-	}
-
-	@Override
-	public IDataStoreTransformer getDataStoreTransformer() {
-		return this.dataSetTransformer;
 	}
 
 	// -----------------------------------------------
@@ -772,6 +701,11 @@ public abstract class AbstractDataSet implements IDataSet {
 		return this instanceof FlatDataSet;
 	}
 
+	@Override
+	public boolean isPreparedDataSet() {
+		return this instanceof PreparedDataSet;
+	}
+
 	/**
 	 * @return the flatTableName
 	 */
@@ -781,6 +715,15 @@ public abstract class AbstractDataSet implements IDataSet {
 			throw new SpagoBIRuntimeException("This dataset is not a flat dataset!!!");
 		}
 		FlatDataSet thisDataSet = (FlatDataSet) this;
+		return thisDataSet.getTableName();
+	}
+
+	@Override
+	public String getPreparedTableName() {
+		if (!this.isPreparedDataSet()) {
+			throw new SpagoBIRuntimeException("This dataset is not a prepared dataset!!!");
+		}
+		PreparedDataSet thisDataSet = (PreparedDataSet) this;
 		return thisDataSet.getTableName();
 	}
 
@@ -899,6 +842,8 @@ public abstract class AbstractDataSet implements IDataSet {
 			return getPersistTableName();
 		} else if (isFlatDataset()) {
 			return getFlatTableName();
+		} else if (isPreparedDataSet()) {
+			return getPreparedTableName();
 		} else {
 			return null;
 			// throw new RuntimeException("Dataset is not persisted");
@@ -935,9 +880,9 @@ public abstract class AbstractDataSet implements IDataSet {
 
 	/**
 	 * Get the values for a certain dataset's field, considering a optional filter. In case the dataset is persisted or flat, the values are retrieved by the
-	 * persistence table. In case the dataset is neither persisted nor flat, it will look for a temporary table with the same signature using
-	 * TemporaryTableManager; in case there is no temporary table, the dataset will be persisted, therefore the datasource must be read and write or a
-	 * datasource for writing must be provided.
+	 * persistence table. In case the dataset is neither persisted nor flat, it will look for a temporary table with the same signature using TemporaryTableManager;
+	 * in case there is no temporary table, the dataset will be persisted, therefore the datasource must be read and write or a datasource for writing must be
+	 * provided.
 	 *
 	 * @param fieldName The dataset's field
 	 * @param start     The offset on results
@@ -947,20 +892,21 @@ public abstract class AbstractDataSet implements IDataSet {
 	 */
 	@Override
 	public IDataStore getDomainValues(String fieldName, Integer start, Integer limit, IDataStoreFilter filter) {
-		if (this.isPersisted() || this.isFlatDataset()) {
+		if (this.isPersisted() || this.isFlatDataset() || this.isPreparedDataSet()) {
 			return getDomainValuesFromPersistenceTable(fieldName, start, limit, filter);
 		} else {
 			return getDomainValuesFromTemporaryTable(fieldName, start, limit, filter);
 		}
 	}
 
-	protected IDataStore getDomainValuesFromPersistenceTable(String fieldName, Integer start, Integer limit, IDataStoreFilter filter) {
+	protected IDataStore getDomainValuesFromPersistenceTable(String fieldName, Integer start, Integer limit,
+			IDataStoreFilter filter) {
 		IDataStore toReturn = null;
 		try {
 			String tableName = this.getTableNameForReading();
 			IDataSource dataSource = this.getDataSourceForReading();
-			StringBuffer buffer = new StringBuffer(
-					"Select DISTINCT " + AbstractJDBCDataset.encapsulateColumnName(fieldName, dataSource) + " FROM " + tableName);
+			StringBuffer buffer = new StringBuffer("Select DISTINCT "
+					+ AbstractJDBCDataset.encapsulateColumnName(fieldName, dataSource) + " FROM " + tableName);
 			IDataSetTableDescriptor tableDescriptor = new DataSetTableDescriptor(this);
 			manageFilterOnDomainValues(buffer, fieldName, tableDescriptor, filter);
 			String sqlStatement = buffer.toString();
@@ -971,7 +917,8 @@ public abstract class AbstractDataSet implements IDataSet {
 		return toReturn;
 	}
 
-	protected IDataStore getDomainValuesFromTemporaryTable(String fieldName, Integer start, Integer limit, IDataStoreFilter filter) {
+	protected IDataStore getDomainValuesFromTemporaryTable(String fieldName, Integer start, Integer limit,
+			IDataStoreFilter filter) {
 
 		IDataStore toReturn = null;
 		try {
@@ -1004,8 +951,8 @@ public abstract class AbstractDataSet implements IDataSet {
 			}
 			IDataSource dataSource = tableDescriptor.getDataSource();
 			String filterColumnName = tableDescriptor.getColumnName(fieldName);
-			StringBuffer buffer = new StringBuffer(
-					"Select DISTINCT " + AbstractJDBCDataset.encapsulateColumnName(filterColumnName, dataSource) + " FROM " + tableName);
+			StringBuffer buffer = new StringBuffer("Select DISTINCT "
+					+ AbstractJDBCDataset.encapsulateColumnName(filterColumnName, dataSource) + " FROM " + tableName);
 			manageFilterOnDomainValues(buffer, fieldName, tableDescriptor, filter);
 			String sqlStatement = buffer.toString();
 			toReturn = TemporaryTableManager.queryTemporaryTable(sqlStatement, dataSource, start, limit);
@@ -1017,7 +964,8 @@ public abstract class AbstractDataSet implements IDataSet {
 		return toReturn;
 	}
 
-	protected void manageFilterOnDomainValues(StringBuffer buffer, String fieldName, IDataSetTableDescriptor tableDescriptor, IDataStoreFilter filter) {
+	protected void manageFilterOnDomainValues(StringBuffer buffer, String fieldName,
+			IDataSetTableDescriptor tableDescriptor, IDataStoreFilter filter) {
 		if (filter != null) {
 			String filterColumnName = tableDescriptor.getColumnName(fieldName);
 			if (filterColumnName == null) {
@@ -1026,8 +974,10 @@ public abstract class AbstractDataSet implements IDataSet {
 			String columnName = tableDescriptor.getColumnName(fieldName);
 			Class clazz = tableDescriptor.getColumnType(fieldName);
 			String value = getFilterValue(filter.getValue(), clazz);
-			IConditionalOperator conditionalOperator = SQLStatementConditionalOperators.getOperator(filter.getOperator());
-			String temp = conditionalOperator.apply(AbstractJDBCDataset.encapsulateColumnName(columnName, tableDescriptor.getDataSource()),
+			IConditionalOperator conditionalOperator = SQLStatementConditionalOperators
+					.getOperator(filter.getOperator());
+			String temp = conditionalOperator.apply(
+					AbstractJDBCDataset.encapsulateColumnName(columnName, tableDescriptor.getDataSource()),
 					new String[] { value });
 			buffer.append(" WHERE " + temp);
 		}
@@ -1036,8 +986,8 @@ public abstract class AbstractDataSet implements IDataSet {
 	private String getFilterValue(String value, Class clazz) {
 		String toReturn = null;
 		if (String.class.isAssignableFrom(clazz)) {
-			value = StringUtils.escapeQuotes(value);
-			toReturn = StringUtils.bound(value, "'");
+			value = KnowageStringUtils.escapeQuotes(value);
+			toReturn = KnowageStringUtils.bound(value, "'");
 		} else if (Number.class.isAssignableFrom(clazz)) {
 			toReturn = value;
 		} else if (Boolean.class.isAssignableFrom(clazz)) {
@@ -1141,7 +1091,8 @@ public abstract class AbstractDataSet implements IDataSet {
 
 	@Override
 	public DataIterator iterator() {
-		throw new UnsupportedOperationException("This operation has to be overriden by subclasses in order to be used.");
+		throw new UnsupportedOperationException(
+				"This operation has to be overriden by subclasses in order to be used.");
 	}
 
 	@Override
@@ -1156,7 +1107,7 @@ public abstract class AbstractDataSet implements IDataSet {
 
 	@Override
 	public boolean isCachingSupported() {
-		return !isPersisted() && !isFlatDataset();
+		return !isPersisted() && !isFlatDataset() && !isPreparedDataSet();
 	}
 
 	@Override
@@ -1167,13 +1118,13 @@ public abstract class AbstractDataSet implements IDataSet {
 			strategy = DatasetEvaluationStrategyType.REALTIME;
 		} else if (isPersisted()) {
 			strategy = DatasetEvaluationStrategyType.PERSISTED;
-		} else if (isFlatDataset()) {
+		} else if (isFlatDataset() || isPreparedDataSet()) {
 			strategy = DatasetEvaluationStrategyType.FLAT;
 		} else {
 			IDataSource dataSource = getDataSource();
 			DatabaseDialect dialect = dataSource != null ? DatabaseDialect.get(dataSource.getHibDialectClass()) : null;
 			boolean inLineViewSupported = dialect != null ? dialect.isInLineViewSupported() : false;
-			if (isNearRealtime && inLineViewSupported && !hasDataStoreTransformer()) {
+			if (isNearRealtime && inLineViewSupported && !hasDataStoreTransformers()) {
 				strategy = DatasetEvaluationStrategyType.INLINE_VIEW;
 			} else {
 				strategy = DatasetEvaluationStrategyType.CACHED;
@@ -1206,6 +1157,38 @@ public abstract class AbstractDataSet implements IDataSet {
 	@Override
 	public void setTags(Set tags) {
 		this.tags = tags;
+	}
+
+	@Override
+	public boolean hasDataStoreTransformers() {
+		return !dataStoreTransformers.isEmpty();
+	}
+
+	@Override
+	public void clearDataStoreTransformers() {
+		dataStoreTransformers.clear();
+	}
+
+	@Override
+	public void addDataStoreTransformer(IDataStoreTransformer dataSetTransformer) {
+		dataStoreTransformers.add(dataSetTransformer);
+	}
+
+	@Override
+	public void addDataStoreTransformers(Collection<IDataStoreTransformer> dataSetTransformers) {
+		dataStoreTransformers.addAll(dataSetTransformers);
+	}
+
+	@Override
+	public List<IDataStoreTransformer> getDataStoreTransformers() {
+		return Collections.unmodifiableList(dataStoreTransformers);
+	}
+
+	@Override
+	public final void executeDataStoreTransformers(IDataStore dataStore) {
+		for (IDataStoreTransformer dataStoreTransformer : dataStoreTransformers) {
+			dataStoreTransformer.transform(dataStore);
+		}
 	}
 
 }

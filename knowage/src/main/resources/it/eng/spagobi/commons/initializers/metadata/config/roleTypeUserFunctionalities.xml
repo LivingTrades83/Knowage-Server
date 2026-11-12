@@ -122,10 +122,6 @@
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="LovsView" roleType="DEV_ROLE" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="MapCatalogueManagement" roleType="ADMIN" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="MapCatalogueManagement" roleType="DEV_ROLE" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="MenuManagement" roleType="ADMIN" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="ModifyRefresh" roleType="ADMIN" />
@@ -155,6 +151,10 @@
 		userFunctionality="WorklistManagement" roleType="DEV_ROLE" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="WorklistManagement" roleType="TEST_ROLE" />
+	<ROLE_TYPE_USER_FUNCTIONALITY
+		userFunctionality="WorkspaceManagement" roleType="TEST_ROLE" />
+	<ROLE_TYPE_USER_FUNCTIONALITY
+		userFunctionality="WorkspaceManagement" roleType="USER" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="WorkspaceManagement" roleType="ADMIN" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
@@ -234,10 +234,6 @@
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="MeasuresCatalogueManagement" roleType="DEV_ROLE" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="GeoLayersManagement" roleType="ADMIN" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="GeoLayersManagement" roleType="DEV_ROLE" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="CreateCockpitFunctionality" roleType="ADMIN" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="CreateCockpitFunctionality" roleType="USER" />
@@ -247,10 +243,6 @@
 		userFunctionality="CreateCockpitFunctionality" roleType="TEST_ROLE" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="CreateCockpitFunctionality" roleType="MODEL_ADMIN" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="HierarchiesManagement" roleType="ADMIN" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="HierarchiesManagement" roleType="DEV_ROLE" />	
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="CreateSocialAnalysis" roleType="ADMIN" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
@@ -266,22 +258,15 @@
 	<ROLE_TYPE_USER_FUNCTIONALITY
 		userFunctionality="CreateChartFunctionality" roleType="TEST_ROLE" />
 	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="CreateChartFunctionality" roleType="MODEL_ADMIN" />	
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="CkanIntegrationFunctionality" roleType="ADMIN" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="CkanIntegrationFunctionality" roleType="USER" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="CkanIntegrationFunctionality" roleType="DEV_ROLE" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="CkanIntegrationFunctionality" roleType="TEST_ROLE" />
-	<ROLE_TYPE_USER_FUNCTIONALITY
-		userFunctionality="CkanIntegrationFunctionality" roleType="MODEL_ADMIN" />
+		userFunctionality="CreateChartFunctionality" roleType="MODEL_ADMIN" />
 
 	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="Timespan" roleType="ADMIN" />
 	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="Timespan" roleType="USER" />
 	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="Timespan" roleType="DEV_ROLE" />
 	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="Timespan" roleType="MODEL_ADMIN" />
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="TimespanManagement" roleType="ADMIN" />
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="TimespanManagement" roleType="DEV_ROLE" />
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="TimespanManagement" roleType="MODEL_ADMIN" />
 	
 	
 	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ImagesManagement" roleType="ADMIN" />
@@ -391,5 +376,34 @@
 	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="PythonDataset" roleType="DEV_ROLE" />
 
 	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="WidgetGalleryManagement" roleType="ADMIN" />
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ResourceManagement" roleType="ADMIN" />
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ResourceManagementDev" roleType="DEV_ROLE" />
 	
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ProfileAttributeListManagement" roleType="ADMIN"/>
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ProfileAttributeListManagement" roleType="DEV_ROLE"/>
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ProfileAttributeListManagement" roleType="MODEL_ADMIN"/>
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ProfileAttributeListManagement" roleType="TEST_ROLE"/>
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ProfileAttributeListManagement" roleType="USER"/>
+		
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="LicenseReadOnly" roleType="ADMIN" />
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="LicenseReadOnly" roleType="DEV_ROLE"/>
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="LicenseReadOnly" roleType="MODEL_ADMIN"/>
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="LicenseReadOnly" roleType="TEST_ROLE"/>
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="LicenseReadOnly" roleType="USER"/>
+	
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="QbeAdvancedSaving" roleType="ADMIN" />	
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="QbeAdvancedSaving" roleType="DEV_ROLE" />	
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="QbeAdvancedSaving" roleType="TEST_ROLE" />	
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="QbeAdvancedSaving" roleType="MODEL_ADMIN" />	
+
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="ThemeManagement" roleType="ADMIN" />	
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="DashboardThemeManagement" roleType="ADMIN" />	
+
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="CategoryManagement" roleType="ADMIN" />
+
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="MondrianSchemaManagement" roleType="ADMIN" />
+	<ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="MondrianSchemaManagement" roleType="DEV_ROLE" />
+
+    <ROLE_TYPE_USER_FUNCTIONALITY userFunctionality="LogManagement" roleType="ADMIN" />
+
 </ROLE_TYPE_USER_FUNCTIONALITIES>

@@ -20,6 +20,9 @@ package it.eng.spagobi.behaviouralmodel.analyticaldriver.bo;
 import java.io.Serializable;
 import java.util.List;
 
+import it.eng.spagobi.behaviouralmodel.check.bo.Check;
+import it.eng.spagobi.commons.bo.Role;
+
 /**
  * Defines a <code>ParameterUse</code> object.
  */
@@ -29,14 +32,16 @@ public class ParameterUse implements Serializable {
 	Integer useID;
 	Integer id; // in realtà questo è par_id nella tabella
 	Integer idLov;
+	String descLov;
 	Integer idLovForDefault;
+	Integer idLovForMin;
 	Integer idLovForMax;
 	String name = "";
 	String label = "";
 	String description = "";
 
-	List associatedRoles = null;
-	List associatedChecks = null;
+	List<Role> associatedRoles = null;
+	List<Check> associatedChecks = null;
 
 	String selectionType = "";
 	boolean multivalue = true;
@@ -73,8 +78,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the description.
 	 *
-	 * @param description
-	 *            The description to set.
+	 * @param description The description to set.
 	 */
 	public void setDescription(String description) {
 		this.description = description;
@@ -92,8 +96,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the id.
 	 *
-	 * @param id
-	 *            The id to set.
+	 * @param id The id to set.
 	 */
 	public void setId(Integer id) {
 		this.id = id;
@@ -111,8 +114,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the id lov.
 	 *
-	 * @param idLov
-	 *            The idLov to set.
+	 * @param idLov The idLov to set.
 	 */
 	public void setIdLov(Integer idLov) {
 		this.idLov = idLov;
@@ -124,6 +126,14 @@ public class ParameterUse implements Serializable {
 
 	public void setIdLovForDefault(Integer idLovForDefault) {
 		this.idLovForDefault = idLovForDefault;
+	}
+	
+	public Integer getIdLovForMin() {
+		return idLovForMin;
+	}
+
+	public void setIdLovForMin(Integer idLovForMin) {
+		this.idLovForMin = idLovForMin;
 	}
 
 	public Integer getIdLovForMax() {
@@ -146,8 +156,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the name.
 	 *
-	 * @param name
-	 *            The name to set.
+	 * @param name The name to set.
 	 */
 	public void setName(String name) {
 		this.name = name;
@@ -158,17 +167,16 @@ public class ParameterUse implements Serializable {
 	 *
 	 * @return Returns the associatedRoles.
 	 */
-	public List getAssociatedRoles() {
+	public List<Role> getAssociatedRoles() {
 		return associatedRoles;
 	}
 
 	/**
 	 * Sets the associated roles.
 	 *
-	 * @param listRoles
-	 *            The associatedRoles to set.
+	 * @param listRoles The associatedRoles to set.
 	 */
-	public void setAssociatedRoles(List listRoles) {
+	public void setAssociatedRoles(List<Role> listRoles) {
 		this.associatedRoles = listRoles;
 	}
 
@@ -181,11 +189,11 @@ public class ParameterUse implements Serializable {
 		return useID;
 	}
 
+
 	/**
 	 * Sets the use id.
 	 *
-	 * @param useID
-	 *            The UseID to set.
+	 * @param useID The UseID to set.
 	 */
 	public void setUseID(Integer useID) {
 		this.useID = useID;
@@ -196,17 +204,16 @@ public class ParameterUse implements Serializable {
 	 *
 	 * @return Returns the associatedChecks.
 	 */
-	public List getAssociatedChecks() {
+	public List<Check> getAssociatedChecks() {
 		return associatedChecks;
 	}
 
 	/**
 	 * Sets the associated checks.
 	 *
-	 * @param associatedChecks
-	 *            The associatedChecks to set.
+	 * @param associatedChecks The associatedChecks to set.
 	 */
-	public void setAssociatedChecks(List associatedChecks) {
+	public void setAssociatedChecks(List<Check> associatedChecks) {
 		this.associatedChecks = associatedChecks;
 	}
 
@@ -222,8 +229,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the label.
 	 *
-	 * @param label
-	 *            the new label
+	 * @param label the new label
 	 */
 	public void setLabel(String label) {
 		this.label = label;
@@ -241,8 +247,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the manual input.
 	 *
-	 * @param manualInput
-	 *            The manualInput to set.
+	 * @param manualInput The manualInput to set.
 	 */
 	public void setManualInput(Integer manualInput) {
 		this.manualInput = manualInput;
@@ -260,8 +265,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the value selection.
 	 *
-	 * @param valueSelection
-	 *            The value selection to set.
+	 * @param valueSelection The value selection to set.
 	 */
 	public void setValueSelection(String valueSelection) {
 		this.valueSelection = valueSelection;
@@ -279,8 +283,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the selected layer property.
 	 *
-	 * @param selectedLayerProp
-	 *            The map to set.
+	 * @param selectedLayerProp The map to set.
 	 */
 	public void setSelectedLayerProp(String selectedLayerProp) {
 		this.selectedLayerProp = selectedLayerProp;
@@ -298,8 +301,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the selected layer.
 	 *
-	 * @param selectedLayer
-	 *            The layer to set.
+	 * @param selectedLayer The layer to set.
 	 */
 	public void setSelectedLayer(String selectedLayer) {
 		this.selectedLayer = selectedLayer;
@@ -317,8 +319,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the selection type.
 	 *
-	 * @param selectionType
-	 *            the new selection type
+	 * @param selectionType the new selection type
 	 */
 	public void setSelectionType(String selectionType) {
 		this.selectionType = selectionType;
@@ -336,8 +337,7 @@ public class ParameterUse implements Serializable {
 	/**
 	 * Sets the multivalue.
 	 *
-	 * @param multivalue
-	 *            the new multivalue
+	 * @param multivalue the new multivalue
 	 */
 	public void setMultivalue(boolean multivalue) {
 		this.multivalue = multivalue;
@@ -357,6 +357,14 @@ public class ParameterUse implements Serializable {
 
 	public void setDefaultFormula(String defaultFormula) {
 		this.defaultFormula = defaultFormula;
+	}
+
+	public void setDescLov(String descLov) {
+		this.descLov = descLov;
+	}
+
+	public String getDescLov() {
+		return descLov;
 	}
 
 }

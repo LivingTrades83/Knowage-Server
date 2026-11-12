@@ -36,17 +36,21 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.workspace.bo.FunctionsOrganizer;
 import it.eng.spagobi.workspace.metadata.SbiFunctionsOrganizer;
 
+/**
+ * @deprecated Replaced by KNOWAGE_TM-513 TODO : Delete
+ */
+@Deprecated
 public class FunctionsOrganizerDAOHibImpl extends AbstractHibernateDAO implements IFunctionsOrganizerDAO {
 
-	private static transient Logger logger = Logger.getLogger(FunctionsOrganizerDAOHibImpl.class);
+	private static final Logger LOGGER = Logger.getLogger(FunctionsOrganizerDAOHibImpl.class);
 
 	@Override
-	public List loadFolderByUser() {
-		logger.debug("IN");
+	public List<FunctionsOrganizer> loadFolderByUser() {
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
-		List listOfFolders = null;
-		List realResult = new ArrayList();
+		List<SbiFunctionsOrganizer> listOfFolders = null;
+		List<FunctionsOrganizer> realResult = new ArrayList<>();
 		try {
 			aSession = getSession();
 			IEngUserProfile user = getUserProfile();
@@ -58,31 +62,28 @@ public class FunctionsOrganizerDAOHibImpl extends AbstractHibernateDAO implement
 			Criterion rest2 = Restrictions.eq("commonInfo.userIn", userId);
 			criteria.add(Restrictions.or(rest1, rest2));
 			listOfFolders = criteria.list();
-			Iterator it = listOfFolders.iterator();
+			Iterator<SbiFunctionsOrganizer> it = listOfFolders.iterator();
 			if (listOfFolders.isEmpty()) {
 				SbiFunctionsOrganizer root = createRootFolder(userId);
 				realResult.add(toFunctionsOrganizer(root));
 			} else {
 				while (it.hasNext()) {
-					realResult.add(toFunctionsOrganizer((SbiFunctionsOrganizer) it.next()));
+					realResult.add(toFunctionsOrganizer(it.next()));
 				}
 			}
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return realResult;
 	}
 
 	@Override
 	public SbiFunctionsOrganizer createFolder(SbiFunctionsOrganizer folder) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		SbiFunctionsOrganizer hibFunct = null;
@@ -103,26 +104,21 @@ public class FunctionsOrganizerDAOHibImpl extends AbstractHibernateDAO implement
 			tx.commit();
 		} catch (HibernateException he) {
 
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			/**
-			 * Throw this specific exception so the service that called the Hibernate method can handle it and forward the information about the error towards
-			 * the client (final user).
+			 * Throw this specific exception so the service that called the Hibernate method can handle it and forward the information about the error towards the client
+			 * (final user).
 			 *
 			 * @author Danilo Ristovski (danristo, danilo.ristovski@mht.net)
 			 */
 			throw new HibernateException(he);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen()) {
-					aSession.close();
-				}
-				logger.debug("OUT");
-			}
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 		return hibFunct;
 	}
@@ -130,7 +126,7 @@ public class FunctionsOrganizerDAOHibImpl extends AbstractHibernateDAO implement
 	@Override
 	public void deleteFolder(Integer folderId) {
 
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -140,20 +136,16 @@ public class FunctionsOrganizerDAOHibImpl extends AbstractHibernateDAO implement
 			tx.commit();
 		} catch (Exception he) {
 			logException(he);
-			logger.error("Error in deleting the folder from organizer", he);
-			if (tx != null)
-				tx.rollback();
+			LOGGER.error("Error in deleting the folder from organizer", he);
+			rollbackIfActive(tx);
 			throw new SpagoBIRuntimeException("Could not delete folder", he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	public void deleteOrganizerFolderById(Integer id, Session aSession) throws Exception {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		SbiFunctionsOrganizer folderToDelete = (SbiFunctionsOrganizer) aSession.load(SbiFunctionsOrganizer.class, id);
 		aSession.delete(folderToDelete);
 	}
@@ -175,7 +167,7 @@ public class FunctionsOrganizerDAOHibImpl extends AbstractHibernateDAO implement
 	}
 
 	public SbiFunctionsOrganizer createRootFolder(String user) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		SbiFunctionsOrganizer hibFunct = null;
@@ -195,18 +187,13 @@ public class FunctionsOrganizerDAOHibImpl extends AbstractHibernateDAO implement
 
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
+			LOGGER.error("HibernateException", he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen()) {
-					aSession.close();
-				}
-				logger.debug("OUT");
-			}
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 		return hibFunct;
 	}

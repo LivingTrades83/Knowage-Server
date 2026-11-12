@@ -1,7 +1,7 @@
 /*
  * Knowage, Open Source Business Intelligence suite
  * Copyright (C) 2016 Engineering Ingegneria Informatica S.p.A.
- * 
+ *
  * Knowage is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -11,26 +11,11 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package it.eng.spagobi.tools.distributionlist.dao;
-
-import it.eng.spago.base.SourceBean;
-import it.eng.spago.base.SourceBeanException;
-import it.eng.spago.error.EMFErrorSeverity;
-import it.eng.spago.error.EMFUserError;
-import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
-import it.eng.spagobi.analiticalmodel.document.dao.BIObjectDAOHibImpl;
-import it.eng.spagobi.analiticalmodel.document.metadata.SbiObjects;
-import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.tools.distributionlist.bo.DistributionList;
-import it.eng.spagobi.tools.distributionlist.bo.Email;
-import it.eng.spagobi.tools.distributionlist.metadata.SbiDistributionList;
-import it.eng.spagobi.tools.distributionlist.metadata.SbiDistributionListUser;
-import it.eng.spagobi.tools.distributionlist.metadata.SbiDistributionListsObjects;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -44,7 +29,22 @@ import org.hibernate.Query;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.criterion.Criterion;
-import org.hibernate.criterion.Expression;
+import org.hibernate.criterion.Restrictions;
+
+import it.eng.spago.base.SourceBean;
+import it.eng.spago.base.SourceBeanException;
+import it.eng.spago.error.EMFErrorSeverity;
+import it.eng.spago.error.EMFUserError;
+import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
+import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectDAO;
+import it.eng.spagobi.analiticalmodel.document.metadata.SbiObjects;
+import it.eng.spagobi.commons.dao.AbstractHibernateDAO;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.tools.distributionlist.bo.DistributionList;
+import it.eng.spagobi.tools.distributionlist.bo.Email;
+import it.eng.spagobi.tools.distributionlist.metadata.SbiDistributionList;
+import it.eng.spagobi.tools.distributionlist.metadata.SbiDistributionListUser;
+import it.eng.spagobi.tools.distributionlist.metadata.SbiDistributionListsObjects;
 
 /**
  * @author Chiarelli Chiara (chiara.chiarelli@eng.it)
@@ -52,11 +52,11 @@ import org.hibernate.criterion.Expression;
 
 public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDistributionListDAO {
 
-	static private Logger logger = Logger.getLogger(DistributionListDaoImpl.class);
+	private static Logger logger = Logger.getLogger(DistributionListDaoImpl.class);
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#eraseDistributionList(it.eng.spagobi.tools.distributionlist.bo.DistributionList)
 	 */
 	@Override
@@ -68,13 +68,14 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class, new Integer(aDistributionList.getId()));
+			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class,
+					aDistributionList.getId());
 
 			aSession.delete(hibDistributionList);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("Error while erasing the distribution list with id " + ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())),
-					he);
+			logger.error("Error while erasing the distribution list with id "
+					+ ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -93,9 +94,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#eraseDistributionListObjects(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
+	 *
+	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#eraseDistributionListObjects(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
 	 * int, java.lang.String)
 	 */
 	@Override
@@ -109,16 +109,15 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			tx = aSession.beginTransaction();
 			SbiDistributionListsObjects hibDistributionListsObjects = new SbiDistributionListsObjects();
 
-			// String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=" + dl.getId()+" and sdlo.sbiObjects.biobjId="+biobId;
 			String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=? and sdlo.sbiObjects.biobjId=?";
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, dl.getId());
 			query.setInteger(1, biobId);
-			List l = query.list();
+			List<SbiDistributionListsObjects> l = query.list();
 			if (!l.isEmpty()) {
-				Iterator it = l.iterator();
+				Iterator<SbiDistributionListsObjects> it = l.iterator();
 				while (it.hasNext()) {
-					SbiDistributionListsObjects temp = (SbiDistributionListsObjects) it.next();
+					SbiDistributionListsObjects temp = it.next();
 					String xmlstr = temp.getXml();
 					SourceBean sb = SourceBean.fromXMLString(xmlstr);
 					String trigName = (String) sb.getAttribute("triggerName");
@@ -130,8 +129,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			}
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("Error while erasing Distribution List objects related to the Distribution List " + ((dl == null) ? "" : String.valueOf(dl.getId())),
-					he);
+			logger.error("Error while erasing Distribution List objects related to the Distribution List "
+					+ ((dl == null) ? "" : String.valueOf(dl.getId())), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -139,8 +138,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 9106);
 
 		} catch (SourceBeanException e) {
-			logger.error("Error while generating Source Bean");
-			e.printStackTrace();
+			logger.error("Error while generating Source Bean", e);
 		} finally {
 			if (aSession != null) {
 				if (aSession.isOpen())
@@ -152,7 +150,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#eraseAllRelatedDistributionListObjects(java.lang.String)
 	 */
 	@Override
@@ -168,11 +166,11 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			String hql = "from SbiDistributionListsObjects ";
 			Query query = aSession.createQuery(hql);
 
-			List l = query.list();
+			List<SbiDistributionListsObjects> l = query.list();
 			if (!l.isEmpty()) {
-				Iterator it = l.iterator();
+				Iterator<SbiDistributionListsObjects> it = l.iterator();
 				while (it.hasNext()) {
-					SbiDistributionListsObjects temp = (SbiDistributionListsObjects) it.next();
+					SbiDistributionListsObjects temp = it.next();
 					String xmlstr = temp.getXml();
 					SourceBean sb = SourceBean.fromXMLString(xmlstr);
 					String trigName = (String) sb.getAttribute("triggerName");
@@ -183,7 +181,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			}
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("Error while erasing Distribution List objects with triggername " + ((triggername == null) ? "" : triggername), he);
+			logger.error("Error while erasing Distribution List objects with triggername "
+					+ ((triggername == null) ? "" : triggername), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -191,8 +190,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 9106);
 
 		} catch (SourceBeanException e) {
-			logger.error("Error while generating Source Bean");
-			e.printStackTrace();
+			logger.error("Error while generating Source Bean", e);
 		} finally {
 			if (aSession != null) {
 				if (aSession.isOpen())
@@ -204,7 +202,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#insertDistributionList(it.eng.spagobi.tools.distributionlist.bo.DistributionList)
 	 */
 	@Override
@@ -225,9 +223,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			aSession.save(hibDistributionList);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error(
-					"Error while inserting the Distribution List with name " + ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getName())),
-					he);
+			logger.error("Error while inserting the Distribution List with name "
+					+ ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getName())), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -246,27 +243,27 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#loadAllDistributionLists()
 	 */
 	@Override
-	public List loadAllDistributionLists() throws EMFUserError {
+	public List<DistributionList> loadAllDistributionLists() throws EMFUserError {
 
 		logger.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
-		List realResult = new ArrayList();
+		List<DistributionList> realResult = new ArrayList<>();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
 			Query hibQuery = aSession.createQuery(" from SbiDistributionList");
 
-			List hibList = hibQuery.list();
-			Iterator it = hibList.iterator();
+			List<SbiDistributionList> hibList = hibQuery.list();
+			Iterator<SbiDistributionList> it = hibList.iterator();
 
 			while (it.hasNext()) {
-				realResult.add(toDistributionList((SbiDistributionList) it.next()));
+				realResult.add(toDistributionList(it.next()));
 			}
 			tx.commit();
 		} catch (HibernateException he) {
@@ -290,11 +287,11 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#loadDistributionListById(java.lang.Integer)
 	 */
 	@Override
-	public DistributionList loadDistributionListById(Integer Id) throws EMFUserError {
+	public DistributionList loadDistributionListById(Integer id) throws EMFUserError {
 
 		logger.debug("IN");
 		DistributionList toReturn = null;
@@ -304,12 +301,14 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class, Id);
+			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class,
+					id);
 			toReturn = toDistributionList(hibDistributionList);
 			tx.commit();
 
 		} catch (HibernateException he) {
-			logger.error("Error while loading the Distribution List with id " + ((Id == null) ? "" : Id.toString()), he);
+			logger.error("Error while loading the Distribution List with id " + ((id == null) ? "" : id.toString()),
+					he);
 
 			if (tx != null)
 				tx.rollback();
@@ -329,7 +328,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#loadDistributionListByName(java.lang.String)
 	 */
 	@Override
@@ -341,7 +340,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 		try {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
-			Criterion nameCriterrion = Expression.eq("name", name);
+			Criterion nameCriterrion = Restrictions.eq("name", name);
 			Criteria criteria = tmpSession.createCriteria(SbiDistributionList.class);
 			criteria.add(nameCriterrion);
 			SbiDistributionList hibDL = (SbiDistributionList) criteria.uniqueResult();
@@ -366,7 +365,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#modifyDistributionList(it.eng.spagobi.tools.distributionlist.bo.DistributionList)
 	 */
 	@Override
@@ -379,14 +378,15 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class, new Integer(aDistributionList.getId()));
+			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class,
+					aDistributionList.getId());
 			hibDistributionList.setName(aDistributionList.getName());
 			hibDistributionList.setDescr(aDistributionList.getDescr());
 			updateSbiCommonInfo4Update(hibDistributionList);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error(
-					"Error while modifing the distribution list with id " + ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())), he);
+			logger.error("Error while modifing the distribution list with id "
+					+ ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -405,10 +405,9 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/**
 	 * To distribution list.
-	 * 
-	 * @param hibDistributionList
-	 *            the hib distribution list
-	 * 
+	 *
+	 * @param hibDistributionList the hib distribution list
+	 *
 	 * @return the distribution list
 	 */
 	public DistributionList toDistributionList(SbiDistributionList hibDistributionList) {
@@ -419,31 +418,31 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 		dl.setDescr(hibDistributionList.getDescr());
 
 		// Gets all userids and respective emails and puts them into a list of Emails
-		List emails = new ArrayList();
-		Set s = hibDistributionList.getSbiDistributionListUsers();
-		Iterator i = s.iterator();
+		List<Email> emails = new ArrayList<>();
+		Set<SbiDistributionListUser> s = hibDistributionList.getSbiDistributionListUsers();
+		Iterator<SbiDistributionListUser> i = s.iterator();
 		while (i.hasNext()) {
-			SbiDistributionListUser dls = (SbiDistributionListUser) i.next();
+			SbiDistributionListUser dls = i.next();
 			String userId = dls.getUserId();
-			String e_mail = dls.getEMail();
+			String eMail = dls.getEMail();
 			Email email = new Email();
 			email.setUserId(userId);
-			email.setEmail(e_mail);
+			email.setEmail(eMail);
 			emails.add(email);
 		}
 
 		dl.setEmails(emails);
 
 		// Gets all documents related to the distribution list and puts them into a list of documents
-		List documents = new ArrayList();
-		Set d = hibDistributionList.getSbiDistributionListsObjectses();
-		Iterator it = d.iterator();
+		List<BIObject> documents = new ArrayList<>();
+		Set<SbiDistributionListsObjects> d = hibDistributionList.getSbiDistributionListsObjectses();
+		Iterator<SbiDistributionListsObjects> it = d.iterator();
 		while (it.hasNext()) {
-			SbiDistributionListsObjects dlo = (SbiDistributionListsObjects) it.next();
+			SbiDistributionListsObjects dlo = it.next();
 			SbiObjects so = dlo.getSbiObjects();
-			BIObjectDAOHibImpl objDAO = null;
+			IBIObjectDAO objDAO = null;
 			try {
-				objDAO = (BIObjectDAOHibImpl) DAOFactory.getBIObjectDAO();
+				objDAO = DAOFactory.getBIObjectDAO();
 				BIObject obj = objDAO.toBIObject(so, null);
 				documents.add(obj);
 			} catch (EMFUserError e) {
@@ -459,7 +458,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#hasBIObjAssociated(java.lang.String)
 	 */
 	@Override
@@ -474,12 +473,11 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			tx = aSession.beginTransaction();
 			Integer dlIdInt = Integer.valueOf(dlId);
 
-			// String hql = " from SbiObjects s where s.distributionList.dlId = "+ dlIdInt;
 			String hql = " from SbiObjects s where s.distributionList.dlId = ?";
 			Query aQuery = aSession.createQuery(hql);
-			aQuery.setInteger(0, dlIdInt.intValue());
+			aQuery.setInteger(0, dlIdInt);
 			List biObjectsAssocitedWithDl = aQuery.list();
-			if (biObjectsAssocitedWithDl.size() > 0)
+			if (!biObjectsAssocitedWithDl.isEmpty())
 				bool = true;
 			else
 				bool = false;
@@ -505,9 +503,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#subscribeToDistributionList(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
+	 *
+	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#subscribeToDistributionList(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
 	 * it.eng.spagobi.tools.distributionlist.bo.Email)
 	 */
 	@Override
@@ -521,7 +518,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class, new Integer(aDistributionList.getId()));
+			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class,
+					aDistributionList.getId());
 
 			SbiDistributionListUser hibDistributionListUser = new SbiDistributionListUser();
 			hibDistributionListUser.setUserId(user.getUserId());
@@ -531,9 +529,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			aSession.save(hibDistributionListUser);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error(
-					"Error while subscribing to the distribution list with id "
-							+ ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())), he);
+			logger.error("Error while subscribing to the distribution list with id "
+					+ ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -551,7 +548,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see
 	 * it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#unsubscribeFromDistributionList(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
 	 * java.lang.String)
@@ -567,12 +564,13 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class, new Integer(aDistributionList.getId()));
+			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class,
+					aDistributionList.getId());
 
-			Set s = hibDistributionList.getSbiDistributionListUsers();
-			Iterator i = s.iterator();
+			Set<SbiDistributionListUser> s = hibDistributionList.getSbiDistributionListUsers();
+			Iterator<SbiDistributionListUser> i = s.iterator();
 			while (i.hasNext()) {
-				SbiDistributionListUser dls = (SbiDistributionListUser) i.next();
+				SbiDistributionListUser dls = i.next();
 				String userId = dls.getUserId();
 				if (userId.equals(user)) {
 					aSession.delete(dls);
@@ -581,9 +579,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error(
-					"Error while unsubscribing to the distribution list with id "
-							+ ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())), he);
+			logger.error("Error while unsubscribing to the distribution list with id "
+					+ ((aDistributionList == null) ? "" : String.valueOf(aDistributionList.getId())), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -601,7 +598,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#insertDLforDocument(it.eng.spagobi.tools.distributionlist.bo.DistributionList, int,
 	 * java.lang.String)
 	 */
@@ -630,17 +627,18 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			if (otherSchedule == true) {
+			if (otherSchedule) {
 
-				String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=" + dl.getId() + " and sdlo.sbiObjects.biobjId="
-						+ objId;
+				String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=:dlId  and sdlo.sbiObjects.biobjId=:objId";
 				Query query = aSession.createQuery(hql);
+				query.setParameter("dlId", dl.getId());
+				query.setParameter("objId", objId);
 
-				List l = query.list();
+				List<SbiDistributionListsObjects> l = query.list();
 
-				Iterator it = l.iterator();
+				Iterator<SbiDistributionListsObjects> it = l.iterator();
 				while (it.hasNext()) {
-					SbiDistributionListsObjects temp = (SbiDistributionListsObjects) it.next();
+					SbiDistributionListsObjects temp = it.next();
 					String xmlstr = temp.getXml();
 					SourceBean sb = SourceBean.fromXMLString(xmlstr);
 					String trigName = (String) sb.getAttribute("triggerName");
@@ -649,15 +647,16 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 					SourceBean tmpSB = (SourceBean) listRows.get(0);
 					String parvalues = (String) tmpSB.getAttribute("value");
 
-					if (trigName != null && trigName.equals(trigNameOrig) && parvalues != null && parvalues.equals(parvaluesOrig)) {
+					if (trigName != null && trigName.equals(trigNameOrig) && parvalues != null
+							&& parvalues.equals(parvaluesOrig)) {
 						hibDistributionListsObjects = temp;
 					}
-					;
 				}
 			}
 
-			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class, new Integer(dl.getId()));
-			SbiObjects hibObj = (SbiObjects) aSession.load(SbiObjects.class, new Integer(objId));
+			SbiDistributionList hibDistributionList = (SbiDistributionList) aSession.load(SbiDistributionList.class,
+					dl.getId());
+			SbiObjects hibObj = (SbiObjects) aSession.load(SbiObjects.class, objId);
 
 			hibDistributionListsObjects.setSbiDistributionList(hibDistributionList);
 			hibDistributionListsObjects.setSbiObjects(hibObj);
@@ -666,7 +665,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			aSession.save(hibDistributionListsObjects);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("Error while inserting the document to the distribution list with name " + ((dl == null) ? "" : String.valueOf(dl.getName())), he);
+			logger.error("Error while inserting the document to the distribution list with name "
+					+ ((dl == null) ? "" : String.valueOf(dl.getName())), he);
 
 			if (tx != null)
 				tx.rollback();
@@ -674,8 +674,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 9106);
 
 		} catch (SourceBeanException e) {
-			logger.error("Error while generating Source Bean");
-			e.printStackTrace();
+			logger.error("Error while generating Source Bean", e);
 		} finally {
 			if (aSession != null) {
 				if (aSession.isOpen())
@@ -687,9 +686,8 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#isDocScheduleAlreadyLinkedToDL(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
+	 *
+	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#isDocScheduleAlreadyLinkedToDL(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
 	 * int, java.lang.String)
 	 */
 	@Override
@@ -701,8 +699,6 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 		try {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
-			// String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=" +
-			// dl.getId()+" and sdlo.sbiObjects.biobjId="+objId+" and sdlo.xml='"+xml+"'" ;
 			String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=? and sdlo.sbiObjects.biobjId=? and sdlo.xml=?";
 			Query query = tmpSession.createQuery(hql);
 			query.setInteger(0, dl.getId());
@@ -730,9 +726,9 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
-	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#isDocScheduledInOtherTime(it.eng.spagobi.tools.distributionlist.bo.DistributionList,
-	 * int, java.lang.String)
+	 *
+	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#isDocScheduledInOtherTime(it.eng.spagobi.tools.distributionlist.bo.DistributionList, int,
+	 * java.lang.String)
 	 */
 	@Override
 	public boolean isDocScheduledInOtherTime(DistributionList dl, int objId, String xml) throws EMFUserError {
@@ -747,16 +743,15 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
 
-			// String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=" + dl.getId()+" and sdlo.sbiObjects.biobjId="+objId;
 			String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=? and sdlo.sbiObjects.biobjId=?";
 			Query query = tmpSession.createQuery(hql);
 			query.setInteger(0, dl.getId());
 			query.setInteger(1, objId);
-			List l = query.list();
+			List<SbiDistributionListsObjects> l = query.list();
 			if (!l.isEmpty()) {
-				Iterator it = l.iterator();
+				Iterator<SbiDistributionListsObjects> it = l.iterator();
 				while (it.hasNext()) {
-					SbiDistributionListsObjects temp = (SbiDistributionListsObjects) it.next();
+					SbiDistributionListsObjects temp = it.next();
 					String xmlstr = temp.getXml();
 					SourceBean sb = SourceBean.fromXMLString(xmlstr);
 					String trigName = (String) sb.getAttribute("triggerName");
@@ -771,8 +766,7 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 9106);
 		} catch (SourceBeanException e) {
-			logger.error("Error while generating Source Bean");
-			e.printStackTrace();
+			logger.error("Error while generating Source Bean", e);
 		} finally {
 			if (tmpSession != null) {
 				if (tmpSession.isOpen())
@@ -785,31 +779,29 @@ public class DistributionListDaoImpl extends AbstractHibernateDAO implements IDi
 
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see it.eng.spagobi.tools.distributionlist.dao.IDistributionListDAO#getXmlRelated(it.eng.spagobi.tools.distributionlist.bo.DistributionList, int)
 	 */
 	@Override
-	public List getXmlRelated(DistributionList dl, int objId) throws EMFUserError {
+	public List<String> getXmlRelated(DistributionList dl, int objId) throws EMFUserError {
 		logger.debug("IN");
-		List xmls = new ArrayList();
+		List<String> xmls = new ArrayList<>();
 		Session tmpSession = null;
 		Transaction tx = null;
 		try {
 			tmpSession = getSession();
 			tx = tmpSession.beginTransaction();
 
-			// String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=" +
-			// dl.getId()+" and sdlo.sbiObjects.biobjId="+objId+" group by sdlo.xml";
 			String hql = "from SbiDistributionListsObjects sdlo where sdlo.sbiDistributionList.dlId=? and sdlo.sbiObjects.biobjId=?";
 			Query query = tmpSession.createQuery(hql);
 			query.setInteger(0, dl.getId());
 			query.setInteger(1, objId);
-			List l = query.list();
+			List<SbiDistributionListsObjects> l = query.list();
 
 			if (!l.isEmpty()) {
-				Iterator it = l.iterator();
+				Iterator<SbiDistributionListsObjects> it = l.iterator();
 				while (it.hasNext()) {
-					SbiDistributionListsObjects temp = (SbiDistributionListsObjects) it.next();
+					SbiDistributionListsObjects temp = it.next();
 					String xmlstr = temp.getXml();
 					xmls.add(xmlstr);
 				}

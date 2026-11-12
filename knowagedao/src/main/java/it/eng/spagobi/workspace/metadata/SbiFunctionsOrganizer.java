@@ -17,10 +17,15 @@
  */
 package it.eng.spagobi.workspace.metadata;
 
-import it.eng.spagobi.commons.metadata.SbiHibernateModel;
-
 import java.util.Set;
 
+import it.eng.spagobi.commons.metadata.SbiHibernateModel;
+
+/**
+ * @deprecated Replaced by KNOWAGE_TM-513
+ * TODO : Delete
+ */
+@Deprecated
 public class SbiFunctionsOrganizer extends SbiHibernateModel {
 
 	// Fields
@@ -49,7 +54,7 @@ public class SbiFunctionsOrganizer extends SbiHibernateModel {
 		return functId;
 	}
 
-	public void setFunctId(Integer functId) {
+	private void setFunctId(Integer functId) {
 		this.functId = functId;
 	}
 

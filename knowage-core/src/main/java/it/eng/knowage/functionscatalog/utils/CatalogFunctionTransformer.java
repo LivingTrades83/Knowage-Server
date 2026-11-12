@@ -34,15 +34,13 @@ import it.eng.knowage.backendservices.rest.widgets.PythonUtils;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.functions.dao.ICatalogFunctionDAO;
-import it.eng.spagobi.functions.metadata.SbiCatalogFunction;
 import it.eng.spagobi.services.common.JWTSsoService;
+import it.eng.spagobi.tenant.TenantManager;
 import it.eng.spagobi.tools.dataset.common.datareader.IDataReader;
 import it.eng.spagobi.tools.dataset.common.datareader.JSONPathDataReader;
-import it.eng.spagobi.tools.dataset.common.datareader.JSONPathDataReader.JSONPathAttribute;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IField;
 import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
-import it.eng.spagobi.tools.dataset.common.datastore.Record;
 import it.eng.spagobi.tools.dataset.common.metadata.FieldMetadata;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
@@ -56,97 +54,42 @@ import it.eng.spagobi.utilities.rest.RestUtilities.HttpMethod;
  */
 public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 
+	private static final Logger LOGGER = Logger.getLogger(CatalogFunctionTransformer.class);
+
 	private final String functionUuid;
-	private SbiCatalogFunction function;
-	private final JSONObject functionConfiguration;
-	private Map<String, String> inputColumns;
-	private Map<String, InputVariable> inputVariables;
-	private Map<String, OutputColumnRuntime> outputColumns;
-	private UserProfile profile;
+	private String script;
+	private final CatalogFunctionRuntimeConfigDTO cfg;
+	private final UserProfile profile;
 	private CatalogFunctionDataProxy proxy;
 	private IDataStore newColumns;
 
-	private static transient Logger logger = Logger.getLogger(CatalogFunctionTransformer.class);
-
-	public CatalogFunctionTransformer(String functionUuid, JSONObject catalogFunctionConfig) {
+	public CatalogFunctionTransformer(UserProfile profile, String functionUuid,
+			CatalogFunctionRuntimeConfigDTO configDTO) {
+		this.profile = profile;
 		this.functionUuid = functionUuid;
-		this.functionConfiguration = catalogFunctionConfig;
+		this.cfg = configDTO;
 		init();
 	}
 
 	private void init() {
-		profile = new UserProfileResource().getUserProfileForFunctionsCatalog();
-		initInputColumns();
-		initOutputColumns();
-		initInputVariables();
 		initFunction();
 		initProxy();
-	}
-
-	private void initInputColumns() {
-		inputColumns = new HashMap<String, String>();
-		JSONArray inCols = functionConfiguration.optJSONArray("inputColumns");
-		for (int i = 0; i < inCols.length(); i++) {
-			try {
-				String columnName = inCols.getJSONObject(i).getString("name");
-				String dsColumn = inCols.getJSONObject(i).getString("dsColumn");
-				inputColumns.put(columnName, dsColumn);
-			} catch (Exception e) {
-				logger.error("Error initializing input columns", e);
-				inputColumns = new HashMap<String, String>();
-			}
-		}
-	}
-
-	private void initInputVariables() {
-		inputVariables = new HashMap<String, InputVariable>();
-		JSONArray inVars = functionConfiguration.optJSONArray("inputVariables");
-		for (int i = 0; i < inVars.length(); i++) {
-			try {
-				String varName = inVars.getJSONObject(i).getString("name");
-				String type = inVars.getJSONObject(i).getString("type");
-				String value = inVars.getJSONObject(i).getString("value");
-				InputVariable inputVariable = new InputVariable(varName, type, value);
-				inputVariables.put(varName, inputVariable);
-			} catch (Exception e) {
-				logger.error("Error initializing input variables", e);
-				inputVariables = new HashMap<String, InputVariable>();
-			}
-		}
-	}
-
-	private void initOutputColumns() {
-		outputColumns = new HashMap<String, OutputColumnRuntime>();
-		JSONArray outCols = functionConfiguration.optJSONArray("outputColumns");
-		for (int i = 0; i < outCols.length(); i++) {
-			try {
-				String columnName = outCols.getJSONObject(i).getString("name");
-				String fieldType = outCols.getJSONObject(i).getString("fieldType");
-				String type = outCols.getJSONObject(i).getString("type");
-				String alias = outCols.getJSONObject(i).optString("alias");
-				OutputColumnRuntime outputColumn = new OutputColumnRuntime(columnName, fieldType, type, alias);
-				outputColumns.put(columnName, outputColumn);
-			} catch (Exception e) {
-				logger.error("Error initializing output columns", e);
-				outputColumns = new HashMap<String, OutputColumnRuntime>();
-			}
-		}
 	}
 
 	private void initFunction() {
 		ICatalogFunctionDAO fcDAO = DAOFactory.getCatalogFunctionDAO();
 		fcDAO.setUserProfile(profile);
-		function = fcDAO.getCatalogFunctionByUuid(functionUuid);
-		if (function == null) {
-			logger.error("Couldn't retrieve function: " + functionUuid);
-			throw new SpagoBIRuntimeException("Couldn't retrieve function: " + functionUuid);
+		script = fcDAO.getCatalogFunctionScriptByUuidAndOrganization(functionUuid,
+				TenantManager.getTenant().toString());
+		if (script == null) {
+			throw new SpagoBIRuntimeException("Couldn't retrieve function script from id: " + functionUuid);
 		}
 	}
 
 	private void initProxy() {
 		String address = getEngineAddress() + "catalog/execute";
 		HttpMethod method = HttpMethod.valueOf("Post");
-		Map<String, String> requestHeaders = new HashMap<String, String>();
+		Map<String, String> requestHeaders = new HashMap<>();
 		requestHeaders.put("Content-Type", "application/json");
 		JSONObject requestBody = initRequestBody();
 		proxy = new CatalogFunctionDataProxy(address, method, requestHeaders, requestBody);
@@ -156,10 +99,10 @@ public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 		String envLabel = null;
 		String address = null;
 		try {
-			envLabel = functionConfiguration.getString("environment");
+			envLabel = cfg.getEnvironment();
 			address = PythonUtils.getPythonAddress(envLabel);
 		} catch (Exception e) {
-			logger.error("Cannot retrieve environment <" + envLabel + "> address", e);
+			LOGGER.error("Cannot retrieve environment <" + envLabel + "> address", e);
 			throw new SpagoBIRuntimeException("Cannot retrieve environment <" + envLabel + "> address", e);
 		}
 		return address;
@@ -170,23 +113,23 @@ public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 		JSONObject inputs = new JSONObject();
 		try {
 			JSONArray inputColsArray = new JSONArray();
-			for (String colName : inputColumns.keySet()) {
-				String dsColumn = inputColumns.get(colName);
+			for (String colName : cfg.getInputColumns().keySet()) {
+				String dsColumn = cfg.getInputColumns().get(colName);
 				inputColsArray.put(dsColumn);
 			}
 
 			JSONObject inputVarsObj = new JSONObject();
-			for (String varName : inputVariables.keySet()) {
-				InputVariable var = inputVariables.get(varName);
+			for (String varName : cfg.getInputVariables().keySet()) {
+				InputVariable inputVariable = cfg.getInputVariables().get(varName);
 				JSONObject varObj = new JSONObject();
-				varObj.put("type", var.getType());
-				varObj.put("value", var.getValue());
+				varObj.put("type", inputVariable.getType());
+				varObj.put("value", inputVariable.getValue());
 				inputVarsObj.put(varName, varObj);
 			}
 
 			JSONArray outputColsArray = new JSONArray();
-			for (String colName : outputColumns.keySet()) {
-				OutputColumnRuntime outCol = outputColumns.get(colName);
+			for (String colName : cfg.getOutputColumns().keySet()) {
+				OutputColumnRuntime outCol = cfg.getOutputColumns().get(colName);
 				outputColsArray.put(outCol.getName());
 			}
 
@@ -197,30 +140,27 @@ public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 			toReturn.put("inputs", inputs);
 			toReturn.put("token", getScriptJwtToken());
 		} catch (Exception e) {
-			logger.error("Error building request body", e);
+			LOGGER.error("Error building request body", e);
 			throw new SpagoBIRuntimeException("Error building request body", e);
 		}
 		return toReturn;
 	}
 
 	private String getScriptJwtToken() {
-		String script = function.getOnlineScript();
 		// replace keywords
-		for (String colName : inputColumns.keySet()) {
-			String dsColumn = inputColumns.get(colName);
+		for (String colName : cfg.getInputColumns().keySet()) {
+			String dsColumn = cfg.getInputColumns().get(colName);
 			script = script.replace("${" + colName + "}", "${" + dsColumn + "}");
 		}
-		for (String colName : outputColumns.keySet()) {
-			OutputColumnRuntime outCol = outputColumns.get(colName);
+		for (String colName : cfg.getOutputColumns().keySet()) {
+			OutputColumnRuntime outCol = cfg.getOutputColumns().get(colName);
 			script = script.replace("${" + outCol.getName() + "}", "${" + colName + "}");
 		}
 		// create token
 		Calendar calendar = Calendar.getInstance();
 		calendar.add(Calendar.MINUTE, 5);
 		Date expiresAt = calendar.getTime();
-		String jwtToken = JWTSsoService.pythonScript2jwtToken(script, expiresAt);
-
-		return jwtToken;
+		return JWTSsoService.pythonScript2jwtToken(script, expiresAt);
 	}
 
 	@Override
@@ -228,11 +168,11 @@ public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 		try {
 			proxy.setDataStore(dataStore);
 			// we use JSON data reader with the same config used for Python DataSet
-			IDataReader dataReader = new JSONPathDataReader("$[*]", new ArrayList<JSONPathAttribute>(), true, false);
+			IDataReader dataReader = new JSONPathDataReader("$[*]", new ArrayList<>(), true, false);
 			newColumns = proxy.load(dataReader);
 			for (int i = 0; i < newColumns.getRecords().size(); i++) {
-				IRecord newRecord = (Record) newColumns.getRecords().get(i);
-				IRecord oldRecord = (Record) dataStore.getRecords().get(i);
+				IRecord newRecord = newColumns.getRecords().get(i);
+				IRecord oldRecord = dataStore.getRecords().get(i);
 				for (int j = 0; j < newRecord.getFields().size(); j++) {
 					IField newField = newRecord.getFields().get(j);
 					oldRecord.appendField(newField);
@@ -241,7 +181,7 @@ public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 		} catch (CatalogFunctionException e) {
 			throw e;
 		} catch (Exception e) {
-			logger.error("Error transforming records: ", e);
+			LOGGER.error("Error transforming records: ", e);
 			throw new SpagoBIRuntimeException("Error transforming records: ", e);
 		}
 	}
@@ -255,16 +195,16 @@ public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 				dataStoreMeta.addFiedMeta(newMeta.get(i));
 			}
 		} catch (Exception e) {
-			logger.error("Error transforming metadata: ", e);
+			LOGGER.error("Error transforming metadata: ", e);
 			throw new SpagoBIRuntimeException("Error transforming metadata: ", e);
 		}
 	}
 
 	private List<IFieldMetaData> getNewFieldsMeta() {
-		List<IFieldMetaData> newMetaList = new ArrayList<IFieldMetaData>();
+		List<IFieldMetaData> newMetaList = new ArrayList<>();
 		try {
 			for (int i = 0; i < newColumns.getMetaData().getFieldsMeta().size(); i++) {
-				IFieldMetaData proxyMeta = (IFieldMetaData) newColumns.getMetaData().getFieldsMeta().get(i);
+				IFieldMetaData proxyMeta = newColumns.getMetaData().getFieldsMeta().get(i);
 				FieldMetadata newMeta = new FieldMetadata();
 				newMeta.setName(proxyMeta.getName());
 				String alias = getColumnAlias(proxyMeta.getName());
@@ -274,15 +214,15 @@ public class CatalogFunctionTransformer extends AbstractDataStoreTransformer {
 				newMetaList.add(newMeta);
 			}
 		} catch (Exception e) {
-			logger.error("Error getting new fields meta", e);
+			LOGGER.error("Error getting new fields meta", e);
 			throw new SpagoBIRuntimeException("Error getting new fields meta", e);
 		}
 		return newMetaList;
 	}
 
 	private String getColumnAlias(String targetColName) {
-		for (String colName : outputColumns.keySet()) {
-			OutputColumnRuntime col = outputColumns.get(colName);
+		for (String colName : cfg.getOutputColumns().keySet()) {
+			OutputColumnRuntime col = cfg.getOutputColumns().get(colName);
 			if (targetColName.equals(col.getName()))
 				return col.getAlias();
 		}

@@ -43,7 +43,7 @@ public class DataStoreStatistics {
 	boolean extimateVarCharMemorySizeUsingSample;
 	int sampleDimension;
 
-	static private Logger logger = Logger.getLogger(DataStoreStatistics.class);
+	private static Logger logger = Logger.getLogger(DataStoreStatistics.class);
 
 	public DataStoreStatistics(IDataStore store) {
 		this.store = store;
@@ -109,7 +109,7 @@ public class DataStoreStatistics {
 		return fieldsMemorySize;
 	}
 
-	private BigDecimal[] extimateFieldsMemorySize(IRecord record, BigDecimal[] fieldsMaxMemorySize) {
+	private BigDecimal[] extimateFieldsMemorySize(IRecord currRecord, BigDecimal[] fieldsMaxMemorySize) {
 
 		BigDecimal[] fieldsMemorySize = null;
 
@@ -128,8 +128,8 @@ public class DataStoreStatistics {
 					if (fieldTypeName.contains("String") && extimateVarCharMemorySize) {
 						String value = "";
 
-						if (!(record.getFieldAt(i).getValue() instanceof String)) {
-							Object nonStringValue = record.getFieldAt(i).getValue();
+						if (!(currRecord.getFieldAt(i).getValue() instanceof String)) {
+							Object nonStringValue = currRecord.getFieldAt(i).getValue();
 							if (nonStringValue != null) {
 								value = nonStringValue.toString();
 							} else {
@@ -138,7 +138,7 @@ public class DataStoreStatistics {
 							logger.debug("An unexpected error occured while extimating field [" + fmd.getName() + "] memory size whose type is equal to ["
 									+ fmd.getType().toString() + "]. Field forced to String");
 						} else {
-							value = (String) record.getFieldAt(i).getValue();
+							value = (String) currRecord.getFieldAt(i).getValue();
 						}
 
 						int valueLength = value != null ? value.length() : 0;

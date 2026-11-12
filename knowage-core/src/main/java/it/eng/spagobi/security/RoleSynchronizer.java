@@ -18,7 +18,6 @@
 
 package it.eng.spagobi.security;
 
-import it.eng.spago.base.SourceBean;
 import it.eng.spago.dbaccess.Utils;
 import it.eng.spago.dbaccess.sql.DataConnection;
 import it.eng.spago.dbaccess.sql.SQLCommand;
@@ -48,7 +47,7 @@ import org.apache.log4j.Logger;
  */
 public class RoleSynchronizer {
 	
-	static private Logger logger = Logger.getLogger(RoleSynchronizer.class);
+	private static Logger logger = Logger.getLogger(RoleSynchronizer.class);
 	
 	/**
 	 * Syncronize the portal roles with SpagoBI roles importing roles missing in SpagoBI.

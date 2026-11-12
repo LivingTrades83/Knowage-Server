@@ -35,9 +35,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.stereotype.Component;
 
+import it.eng.knowage.boot.error.KnowageRuntimeException;
 import it.eng.knowage.knowageapi.dao.dto.SbiWidgetGallery;
 import it.eng.knowage.knowageapi.dao.dto.SbiWidgetGalleryTag;
-import it.eng.knowage.knowageapi.error.KnowageRuntimeException;
 import it.eng.knowage.knowageapi.resource.dto.Code;
 import it.eng.knowage.knowageapi.resource.dto.WidgetGalleryDTO;
 
@@ -51,7 +51,7 @@ import it.eng.knowage.knowageapi.resource.dto.WidgetGalleryDTO;
 @Transactional
 public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 
-	private static final Logger logger = Logger.getLogger(SbiWidgetGalleryDaoImpl.class.getName());
+	private static final Logger LOGGER = Logger.getLogger(SbiWidgetGalleryDaoImpl.class.getName());
 
 	@PersistenceContext(unitName = "knowage-gallery")
 	private EntityManager em;
@@ -68,19 +68,19 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 	@Override
 	@Transactional(value = TxType.REQUIRED)
 	public String update(SbiWidgetGallery sbiWidgetGallery) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
-		SbiWidgetGallery sbiWidgetGalleryFound = null;
-		List<SbiWidgetGallery> resultList = em
+		SbiWidgetGallery sbiWidgetGalleryFound = em
 				.createQuery("SELECT t FROM SbiWidgetGallery t where t.id.uuid = :value1 and t.id.organization = :value2", SbiWidgetGallery.class)
-				.setParameter("value1", sbiWidgetGallery.getId().getUuid()).setParameter("value2", sbiWidgetGallery.getId().getOrganization()).getResultList();
-		if (resultList.size() == 1) {
-			sbiWidgetGalleryFound = resultList.get(0);
-		}
+				.setParameter("value1", sbiWidgetGallery.getId().getUuid()).setParameter("value2", sbiWidgetGallery.getId().getOrganization())
+				.getSingleResult();
+
+		int counter = sbiWidgetGallery.getUsageCounter() + 1;
 
 		sbiWidgetGalleryFound.setAuthor(sbiWidgetGallery.getAuthor());
 		sbiWidgetGalleryFound.setDescription(sbiWidgetGallery.getDescription());
 		sbiWidgetGalleryFound.setName(sbiWidgetGallery.getName());
+		sbiWidgetGalleryFound.setLabel(sbiWidgetGallery.getLabel());
 		sbiWidgetGalleryFound.getId().setOrganization(sbiWidgetGallery.getId().getOrganization());
 		sbiWidgetGalleryFound.setPreviewImage(sbiWidgetGallery.getPreviewImage());
 		sbiWidgetGalleryFound.setSbiVersionIn(sbiWidgetGallery.getSbiVersionIn());
@@ -89,13 +89,12 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 		sbiWidgetGalleryFound.setType(sbiWidgetGallery.getType());
 		sbiWidgetGalleryFound.setUserUp(sbiWidgetGallery.getUserUp());
 		sbiWidgetGalleryFound.setOutputType(sbiWidgetGallery.getOutputType());
-		int counter = sbiWidgetGallery.getUsageCounter() + 1;
 		sbiWidgetGalleryFound.setUsageCounter(counter);
 		sbiWidgetGalleryFound.getSbiWidgetGalleryTags().clear();
 		sbiWidgetGalleryFound.getSbiWidgetGalleryTags().addAll(sbiWidgetGallery.getSbiWidgetGalleryTags());
 		em.merge(sbiWidgetGalleryFound);
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return sbiWidgetGallery.getId().getUuid();
 	}
 
@@ -112,10 +111,10 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 	}
 
 	@Override
-	public Collection<WidgetGalleryDTO> findAll() {
+	public List<WidgetGalleryDTO> findAll() {
 		Query query = em.createQuery("SELECT e FROM SbiWidgetGallery e");
 		Collection<SbiWidgetGallery> galleryss = query.getResultList();
-		List<WidgetGalleryDTO> galeryDtoss = new ArrayList<WidgetGalleryDTO>();
+		List<WidgetGalleryDTO> galeryDtoss = new ArrayList<>();
 		for (SbiWidgetGallery sbiWidgetGallery : galleryss) {
 			try {
 				galeryDtoss.add(mapToLight(sbiWidgetGallery));
@@ -128,7 +127,7 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 
 	@Override
 	public SbiWidgetGallery findByIdTenantSbiWidgetGallery(String id, String tenant) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		SbiWidgetGallery result = null;
 		List<SbiWidgetGallery> resultList = em
@@ -137,13 +136,13 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 		if (resultList.size() == 1)
 			result = resultList.get(0);
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return result;
 	}
 
 	@Override
 	public WidgetGalleryDTO findByIdTenant(String id, String tenant) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		SbiWidgetGallery result = null;
 		WidgetGalleryDTO galeryDtoss = null;
@@ -164,10 +163,10 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 
 	@Override
 	@Transactional(value = TxType.REQUIRED)
-	public Collection<WidgetGalleryDTO> findAllByTenant(String tenant) {
-		logger.debug("IN");
+	public List<WidgetGalleryDTO> findAllByTenant(String tenant) {
+		LOGGER.debug("IN");
 
-		List<WidgetGalleryDTO> galeryDtoss = new ArrayList<WidgetGalleryDTO>();
+		List<WidgetGalleryDTO> galeryDtoss = new ArrayList<>();
 		Collection<SbiWidgetGallery> results = em.createQuery("SELECT t FROM SbiWidgetGallery t where t.id.organization = :value2", SbiWidgetGallery.class)
 				.setParameter("value2", tenant).getResultList();
 
@@ -179,14 +178,14 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 			}
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return galeryDtoss;
 	}
 
 	@Override
 	@Transactional(value = TxType.REQUIRED)
 	public int deleteByIdTenant(String id, String tenant) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 
 		SbiWidgetGallery result = null;
 		List<SbiWidgetGallery> resultList = em
@@ -198,19 +197,19 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 
 		em.remove(result);
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return 1;
 	}
 
 	@Override
 	@Transactional(value = TxType.REQUIRED)
-	public Collection<WidgetGalleryDTO> findAllByTenantAndType(String tenant, String type) {
-		logger.debug("IN");
+	public List<WidgetGalleryDTO> findAllByTenantAndType(String tenant, String type) {
+		LOGGER.debug("IN");
 
 		Collection<SbiWidgetGallery> results = em
 				.createQuery("SELECT t FROM SbiWidgetGallery t where t.id.organization = :tenant and type=:valueType", SbiWidgetGallery.class)
 				.setParameter("tenant", tenant).setParameter("valueType", type).getResultList();
-		List<WidgetGalleryDTO> galeryDtoss = new ArrayList<WidgetGalleryDTO>();
+		List<WidgetGalleryDTO> galeryDtoss = new ArrayList<>();
 		for (SbiWidgetGallery sbiWidgetGallery : results) {
 			try {
 				WidgetGalleryDTO obj = mapTo(sbiWidgetGallery);
@@ -220,7 +219,7 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 			}
 		}
 
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return galeryDtoss;
 	}
 
@@ -231,6 +230,7 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 		toRet.setAuthor(sbiWidgetGallery.getAuthor());
 		toRet.setId(sbiWidgetGallery.getId().getUuid());
 		toRet.setName(sbiWidgetGallery.getName());
+		toRet.setLabel(sbiWidgetGallery.getLabel());
 		toRet.setDescription(sbiWidgetGallery.getDescription());
 		toRet.setType(sbiWidgetGallery.getType());
 		if (sbiWidgetGallery.getPreviewImage() != null) {
@@ -239,8 +239,8 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 		toRet.setOrganization(sbiWidgetGallery.getId().getOrganization());
 		toRet.setUsageCounter(sbiWidgetGallery.getUsageCounter());
 		List<SbiWidgetGalleryTag> tagList = sbiWidgetGallery.getSbiWidgetGalleryTags();
-		if (tagList != null && tagList.size() > 0) {
-			List<String> tags = new ArrayList<String>();
+		if (tagList != null && !tagList.isEmpty()) {
+			List<String> tags = new ArrayList<>();
 			for (int i = 0; i < tagList.size(); i++) {
 				tags.add(tagList.get(i).getId().getTag());
 			}
@@ -276,11 +276,12 @@ public class SbiWidgetGalleryDaoImpl implements SbiWidgetGalleryDao {
 		toRet.setDescription(sbiWidgetGallery.getDescription());
 		toRet.setId(sbiWidgetGallery.getId().getUuid());
 		toRet.setName(sbiWidgetGallery.getName());
+		toRet.setLabel(sbiWidgetGallery.getLabel());
 		toRet.setType(sbiWidgetGallery.getType());
 
 		List<SbiWidgetGalleryTag> tagList = sbiWidgetGallery.getSbiWidgetGalleryTags();
-		if (tagList != null && tagList.size() > 0) {
-			List<String> tags = new ArrayList<String>();
+		if (tagList != null && !tagList.isEmpty()) {
+			List<String> tags = new ArrayList<>();
 			for (int i = 0; i < tagList.size(); i++) {
 				tags.add(tagList.get(i).getId().getTag());
 			}

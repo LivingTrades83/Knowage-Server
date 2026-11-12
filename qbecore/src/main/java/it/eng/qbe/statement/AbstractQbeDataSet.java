@@ -34,16 +34,10 @@ import org.apache.log4j.LogMF;
 import org.apache.log4j.Logger;
 
 import it.eng.qbe.datasource.AbstractDataSource;
-import it.eng.qbe.model.structure.IModelField;
-import it.eng.qbe.query.CalculatedSelectField;
 import it.eng.qbe.query.HavingField;
 import it.eng.qbe.query.ISelectField;
-import it.eng.qbe.query.InLineCalculatedSelectField;
 import it.eng.qbe.query.Query;
-import it.eng.qbe.query.SimpleSelectField;
 import it.eng.qbe.query.WhereField;
-import it.eng.qbe.query.serializer.json.QueryJSONSerializer;
-import it.eng.qbe.query.serializer.json.QuerySerializationConstants;
 import it.eng.qbe.script.groovy.GroovyScriptAPI;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.tools.dataset.bo.AbstractDataSet;
@@ -54,11 +48,8 @@ import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStoreFilter;
 import it.eng.spagobi.tools.dataset.common.datastore.IRecord;
 import it.eng.spagobi.tools.dataset.common.datastore.Record;
-import it.eng.spagobi.tools.dataset.common.metadata.FieldMetadata;
 import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
-import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData.FieldType;
 import it.eng.spagobi.tools.dataset.common.metadata.IMetaData;
-import it.eng.spagobi.tools.dataset.common.metadata.MetaData;
 import it.eng.spagobi.tools.dataset.persist.IDataSetTableDescriptor;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.utilities.assertion.Assert;
@@ -79,9 +70,6 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 	/** Logger component. */
 	public static transient Logger logger = Logger.getLogger(AbstractQbeDataSet.class);
 
-	public static final String PROPERTY_IS_SEGMENT_ATTRIBUTE = "isSegmentAttribute";
-	public static final String PROPERTY_IS_MANDATORY_MEASURE = "isMandatoryMeasure";
-
 	public AbstractQbeDataSet(IStatement statement) {
 		setStatement(statement);
 		bindings = new HashMap();
@@ -90,101 +78,6 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 	@Override
 	public IDataStore getDataStore() {
 		return dataStore;
-	}
-
-	protected IMetaData getDataStoreMeta(Query query) {
-		IMetaData dataStoreMeta;
-		ISelectField queryField;
-		FieldMetadata dataStoreFieldMeta;
-
-		Map<String, String> aliasSelectedFields = QueryJSONSerializer.getFieldsNature(query, statement.getDataSource());
-		dataStoreMeta = new MetaData();
-
-		Iterator fieldsIterator = query.getSelectFields(true).iterator();
-		while (fieldsIterator.hasNext()) {
-			queryField = (ISelectField) fieldsIterator.next();
-
-			dataStoreFieldMeta = new FieldMetadata();
-			dataStoreFieldMeta.setAlias(queryField.getAlias());
-			if (queryField.isSimpleField()) {
-				SimpleSelectField dataMartSelectField = (SimpleSelectField) queryField;
-				dataStoreFieldMeta.setName(((SimpleSelectField) queryField).getAlias());
-				dataStoreFieldMeta.setProperty("calculated", new Boolean(false));
-				dataStoreFieldMeta.setProperty("uniqueName", dataMartSelectField.getUniqueName());
-
-				if (dataMartSelectField.getFunction().getName().equals("NONE") && dataMartSelectField.getJavaClass() != null) {
-					dataStoreFieldMeta.setType(dataMartSelectField.getJavaClass());
-				} else {
-					dataStoreFieldMeta.setType(Object.class);
-				}
-
-				String format = dataMartSelectField.getPattern();
-				if (format != null && !format.trim().equals("")) {
-					dataStoreFieldMeta.setProperty("format", format);
-				}
-
-				IModelField datamartField = ((AbstractDataSource) statement.getDataSource()).getModelStructure().getField(dataMartSelectField.getUniqueName());
-				String iconCls = datamartField.getPropertyAsString("type");
-				String nature = dataMartSelectField.getNature();
-				dataStoreFieldMeta.setProperty("aggregationFunction", dataMartSelectField.getFunction().getName());
-
-				if (nature.equals(QuerySerializationConstants.FIELD_NATURE_MANDATORY_MEASURE)) {
-					dataStoreFieldMeta.setFieldType(FieldType.MEASURE);
-					dataStoreFieldMeta.getProperties().put(PROPERTY_IS_MANDATORY_MEASURE, Boolean.TRUE);
-				} else if (nature.equals(QuerySerializationConstants.FIELD_NATURE_MEASURE)) {
-					dataStoreFieldMeta.setFieldType(FieldType.MEASURE);
-				} else if (nature.equals(QuerySerializationConstants.FIELD_NATURE_SEGMENT_ATTRIBUTE)) {
-					dataStoreFieldMeta.setFieldType(FieldType.ATTRIBUTE);
-					dataStoreFieldMeta.getProperties().put(PROPERTY_IS_SEGMENT_ATTRIBUTE, Boolean.TRUE);
-				} else if (nature.equals(QuerySerializationConstants.FIELD_NATURE_ATTRIBUTE)) {
-					dataStoreFieldMeta.setFieldType(FieldType.ATTRIBUTE);
-				} else {
-					dataStoreFieldMeta.setFieldType(FieldType.ATTRIBUTE);
-				}
-
-			} else if (queryField.isCalculatedField()) {
-				CalculatedSelectField calculatedQueryField = (CalculatedSelectField) queryField;
-				dataStoreFieldMeta.setName(calculatedQueryField.getAlias());
-				dataStoreFieldMeta.setProperty("calculated", new Boolean(true));
-				dataStoreFieldMeta.setProperty("calculatedExpert", new Boolean(true));
-				// FIXME also calculated field must have uniquename for
-				// uniformity
-				dataStoreFieldMeta.setProperty("uniqueName", calculatedQueryField.getAlias());
-				DataSetVariable variable = new DataSetVariable(calculatedQueryField.getAlias(), calculatedQueryField.getType(),
-						calculatedQueryField.getExpression());
-				dataStoreFieldMeta.setProperty("variable", variable);
-				dataStoreFieldMeta.setType(variable.getTypeClass());
-
-			} else if (queryField.isInLineCalculatedField()) {
-				InLineCalculatedSelectField calculatedQueryField = (InLineCalculatedSelectField) queryField;
-				dataStoreFieldMeta.setName(calculatedQueryField.getAlias());
-				dataStoreFieldMeta.setProperty("calculated", new Boolean(false));
-				// FIXME also calculated field must have uniquename for
-				// uniformity
-				dataStoreFieldMeta.setProperty("uniqueName", calculatedQueryField.getAlias());
-				DataSetVariable variable = new DataSetVariable(calculatedQueryField.getAlias(), calculatedQueryField.getType(),
-						calculatedQueryField.getExpression());
-				dataStoreFieldMeta.setProperty("variable", variable);
-				dataStoreFieldMeta.setType(variable.getTypeClass());
-
-				String nature = queryField.getNature();
-				if (nature == null) {
-					nature = QueryJSONSerializer.getInLinecalculatedFieldNature(calculatedQueryField.getExpression(), aliasSelectedFields);
-				}
-				dataStoreFieldMeta.setProperty("nature", nature);
-				if (nature.equalsIgnoreCase(QuerySerializationConstants.FIELD_NATURE_MANDATORY_MEASURE)
-						|| nature.equalsIgnoreCase(QuerySerializationConstants.FIELD_NATURE_MEASURE)) {
-					dataStoreFieldMeta.setFieldType(FieldType.MEASURE);
-				} else {
-					dataStoreFieldMeta.setFieldType(FieldType.ATTRIBUTE);
-				}
-			}
-			dataStoreFieldMeta.setProperty("visible", new Boolean(queryField.isVisible()));
-
-			dataStoreMeta.addFiedMeta(dataStoreFieldMeta);
-		}
-
-		return dataStoreMeta;
 	}
 
 	protected IDataStore toDataStore(List result, IMetaData dataStoreMeta) {
@@ -215,7 +108,7 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 			row = (Object[]) o;
 		}
 		LogMF.debug(logger, "Processing record {0}", Arrays.toString(row));
-		IRecord record = new Record();
+		IRecord newRecord = new Record();
 		for (int i = 0, j = 0; i < dataStoreMeta.getFieldCount(); i++) {
 			IFieldMetaData fieldMeta = dataStoreMeta.getFieldMeta(i);
 			Boolean calculated = (Boolean) fieldMeta.getProperty("calculated");
@@ -235,13 +128,13 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 						s.useDelimiter("\\A");
 
 						String clobAsString = s.hasNext() ? s.next() : "";
-						record.appendField(new Field(clobAsString));
+						newRecord.appendField(new Field(clobAsString));
 					}
 					if (row[j] != null)
 						fieldMeta.setType(row[j].getClass());
 				} else {
 
-					record.appendField(new Field(row[j]));
+					newRecord.appendField(new Field(row[j]));
 					if (row[j] != null)
 						fieldMeta.setType(row[j].getClass());
 				}
@@ -252,15 +145,15 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 					variable.reset();
 				}
 
-				record.appendField(new Field(variable.getValue()));
+				newRecord.appendField(new Field(variable.getValue()));
 				if (variable.getValue() != null)
 					fieldMeta.setType(variable.getValue().getClass());
 			}
 		}
-		return record;
+		return newRecord;
 	}
 
-	private void processCalculatedFields(IRecord record, IDataStore dataStore) {
+	private void processCalculatedFields(IRecord currRecord, IDataStore dataStore) {
 		IMetaData dataStoreMeta;
 		List calculatedFieldsMeta;
 
@@ -273,7 +166,7 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 			ScriptEngineManager scriptManager = new ScriptEngineManager();
 			// ScriptEngine groovyScriptEngine = scriptManager.getEngineByName("groovy");
 
-			Map<String, Object> groovyBindings = new HashMap<String, Object>();
+			Map<String, Object> groovyBindings = new HashMap<>();
 			// handle bindings
 			// ... static bindings first
 			Iterator it = bindings.keySet().iterator();
@@ -289,9 +182,9 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 			Map dmFields = new HashMap();
 			Object[] columns = new Object[dataStoreMeta.getFieldCount()];
 			for (int j = 0; j < dataStoreMeta.getFieldCount(); j++) {
-				qFields.put(dataStoreMeta.getFieldMeta(j).getAlias(), record.getFieldAt(j).getValue());
-				dmFields.put(dataStoreMeta.getFieldMeta(j).getProperty("uniqueName"), record.getFieldAt(j).getValue());
-				columns[j] = record.getFieldAt(j).getValue();
+				qFields.put(dataStoreMeta.getFieldMeta(j).getAlias(), currRecord.getFieldAt(j).getValue());
+				dmFields.put(dataStoreMeta.getFieldMeta(j).getProperty("uniqueName"), currRecord.getFieldAt(j).getValue());
+				columns[j] = currRecord.getFieldAt(j).getValue();
 			}
 
 			groovyBindings.put("qFields", qFields); // key = alias
@@ -311,13 +204,13 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 
 			} catch (Exception ex) {
 				calculatedValue = "NA";
-				ex.printStackTrace();
+				logger.error("GroovySandbox",ex);
 			}
 
 			logger.debug("Field [" + fieldMeta.getName() + "] is equals to [" + calculatedValue + "]");
 			variable.setValue(calculatedValue);
 
-			record.getFieldAt(dataStoreMeta.getFieldIndex(fieldMeta.getAlias())).setValue(variable.getValue());
+			currRecord.getFieldAt(dataStoreMeta.getFieldIndex(fieldMeta.getAlias())).setValue(variable.getValue());
 		}
 	}
 
@@ -390,7 +283,7 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 	// TODO merge with AbstractDataSet.getDomainValues
 	@Override
 	public IDataStore getDomainValues(String fieldName, Integer start, Integer limit, IDataStoreFilter filter) {
-		if (isPersisted() || isFlatDataset()) {
+		if (isPersisted() || isFlatDataset() || isPreparedDataSet()) {
 			int index = this.getStatement().getQuery().getSelectFieldIndex(fieldName);
 			String alias = (this.getStatement().getQuery().getSelectFieldByIndex(index)).getAlias();
 			return getDomainValuesFromPersistenceTable(alias, start, limit, filter);
@@ -407,7 +300,7 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 	}
 
 	private List<String> getDataSetSelectedFields(Query qbeQuery) {
-		List<String> toReturn = new ArrayList<String>();
+		List<String> toReturn = new ArrayList<>();
 		List<ISelectField> selectFieldsNames = qbeQuery.getSelectFields(true);
 		for (int i = 0; i < selectFieldsNames.size(); i++) {
 			ISelectField selectField = selectFieldsNames.get(i);
@@ -431,7 +324,7 @@ public abstract class AbstractQbeDataSet extends AbstractDataSet {
 
 	@Override
 	public IMetaData getMetadata() {
-		return getDataStoreMeta(statement.getQuery());
+		return ((AbstractStatement) statement).getDataStoreMeta();
 	}
 
 	@Override

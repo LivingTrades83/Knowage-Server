@@ -38,7 +38,7 @@ import it.eng.spagobi.utilities.assertion.Assert;
  */
 public class FunctionOutputColumnDAOImpl extends AbstractHibernateDAO implements IFunctionOutputColumnDAO {
 
-	static private Logger logger = Logger.getLogger(FunctionOutputColumnDAOImpl.class);
+	private static Logger logger = Logger.getLogger(FunctionOutputColumnDAOImpl.class);
 
 	@Override
 	public List<SbiFunctionOutputColumn> loadFunctionOutputColumnByFunctionUuid(String functionUuid) {
@@ -52,9 +52,10 @@ public class FunctionOutputColumnDAOImpl extends AbstractHibernateDAO implements
 
 			StringBuilder query = new StringBuilder();
 			query.append("from SbiFunctionOutputColumn sfiv ");
-			query.append("where sfiv.sbiCatalogFunction.functionUuid =" + functionUuid);
+			query.append("where sfiv.sbiCatalogFunction.functionUuid = :functionUuid");
 
 			Query hibQuery = session.createQuery(query.toString());
+			hibQuery.setString("functionUuid", functionUuid);
 
 			sbiFunctionOutputColumnList = hibQuery.list();
 		} catch (Throwable t) {

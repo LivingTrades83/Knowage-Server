@@ -18,16 +18,10 @@
 package it.eng.spagobi.api;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
-import javax.mail.Message;
-import javax.mail.Multipart;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMultipart;
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -43,8 +37,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import it.eng.knowage.mail.MailSessionBuilder;
-import it.eng.knowage.mail.MailSessionBuilder.SessionFacade;
 /* SpagoBI, the Open Source Business Intelligence suite
 
  * Copyright (C) 2012 Engineering Ingegneria Informatica S.p.A. - SpagoBI Competency Center
@@ -54,10 +46,10 @@ import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.document.AnalyticalModelDocumentManagementAPI;
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
-import it.eng.spagobi.analiticalmodel.document.dao.IBIObjectDAO;
 import it.eng.spagobi.analiticalmodel.execution.service.ExecuteAdHocUtility;
 import it.eng.spagobi.analiticalmodel.functionalitytree.bo.LowFunctionality;
 import it.eng.spagobi.analiticalmodel.functionalitytree.dao.ILowFunctionalityDAO;
+import it.eng.spagobi.api.common.DocumentModificationAuthorization;
 import it.eng.spagobi.commons.bo.Domain;
 import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.dao.DAOFactory;
@@ -65,14 +57,8 @@ import it.eng.spagobi.commons.serializer.DocumentsJSONDecorator;
 import it.eng.spagobi.commons.serializer.SerializationException;
 import it.eng.spagobi.commons.serializer.SerializerFactory;
 import it.eng.spagobi.commons.utilities.UserUtilities;
-import it.eng.spagobi.commons.utilities.messages.IMessageBuilder;
 import it.eng.spagobi.commons.utilities.messages.MessageBuilder;
-import it.eng.spagobi.commons.utilities.messages.MessageBuilderFactory;
 import it.eng.spagobi.engines.config.bo.Engine;
-import it.eng.spagobi.services.exceptions.ExceptionUtilities;
-import it.eng.spagobi.services.security.bo.SpagoBIUserProfile;
-import it.eng.spagobi.services.security.service.ISecurityServiceSupplier;
-import it.eng.spagobi.services.security.service.SecurityServiceSupplierFactory;
 import it.eng.spagobi.services.serialization.JsonConverter;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.json.JSONUtils;
@@ -92,7 +78,7 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 	public static final String DOCUMENT_TYPE = "docType";
 	public static final String DIRECTION = "direction";
 
-	static private Logger logger = Logger.getLogger(DocumentCRUD.class);
+	private static Logger logger = Logger.getLogger(DocumentCRUD.class);
 
 	/**
 	 * Service to clone a document
@@ -117,6 +103,8 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 		IEngUserProfile profile = this.getUserProfile();
 
 		AnalyticalModelDocumentManagementAPI documentManagementAPI = new AnalyticalModelDocumentManagementAPI(profile);
+		BIObject document = documentManagementAPI.getDocument(id);
+		DocumentModificationAuthorization.checkCanModify(document, getUserProfile());
 		logger.debug("Execute clone");
 		BIObject cloned = documentManagementAPI.cloneDocument(id);
 		logger.debug("OUT");
@@ -124,84 +112,10 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 		return Response.ok(toBeReturned).build();
 	}
 
-	/**
-	 * Service to send e-mail Feedback about a document
-	 *
-	 * @param req
-	 * @return
-	 */
-	@POST
-	@Path("/sendFeedback")
-	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public String sendFeedback(@Context HttpServletRequest req) {
-
-		logger.debug("IN");
-		IMessageBuilder msgBuilder = MessageBuilderFactory.getMessageBuilder();
-
-		// 1- Label of current document
-		String label = req.getParameter("label");
-		// Author of the document
-		String documentCreationUser = null;
-		// 2 - email address of creation user
-		String emailAddressdocumentCreationUser = null;
-		IBIObjectDAO biObjectDao;
-		try {
-			biObjectDao = DAOFactory.getBIObjectDAO();
-			if ((label != null) && (!label.isEmpty())) {
-				BIObject document = biObjectDao.loadBIObjectByLabel(label);
-				documentCreationUser = document.getCreationUser();
-
-				ISecurityServiceSupplier supplier = SecurityServiceSupplierFactory.createISecurityServiceSupplier();
-				SpagoBIUserProfile userProfile = supplier.createUserProfile(documentCreationUser);
-				HashMap userAttributes = userProfile.getAttributes();
-				if (userAttributes.get("email") != null) {
-					emailAddressdocumentCreationUser = (String) userAttributes.get("email");
-				}
-
-			}
-			// 3 - content of the email to send
-			String message = req.getParameter("msg");
-
-			// 4 - User sending the feedback (from session)
-			IEngUserProfile profile = this.getUserProfile();
-			String userSendingFeedback = ((UserProfile) profile).getUserId().toString();
-
-			// Check if all the informations to send a mail are valorized
-			if ((emailAddressdocumentCreationUser != null) && (!emailAddressdocumentCreationUser.isEmpty())) {
-				if ((label != null) && (!label.isEmpty())) {
-					if ((userSendingFeedback != null) && (!userSendingFeedback.isEmpty())) {
-						String subject = msgBuilder.getMessage("document.feedback.msg.1", "messages") + " " + userSendingFeedback + " "
-								+ msgBuilder.getMessage("document.feedback.msg.2", "messages") + "  " + label;
-						sendMail(emailAddressdocumentCreationUser, subject, message);
-					}
-				}
-			}
-		} catch (EMFUserError ex) {
-			logger.error("Error sending feedback for document " + label, ex);
-			try {
-				return (ExceptionUtilities.serializeException("Feedback not sent: " + ex.toString(), null));
-			} catch (Exception e) {
-				logger.debug("Error sending feedback for document " + label, e);
-				throw new SpagoBIRuntimeException("Error sending feedback for document " + label, e);
-			}
-		} catch (Exception ex) {
-			logger.error("Error sending feedback for document " + label, ex);
-			try {
-				return (ExceptionUtilities.serializeException("Feedback not sent: " + ex.toString(), null));
-			} catch (Exception e) {
-				logger.debug("Error sending feedback for document " + label, e);
-				throw new SpagoBIRuntimeException("Error sending feedback for document " + label, e);
-			}
-		}
-
-		logger.debug("OUT");
-		return "{}";
-	}
-
 	@GET
 	@Path("/myAnalysisDocsList")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public String getMyAnalysisDocuments(@Context HttpServletRequest req) {
+	public String getMyAnalysisDocuments(@Context HttpServletRequest req) throws JSONException, EMFUserError, SerializationException {
 		logger.debug("IN");
 		String user = req.getParameter(USER);
 		String docType = req.getParameter(DOCUMENT_TYPE);
@@ -209,103 +123,97 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 		logger.debug("Searching documents inside personal folder of user [" + user + "]");
 
 		IEngUserProfile profile = this.getUserProfile();
-		List userFunctionalties;
 		LowFunctionality personalFolder = null;
-		try {
 
-			// Search personal folder of current user
-			ILowFunctionalityDAO functionalitiesDAO = DAOFactory.getLowFunctionalityDAO();
+		// Search personal folder of current user
+		ILowFunctionalityDAO functionalitiesDAO = DAOFactory.getLowFunctionalityDAO();
 
-			userFunctionalties = functionalitiesDAO.loadAllUserFunct();
-			for (Iterator it = userFunctionalties.iterator(); it.hasNext();) {
-				LowFunctionality funct = (LowFunctionality) it.next();
-				if (UserUtilities.isPersonalFolder(funct, (UserProfile) profile)) {
-					personalFolder = funct;
-					break;
-				}
+		List<LowFunctionality> userFunctionalties = functionalitiesDAO.loadAllUserFunct();
+		for (Iterator<LowFunctionality> it = userFunctionalties.iterator(); it.hasNext();) {
+			LowFunctionality funct = it.next();
+			if (UserUtilities.isPersonalFolder(funct, (UserProfile) profile)) {
+				personalFolder = funct;
+				break;
+			}
+		}
+
+		List myObjects = new ArrayList();
+		if (personalFolder != null) {
+			Engine cockpitEngine = null;
+			Engine kpiEngine = null;
+			Engine dossierEngine = null;
+            Engine dashboardEngine = null;
+
+			try {
+				cockpitEngine = ExecuteAdHocUtility.getCockpitEngine();
+			} catch (SpagoBIRuntimeException r) {
+				// the cockpit engine is not found
+				logger.info("Engine not found. ", r);
 			}
 
-			List myObjects = new ArrayList();
-			if (personalFolder != null) {
-				Engine geoEngine = null;
-				Engine cockpitEngine = null;
-				Engine kpiEngine = null;
-
-				try {
-					geoEngine = ExecuteAdHocUtility.getGeoreportEngine();
-				} catch (SpagoBIRuntimeException r) {
-					// the geo engine is not found
-					logger.info("Engine not found. ", r);
-				}
-
-				try {
-					cockpitEngine = ExecuteAdHocUtility.getCockpitEngine();
-				} catch (SpagoBIRuntimeException r) {
-					// the cockpit engine is not found
-					logger.info("Engine not found. ", r);
-				}
-
-				try {
-					kpiEngine = ExecuteAdHocUtility.getKPIEngine();
-				} catch (SpagoBIRuntimeException r) {
-					// the kpi engine is not found
-					logger.info("Engine not found. ", r);
-				}
-
-				// return all documents inside the personal folder
-				if ((docType == null) || (docType.equalsIgnoreCase("ALL"))) {
-					List filteredMyObjects = new ArrayList();
-					myObjects = DAOFactory.getBIObjectDAO().loadBIObjects(Integer.valueOf(personalFolder.getId()), profile, true);
-					// Get only documents of type Cockpit and Map
-					for (Iterator it = myObjects.iterator(); it.hasNext();) {
-						BIObject biObject = (BIObject) it.next();
-						String biObjectType = biObject.getBiObjectTypeCode();
-						if ((geoEngine != null && biObject.getEngine().getId().equals(geoEngine.getId()))
-								|| (cockpitEngine != null && biObject.getEngine().getId().equals(cockpitEngine.getId()))
-								|| (kpiEngine != null && biObject.getEngine().getId().equals(kpiEngine.getId()))) {
-							filteredMyObjects.add(biObject);
-						}
-					}
-					myObjects = filteredMyObjects;
-
-				} else if (docType.equalsIgnoreCase("Map") && geoEngine != null) {
-					// return only Geo Map (GIS) documents inside the personal
-					// folder
-					myObjects = DAOFactory.getBIObjectDAO().loadBIObjects("MAP", "REL", personalFolder.getPath());
-
-				} else if (docType.equalsIgnoreCase("Cockpit") && cockpitEngine != null) {
-					// return only Cockpits inside the personal folder
-					List filteredMyObjects = new ArrayList();
-					myObjects = DAOFactory.getBIObjectDAO().loadBIObjects("DOCUMENT_COMPOSITE", "REL", personalFolder.getPath());
-					for (Iterator it = myObjects.iterator(); it.hasNext();) {
-						BIObject biObject = (BIObject) it.next();
-						if (biObject.getEngine().getId().equals(cockpitEngine.getId())) {
-							filteredMyObjects.add(biObject);
-						}
-					}
-					myObjects = filteredMyObjects;
-				}
-
-				// Serialize documents list
-				MessageBuilder m = new MessageBuilder();
-				Locale locale = m.getLocale(req);
-				JSONArray documentsJSON = (JSONArray) SerializerFactory.getSerializer("application/json").serialize(myObjects, locale);
-				DocumentsJSONDecorator.decorateDocuments(documentsJSON, profile, personalFolder);
-				JSONObject documentsResponseJSON = createJSONResponseDocuments(documentsJSON);
-
-				return documentsResponseJSON.toString();
+			try {
+				kpiEngine = ExecuteAdHocUtility.getKPIEngine();
+			} catch (SpagoBIRuntimeException r) {
+				// the kpi engine is not found
+				logger.info("Engine not found. ", r);
 			}
 
-		} catch (EMFUserError e) {
-			logger.error("Error in myAnalysisDocsList Service: " + e);
-		} catch (SerializationException e) {
-			logger.error("Serializing Error in myAnalysisDocsList Service: " + e);
-		} catch (JSONException e) {
-			logger.error("JSONException Error in myAnalysisDocsList Service: " + e);
+			try {
+				dossierEngine = ExecuteAdHocUtility.getDossierEngine();
+			} catch (SpagoBIRuntimeException r) {
+				// the geo engine is not found
+				logger.info("Engine not found. ", r);
+			}
+
+            try {
+                dashboardEngine = ExecuteAdHocUtility.getDashboardEngine();
+            } catch (SpagoBIRuntimeException r) {
+                // the dashboard engine is not found
+                logger.info("Engine not found. ", r);
+            }
+
+			// return all documents inside the personal folder
+			if ((docType == null) || (docType.equalsIgnoreCase("ALL"))) {
+				List filteredMyObjects = new ArrayList();
+				myObjects = DAOFactory.getBIObjectDAO().loadBIObjects(personalFolder.getId(), profile, true);
+				// Get only documents of type Cockpit and Map
+				for (Iterator it = myObjects.iterator(); it.hasNext();) {
+					BIObject biObject = (BIObject) it.next();
+					if ((cockpitEngine != null && biObject.getEngine().getId().equals(cockpitEngine.getId()))
+							|| (kpiEngine != null && biObject.getEngine().getId().equals(kpiEngine.getId()))
+							|| (dossierEngine != null && biObject.getEngine().getId().equals(dossierEngine.getId()))
+                            || (dashboardEngine != null && biObject.getEngine().getId().equals(dashboardEngine.getId())) ) {
+						filteredMyObjects.add(biObject);
+					}
+				}
+				myObjects = filteredMyObjects;
+
+			} else if (docType.equalsIgnoreCase("Cockpit") && cockpitEngine != null) {
+				// return only Cockpits inside the personal folder
+				List filteredMyObjects = new ArrayList();
+				myObjects = DAOFactory.getBIObjectDAO().loadBIObjects("DOCUMENT_COMPOSITE", "REL", personalFolder.getPath());
+				for (Iterator it = myObjects.iterator(); it.hasNext();) {
+					BIObject biObject = (BIObject) it.next();
+					if (biObject.getEngine().getId().equals(cockpitEngine.getId())) {
+						filteredMyObjects.add(biObject);
+					}
+				}
+				myObjects = filteredMyObjects;
+			}
+
+			// Serialize documents list
+			MessageBuilder m = new MessageBuilder();
+			Locale locale = m.getLocale(req);
+			JSONArray documentsJSON = (JSONArray) SerializerFactory.getSerializer("application/json").serialize(myObjects, locale);
+			DocumentsJSONDecorator.decorateDocuments(documentsJSON, profile, personalFolder);
+			JSONObject documentsResponseJSON = createJSONResponseDocuments(documentsJSON);
+
+			return documentsResponseJSON.toString();
 		}
 
 		logger.debug("OUT");
-		return "{}";
+		return "{\"root\": []}";
+
 	}
 
 	/**
@@ -320,49 +228,61 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 	public String shareDocument(@Context HttpServletRequest req, @QueryParam("functs") List<Integer> functs) {
 
 		logger.debug("IN");
-		String ids = req.getParameter(OBJECT_ID);
-		String isShare = req.getParameter(IS_SHARE);
-		Integer id = -1;
 		try {
-			id = new Integer(ids);
-		} catch (Exception e) {
-			logger.error("Error sharing the document.. Impossible to parse the id of the document " + ids, e);
-			throw new SpagoBIRuntimeException("Error sharing the document.. Impossible to parse the id of the document " + ids, e);
-		}
-		IEngUserProfile profile = this.getUserProfile();
-
-		AnalyticalModelDocumentManagementAPI documentManagementAPI = new AnalyticalModelDocumentManagementAPI(profile);
-		String oper = ("true".equalsIgnoreCase(isShare)) ? "Sharing" : "Unsharing";
-		logger.debug("Execute " + oper);
-		if (id != null) {
-			BIObject document = documentManagementAPI.getDocument(id);
-			List lstFuncts = new ArrayList();
-
-			if ("true".equalsIgnoreCase(isShare)) {
-
-				JSONArray mJSONArray = new JSONArray(functs);
-				lstFuncts = JSONUtils.asList(mJSONArray);
-			}
-			// add personal folder for default
-			LowFunctionality userFunc = null;
+			String ids = req.getParameter(OBJECT_ID);
+			String isShare = req.getParameter(IS_SHARE);
+			Integer id = -1;
 			try {
-				ILowFunctionalityDAO functionalitiesDAO = DAOFactory.getLowFunctionalityDAO();
-				// userFunc = functionalitiesDAO.loadLowFunctionalityByPath("/" + profile.getUserUniqueIdentifier(), false);
-				userFunc = functionalitiesDAO.loadLowFunctionalityByPath("/" + ((UserProfile) profile).getUserId().toString(), false);
+				id = new Integer(ids);
 			} catch (Exception e) {
-				logger.error("Error " + oper + "  the document.. Impossible to get the id of the personal folder for document " + ids, e);
-				throw new SpagoBIRuntimeException("Error " + oper + "  the document.. Impossible to get the id of the personal folder for document " + ids, e);
+				logger.error("Error sharing the document.. Impossible to parse the id of the document " + ids, e);
+				throw new SpagoBIRuntimeException("Error sharing the document.. Impossible to parse the id of the document " + ids, e);
 			}
-			if (userFunc != null)
-				lstFuncts.add(userFunc.getId());
-			else
-				logger.error("Error " + oper + " the document.. Impossible to get the id of the personal folder for document " + ids);
+			IEngUserProfile profile = this.getUserProfile();
 
-			document.setFunctionalities(lstFuncts);
+			AnalyticalModelDocumentManagementAPI documentManagementAPI = new AnalyticalModelDocumentManagementAPI(profile);
+			String oper = ("true".equalsIgnoreCase(isShare)) ? "Sharing" : "Unsharing";
+			logger.debug("Execute " + oper);
+			if (id != null) {
+				BIObject document = documentManagementAPI.getDocument(id);
 
-			// save
-			documentManagementAPI.saveDocument(document, null);
+				List lstFuncts = new ArrayList();
+				if ("true".equalsIgnoreCase(isShare)) {
+					if(functs != null && !functs.isEmpty()) {
+						JSONArray mJSONArray = new JSONArray(functs);
+						lstFuncts = JSONUtils.asList(mJSONArray);
+					} else {
+						logger.error("Error " + oper + " the document.. Impossible to get the functs list " + functs);
+						throw new SpagoBIRuntimeException("Error " + oper + " the document.. Impossible to get the functs list " + functs);
+					}
+				}
+
+				// add personal folder for default
+				LowFunctionality userFunc = null;
+				try {
+					ILowFunctionalityDAO functionalitiesDAO = DAOFactory.getLowFunctionalityDAO();
+					// userFunc = functionalitiesDAO.loadLowFunctionalityByPath("/" + profile.getUserUniqueIdentifier(), false);
+					userFunc = functionalitiesDAO.loadLowFunctionalityByPath("/" + ((UserProfile) profile).getUserId().toString(), false);
+				} catch (Exception e) {
+					logger.error("Error " + oper + "  the document.. Impossible to get the id of the personal folder for document " + ids, e);
+					throw new SpagoBIRuntimeException("Error " + oper + "  the document.. Impossible to get the id of the personal folder for document " + ids, e);
+				}
+				if (userFunc != null) {
+					lstFuncts.add(userFunc.getId());
+				} else {
+					logger.error("Error " + oper + " the document.. Impossible to get the id of the personal folder for document " + ids);
+				}
+
+				document.setFunctionalities(lstFuncts);
+
+				// save
+				documentManagementAPI.saveDocument(document, null);
+			}
+		} catch (Exception e) {
+			logger.error("Error in shareDocument Service: " + e);
+			throw new SpagoBIRuntimeException("Error in shareDocument Service: " + e);
 		}
+
 		logger.debug("OUT");
 		return "{}";
 	}
@@ -393,7 +313,7 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 
 			if (direction != null && "UP".equalsIgnoreCase(direction)) {
 				moveStateUp(id);
-			}else if (direction != null && "DOWN".equalsIgnoreCase(direction)) {
+			} else if (direction != null && "DOWN".equalsIgnoreCase(direction)) {
 				moveStateDown(id);
 			}
 		} catch (EMFUserError e) {
@@ -404,46 +324,46 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 		return "{}";
 	}
 
-	private void moveStateUp(Integer id) throws EMFUserError  {
+	private void moveStateUp(Integer id) throws EMFUserError {
 
-	    if (id != null){
-    		BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(new Integer(id));
-    		if (obj!= null){
-    			String state = obj.getStateCode();
-    			if (state!= null && state.equals("DEV")){
-    				Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "TEST");
-    				obj.setStateCode("TEST");
-    				obj.setStateID(dTemp.getValueId());
-    			}else if (state!= null && state.equals("TEST")){
-    				Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "REL");
-    				obj.setStateCode("REL");
-    				obj.setStateID(dTemp.getValueId());
-    			}
-    			DAOFactory.getBIObjectDAO().modifyBIObject(obj);
-    		}
-	     }
-	 }
+		if (id != null) {
+			BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(id);
+			if (obj != null) {
+				String state = obj.getStateCode();
+				if (state != null && state.equals("DEV")) {
+					Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "TEST");
+					obj.setStateCode("TEST");
+					obj.setStateID(dTemp.getValueId());
+				} else if (state != null && state.equals("TEST")) {
+					Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "REL");
+					obj.setStateCode("REL");
+					obj.setStateID(dTemp.getValueId());
+				}
+				DAOFactory.getBIObjectDAO().modifyBIObject(obj);
+			}
+		}
+	}
 
+	private void moveStateDown(Integer id) throws EMFUserError {
 
-	private void moveStateDown(Integer id) throws EMFUserError  {
+		if (id != null) {
+			BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(id);
+			if (obj != null) {
+				String state = obj.getStateCode();
+				if (state != null && state.equals("REL")) {
+					Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "TEST");
+					obj.setStateCode("TEST");
+					obj.setStateID(dTemp.getValueId());
+				} else if (state != null && state.equals("TEST")) {
+					Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "DEV");
+					obj.setStateCode("DEV");
+					obj.setStateID(dTemp.getValueId());
+				}
+				DAOFactory.getBIObjectDAO().modifyBIObject(obj);
+			}
+		}
+	}
 
-	    if (id != null){
-    		BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(new Integer(id));
-    		if (obj!= null){
-    			String state = obj.getStateCode();
-    			if (state!= null && state.equals("REL")){
-    				Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "TEST");
-    				obj.setStateCode("TEST");
-    				obj.setStateID(dTemp.getValueId());
-    			}else if (state!= null && state.equals("TEST")){
-    				Domain dTemp = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("STATE", "DEV");
-    				obj.setStateCode("DEV");
-    				obj.setStateID(dTemp.getValueId());
-    			}
-    			DAOFactory.getBIObjectDAO().modifyBIObject(obj);
-    		}
-	     }
-	 }
 	/**
 	 * Creates a json array with children document informations
 	 *
@@ -497,38 +417,6 @@ public class DocumentCRUD extends AbstractSpagoBIResource {
 		// results.put("icon", "document.png");
 		results.put("root", rows);
 		return results;
-	}
-
-	// sending email to emailAddress with passed subject and emailContent
-	private void sendMail(String emailAddress, String subject, String emailContent) throws Exception {
-
-		SessionFacade facade = MailSessionBuilder.newInstance()
-			.usingUserProfile()
-			.withTimeout(5000)
-			.withConnectionTimeout(5000)
-			.build();
-
-		// create a message
-		Message msg = facade.createNewMimeMessage();
-
-		InternetAddress addressTo = new InternetAddress(emailAddress);
-
-		msg.setRecipient(Message.RecipientType.TO, addressTo);
-
-		// Setting the Subject and Content Type
-		msg.setSubject(subject);
-		// create and fill the first message part
-		MimeBodyPart mbp1 = new MimeBodyPart();
-		mbp1.setText(emailContent);
-		// create the Multipart and add its parts to it
-		Multipart mp = new MimeMultipart();
-		mp.addBodyPart(mbp1);
-		// add the Multipart to the message
-		msg.setContent(mp);
-
-		// send message
-		facade.sendMessage(msg);
-
 	}
 
 }

@@ -56,18 +56,16 @@ import it.eng.spagobi.commons.metadata.SbiExtRoles;
  */
 public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IParameterUseDAO {
 
-	static private Logger logger = Logger.getLogger(ParameterUseDAOHibImpl.class);
+	private static Logger logger = Logger.getLogger(ParameterUseDAOHibImpl.class);
 
 	/**
 	 * Load by id.
 	 *
-	 * @param id
-	 *            the id
+	 * @param id the id
 	 *
 	 * @return the sbi paruse
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#loadById(java.lang.Integer)
 	 */
@@ -83,14 +81,10 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return toReturn;
 	}
@@ -98,13 +92,11 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Load by use id.
 	 *
-	 * @param useID
-	 *            the use id
+	 * @param useID the use id
 	 *
 	 * @return the parameter use
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#loadByUseID(java.lang.Integer)
 	 */
@@ -125,16 +117,12 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 		return toReturn;
@@ -144,15 +132,12 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Load by parameter idand role.
 	 *
-	 * @param parameterId
-	 *            the parameter id
-	 * @param roleName
-	 *            the role name
+	 * @param parameterId the parameter id
+	 * @param roleName    the role name
 	 *
 	 * @return the parameter use
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#loadByParameterIdandRole(java.lang.Integer, java.lang.String)
 	 */
@@ -164,13 +149,9 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			/*
-			 * String hql = "select s from SbiParuse s, SbiParuseDet spd where s.sbiParameters.parId="+parameterId+ " and " +
-			 * "s.useId = spd.id.sbiParuse.useId and " + "spd.id.sbiExtRoles.name='"+roleName+"'";
-			 */
 
-			String hql = "select s from SbiParuse s, SbiParuseDet spd where s.sbiParameters.parId=?  and " + "s.useId = spd.id.sbiParuse.useId and "
-					+ "spd.id.sbiExtRoles.name=? ";
+			String hql = "select s from SbiParuse s, SbiParuseDet spd where s.sbiParameters.parId=?  and "
+					+ "s.useId = spd.id.sbiParuse.useId and " + "spd.id.sbiExtRoles.name=? ";
 
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, parameterId.intValue());
@@ -187,14 +168,10 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return toReturn;
 	}
@@ -202,11 +179,9 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Fill associated checks for par use.
 	 *
-	 * @param aParameterUse
-	 *            the a parameter use
+	 * @param aParameterUse the a parameter use
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#fillAssociatedChecksForParUse(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ParameterUse)
 	 */
@@ -230,27 +205,21 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	/**
 	 * Fill roles for par use.
 	 *
-	 * @param aParameterUse
-	 *            the a parameter use
+	 * @param aParameterUse the a parameter use
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#fillRolesForParUse(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ParameterUse)
 	 */
@@ -273,16 +242,12 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 	}
@@ -290,11 +255,9 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Modify parameter use.
 	 *
-	 * @param aParameterUse
-	 *            the a parameter use
+	 * @param aParameterUse the a parameter use
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#modifyParameterUse(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ParameterUse)
 	 */
@@ -313,12 +276,12 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			hibParuse.setName(aParameterUse.getName());
 			hibParuse.setDescr(aParameterUse.getDescription());
 			hibParuse.setSelectionType(aParameterUse.getSelectionType());
-			hibParuse.setMultivalue(aParameterUse.isMultivalue() ? new Integer(1) : new Integer(0));
+			hibParuse.setMultivalue(aParameterUse.isMultivalue() ? 1 : 0);
 			hibParuse.setManualInput(aParameterUse.getManualInput());
 			hibParuse.setMaximizerEnabled(aParameterUse.isMaximizerEnabled());
 			hibParuse.setValueSelection(aParameterUse.getValueSelection());
 			hibParuse.setSelectedLayer(aParameterUse.getSelectedLayer());
-			;
+
 			hibParuse.setSelectedLayerProp(aParameterUse.getSelectedLayerProp());
 			hibParuse.setOptions(aParameterUse.getOptions());
 
@@ -339,6 +302,12 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			} else {
 				hibParuse.setSbiLovForDefault(hibSbiLovForDefault);
 			}
+			SbiLov hibSbiLovForMin = (SbiLov) aSession.load(SbiLov.class, aParameterUse.getIdLovForMin());
+			if (hibSbiLovForMin.getLovId().intValue() == -1) {
+			    hibParuse.setSbiLovForMin(null);
+			} else {
+			    hibParuse.setSbiLovForMin(hibSbiLovForMin);
+			}
 			SbiLov hibSbiLovForMax = (SbiLov) aSession.load(SbiLov.class, aParameterUse.getIdLovForMax());
 			if (hibSbiLovForMax.getLovId().intValue() == -1) {
 				hibParuse.setSbiLovForMax(null);
@@ -347,27 +316,27 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			}
 			hibParuse.setDefaultFormula(aParameterUse.getDefaultFormula());
 
-			Set parUseDets = hibParuse.getSbiParuseDets();
-			for (Iterator it = parUseDets.iterator(); it.hasNext();) {
+			Set<SbiParuseDet> parUseDets = hibParuse.getSbiParuseDets();
+			for (Iterator<SbiParuseDet> it = parUseDets.iterator(); it.hasNext();) {
 				aSession.delete(it.next());
 			}
 
-			Set parUseCks = hibParuse.getSbiParuseCks();
-			for (Iterator it = parUseCks.iterator(); it.hasNext();) {
+			Set<SbiParuseCk> parUseCks = hibParuse.getSbiParuseCks();
+			for (Iterator<SbiParuseCk> it = parUseCks.iterator(); it.hasNext();) {
 				aSession.delete(it.next());
 			}
 
 			// Recreate Relations with sbi_paruse_det
-			List newRoles = aParameterUse.getAssociatedRoles();
+			List<Role> newRoles = aParameterUse.getAssociatedRoles();
 			SbiParuseDet hibParUseDet = null;
 			SbiParuseDetId hibParUseDetId = null;
 
 			SbiExtRoles tmpExtRole = null;
-			Set parUseDetsToSave = new HashSet();
+			Set<SbiParuseDet> parUseDetsToSave = new HashSet<>();
 			for (int i = 0; i < newRoles.size(); i++) {
 				hibParUseDetId = new SbiParuseDetId();
 				hibParUseDetId.setSbiParuse(hibParuse);
-				tmpExtRole = (SbiExtRoles) aSession.load(SbiExtRoles.class, ((Role) newRoles.get(i)).getId());
+				tmpExtRole = (SbiExtRoles) aSession.load(SbiExtRoles.class, newRoles.get(i).getId());
 				hibParUseDetId.setSbiExtRoles(tmpExtRole);
 				hibParUseDet = new SbiParuseDet(hibParUseDetId);
 				updateSbiCommonInfo4Insert(hibParUseDet);
@@ -379,16 +348,16 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			hibParuse.setSbiParuseDets(parUseDetsToSave);
 
 			// Recreate Relations with sbi_paruse_ck
-			List newChecks = aParameterUse.getAssociatedChecks();
+			List<Check> newChecks = aParameterUse.getAssociatedChecks();
 			SbiParuseCk hibParUseCk = null;
 			SbiParuseCkId hibParUseCkId = null;
 
 			SbiChecks tmpCheck = null;
-			Set parUseCkToSave = new HashSet();
+			Set<SbiParuseCk> parUseCkToSave = new HashSet<>();
 			for (int i = 0; i < newChecks.size(); i++) {
 				hibParUseCkId = new SbiParuseCkId();
 				hibParUseCkId.setSbiParuse(hibParuse);
-				tmpCheck = (SbiChecks) aSession.load(SbiChecks.class, ((Check) newChecks.get(i)).getCheckId());
+				tmpCheck = (SbiChecks) aSession.load(SbiChecks.class, newChecks.get(i).getCheckId());
 				hibParUseCkId.setSbiChecks(tmpCheck);
 				hibParUseCk = new SbiParuseCk(hibParUseCkId);
 				updateSbiCommonInfo4Insert(hibParUseCk);
@@ -403,28 +372,21 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	/**
 	 * Insert parameter use.
 	 *
-	 * @param aParameterUse
-	 *            the a parameter use
+	 * @param aParameterUse the a parameter use
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#insertParameterUse(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ParameterUse)
 	 */
@@ -457,6 +419,12 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			} else {
 				hibParuse.setSbiLovForDefault(hibSbiLovForDefault);
 			}
+			SbiLov hibSbiLovForMin = (SbiLov) aSession.load(SbiLov.class, aParameterUse.getIdLovForMin());
+			if (hibSbiLovForMin.getLovId().intValue() == -1) {
+			    hibParuse.setSbiLovForMin(null);
+			} else {
+			    hibParuse.setSbiLovForMin(hibSbiLovForMin);
+			}
 			SbiLov hibSbiLovForMax = (SbiLov) aSession.load(SbiLov.class, aParameterUse.getIdLovForMax());
 			if (hibSbiLovForMax.getLovId().intValue() == -1) {
 				hibParuse.setSbiLovForMax(null);
@@ -469,7 +437,7 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			hibParuse.setName(aParameterUse.getName());
 			hibParuse.setDescr(aParameterUse.getDescription());
 			hibParuse.setSelectionType(aParameterUse.getSelectionType());
-			hibParuse.setMultivalue(aParameterUse.isMultivalue() ? new Integer(1) : new Integer(0));
+			hibParuse.setMultivalue(aParameterUse.isMultivalue() ? 1 : 0);
 			hibParuse.setManualInput(aParameterUse.getManualInput());
 			hibParuse.setMaximizerEnabled(aParameterUse.isMaximizerEnabled());
 			hibParuse.setOptions(aParameterUse.getOptions());
@@ -481,16 +449,16 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 
 			hibParuse = (SbiParuse) aSession.load(SbiParuse.class, useId);
 			// Recreate Relations with sbi_paruse_det
-			List newRoles = aParameterUse.getAssociatedRoles();
+			List<Role> newRoles = aParameterUse.getAssociatedRoles();
 			SbiParuseDet hibParUseDet = null;
 			SbiParuseDetId hibParUseDetId = null;
 
 			SbiExtRoles tmpExtRole = null;
-			Set parUseDetsToSave = new HashSet();
+			Set<SbiParuseDet> parUseDetsToSave = new HashSet<>();
 			for (int i = 0; i < newRoles.size(); i++) {
 				hibParUseDetId = new SbiParuseDetId();
 				hibParUseDetId.setSbiParuse(hibParuse);
-				tmpExtRole = (SbiExtRoles) aSession.load(SbiExtRoles.class, ((Role) newRoles.get(i)).getId());
+				tmpExtRole = (SbiExtRoles) aSession.load(SbiExtRoles.class, newRoles.get(i).getId());
 				hibParUseDetId.setSbiExtRoles(tmpExtRole);
 				hibParUseDet = new SbiParuseDet(hibParUseDetId);
 				updateSbiCommonInfo4Insert(hibParUseDet);
@@ -501,16 +469,16 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			hibParuse.setSbiParuseDets(parUseDetsToSave);
 
 			// Recreate Relations with sbi_paruse_ck
-			List newChecks = aParameterUse.getAssociatedChecks();
+			List<Check> newChecks = aParameterUse.getAssociatedChecks();
 			SbiParuseCk hibParUseCk = null;
 			SbiParuseCkId hibParUseCkId = null;
 
 			SbiChecks tmpCheck = null;
-			Set parUseCkToSave = new HashSet();
+			Set<SbiParuseCk> parUseCkToSave = new HashSet<>();
 			for (int i = 0; i < newChecks.size(); i++) {
 				hibParUseCkId = new SbiParuseCkId();
 				hibParUseCkId.setSbiParuse(hibParuse);
-				tmpCheck = (SbiChecks) aSession.load(SbiChecks.class, ((Check) newChecks.get(i)).getCheckId());
+				tmpCheck = (SbiChecks) aSession.load(SbiChecks.class, newChecks.get(i).getCheckId());
 				hibParUseCkId.setSbiChecks(tmpCheck);
 				hibParUseCk = new SbiParuseCk(hibParUseCkId);
 				updateSbiCommonInfo4Insert(hibParUseCk);
@@ -524,27 +492,21 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		} catch (HibernateException he) {
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	/**
 	 * Erase parameter use.
 	 *
-	 * @param aParameterUse
-	 *            the a parameter use
+	 * @param aParameterUse the a parameter use
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#eraseParameterUse(it.eng.spagobi.behaviouralmodel.analyticaldriver.bo.ParameterUse)
 	 */
@@ -560,13 +522,13 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 
 			SbiParuse hibParuse = (SbiParuse) aSession.load(SbiParuse.class, aParameterUse.getUseID());
 
-			Set parUseDets = hibParuse.getSbiParuseDets();
-			for (Iterator it = parUseDets.iterator(); it.hasNext();) {
+			Set<SbiParuseDet> parUseDets = hibParuse.getSbiParuseDets();
+			for (Iterator<SbiParuseDet> it = parUseDets.iterator(); it.hasNext();) {
 				aSession.delete(it.next());
 			}
 
-			Set parUseCks = hibParuse.getSbiParuseCks();
-			for (Iterator it = parUseCks.iterator(); it.hasNext();) {
+			Set<SbiParuseCk> parUseCks = hibParuse.getSbiParuseCks();
+			for (Iterator<SbiParuseCk> it = parUseCks.iterator(); it.hasNext();) {
 				aSession.delete(it.next());
 			}
 
@@ -577,58 +539,46 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
 	/**
 	 * Checks for par use modes.
 	 *
-	 * @param parId
-	 *            the par id
+	 * @param parId the par id
 	 *
 	 * @return true, if checks for par use modes
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#hasParUseModes(java.lang.String)
 	 */
 	@Override
 	public boolean hasParUseModes(String parId) throws EMFUserError {
-		List parameterUseForParameter = loadParametersUseByParId(Integer.valueOf(parId));
-
-		if (parameterUseForParameter.size() > 0)
-			return true;
-		else
-			return false;
+		List<ParameterUse> parameterUseForParameter = loadParametersUseByParId(Integer.valueOf(parId));
+		return !parameterUseForParameter.isEmpty();
 	}
 
 	/**
 	 * Load parameters use by par id.
 	 *
-	 * @param parId
-	 *            the par id
+	 * @param parId the par id
 	 *
 	 * @return the list
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#loadParametersUseByParId(java.lang.Integer)
 	 */
 	@Override
-	public List loadParametersUseByParId(Integer parId) throws EMFUserError {
-		List realResult = new ArrayList();
+	public List<ParameterUse> loadParametersUseByParId(Integer parId) throws EMFUserError {
+		List<ParameterUse> realResult = new ArrayList<>();
 
 		Session aSession = null;
 		Transaction tx = null;
@@ -637,15 +587,14 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			// String hql = "from SbiParuse s where s.sbiParameters.parId="+parId;
 			String hql = "from SbiParuse s where s.sbiParameters.parId=? ";
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, parId.intValue());
-			List result = query.list();
+			List<SbiParuse> result = query.list();
 
-			Iterator it = result.iterator();
+			Iterator<SbiParuse> it = result.iterator();
 			while (it.hasNext()) {
-				realResult.add(toParameterUse((SbiParuse) it.next(), true));
+				realResult.add(toParameterUse(it.next(), true));
 			}
 
 			tx.commit();
@@ -654,20 +603,14 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 
 			logger.error("HibernateException", he);
 
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
 		} finally {
-
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-
+			closeSessionIfOpen(aSession);
 		}
 
 		return realResult;
@@ -678,8 +621,7 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	 *
 	 * TODO: code refactoring to remove the loadRoles input!!!
 	 *
-	 * @param hibParUse
-	 *            The hybernate parameter use mode
+	 * @param hibParUse The hybernate parameter use mode
 	 *
 	 * @return The corrispondent <code>ParameterUse</code> object
 	 */
@@ -692,10 +634,8 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Fill an empty ParameterUse object extracting data from a SbiParuse object.
 	 *
-	 * @param aParameterUse
-	 *            the destionation ParameterUse object
-	 * @param hibParUse
-	 *            the source SbiParuse object
+	 * @param aParameterUse the destionation ParameterUse object
+	 * @param hibParUse     the source SbiParuse object
 	 */
 	public void fillParameterUse(ParameterUse aParameterUse, SbiParuse hibParUse, boolean loadRoles) {
 		aParameterUse.setUseID(hibParUse.getUseId());
@@ -715,6 +655,7 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			aParameterUse.setIdLov(null);
 		} else {
 			aParameterUse.setIdLov(hibParUse.getSbiLov().getLovId());
+			aParameterUse.setDescLov(hibParUse.getSbiLov().getLabel());
 		}
 		aParameterUse.setManualInput(hibParUse.getManualInput());
 		aParameterUse.setMaximizerEnabled(hibParUse.getMaximizerEnabled());
@@ -725,6 +666,11 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		} else {
 			aParameterUse.setIdLovForDefault(hibParUse.getSbiLovForDefault().getLovId());
 		}
+		if (hibParUse.getSbiLovForMin() == null) {
+			aParameterUse.setIdLovForMin(null);
+		} else {
+			aParameterUse.setIdLovForMin(hibParUse.getSbiLovForMin().getLovId());
+		}
 		if (hibParUse.getSbiLovForMax() == null) {
 			aParameterUse.setIdLovForMax(null);
 		} else {
@@ -732,24 +678,24 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		}
 		aParameterUse.setDefaultFormula(hibParUse.getDefaultFormula());
 
-		List checkList = getAssociatedChecks(hibParUse);
+		List<Check> checkList = getAssociatedChecks(hibParUse);
 		aParameterUse.setAssociatedChecks(checkList);
 		if (loadRoles) {
-			List roleList = getAssociatedRoles(hibParUse);
+			List<Role> roleList = getAssociatedRoles(hibParUse);
 			aParameterUse.setAssociatedRoles(roleList);
 		}
 
 	}
 
-	public List getAssociatedChecks(SbiParuse hibParUse) {
-		Set hibParUseCheks = hibParUse.getSbiParuseCks();
+	public List<Check> getAssociatedChecks(SbiParuse hibParUse) {
+		Set<SbiParuseCk> hibParUseCheks = hibParUse.getSbiParuseCks();
 		SbiParuseCk aSbiParuseCk = null;
 		CheckDAOHibImpl checkDAOHibImpl = new CheckDAOHibImpl();
 		Check tmpCheck = null;
 
-		List checkList = new ArrayList();
-		for (Iterator itParUseCk = hibParUseCheks.iterator(); itParUseCk.hasNext();) {
-			aSbiParuseCk = (SbiParuseCk) itParUseCk.next();
+		List<Check> checkList = new ArrayList<>();
+		for (Iterator<SbiParuseCk> itParUseCk = hibParUseCheks.iterator(); itParUseCk.hasNext();) {
+			aSbiParuseCk = itParUseCk.next();
 			tmpCheck = checkDAOHibImpl.toCheck(aSbiParuseCk.getId().getSbiChecks());
 			checkList.add(tmpCheck);
 		}
@@ -757,15 +703,15 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 		return checkList;
 	}
 
-	public List getAssociatedRoles(SbiParuse hibParUse) {
-		Set hibParUseDets = hibParUse.getSbiParuseDets();
+	public List<Role> getAssociatedRoles(SbiParuse hibParUse) {
+		Set<SbiParuseDet> hibParUseDets = hibParUse.getSbiParuseDets();
 		SbiParuseDet aSbiParuseDet = null;
 		RoleDAOHibImpl roleDAOHibImpl = new RoleDAOHibImpl();
 		Role tmpRole = null;
 
-		List roleList = new ArrayList();
-		for (Iterator itParUseDet = hibParUseDets.iterator(); itParUseDet.hasNext();) {
-			aSbiParuseDet = (SbiParuseDet) itParUseDet.next();
+		List<Role> roleList = new ArrayList<>();
+		for (Iterator<SbiParuseDet> itParUseDet = hibParUseDets.iterator(); itParUseDet.hasNext();) {
+			aSbiParuseDet = itParUseDet.next();
 			tmpRole = roleDAOHibImpl.toRole(aSbiParuseDet.getId().getSbiExtRoles());
 			roleList.add(tmpRole);
 		}
@@ -776,22 +722,19 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Erase parameter use by par id.
 	 *
-	 * @param parId
-	 *            the par id
+	 * @param parId the par id
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#eraseParameterUseByParId(java.lang.Integer)
 	 */
 	@Override
 	public void eraseParameterUseByParId(Integer parId) throws EMFUserError {
-		List parUseList = null;
 		IParameterUseDAO parUseDAO = DAOFactory.getParameterUseDAO();
-		parUseList = parUseDAO.loadParametersUseByParId(parId);
-		Iterator i = parUseList.iterator();
+		List<ParameterUse> parUseList = parUseDAO.loadParametersUseByParId(parId);
+		Iterator<ParameterUse> i = parUseList.iterator();
 		while (i.hasNext()) {
-			ParameterUse parUse = (ParameterUse) i.next();
+			ParameterUse parUse = i.next();
 			parUseDAO.eraseParameterUse(parUse);
 		}
 	}
@@ -799,19 +742,17 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Gets the parameter uses associated to lov.
 	 *
-	 * @param lovId
-	 *            the lov id
+	 * @param lovId the lov id
 	 *
 	 * @return the parameter uses associated to lov
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#getParameterUsesAssociatedToLov(java.lang.Integer)
 	 */
 	@Override
-	public List getParameterUsesAssociatedToLov(Integer lovId) throws EMFUserError {
-		List realResult = new ArrayList();
+	public List<ParameterUse> getParameterUsesAssociatedToLov(Integer lovId) throws EMFUserError {
+		List<ParameterUse> realResult = new ArrayList<>();
 
 		Session aSession = null;
 		Transaction tx = null;
@@ -820,31 +761,26 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			// String hql = "from SbiParuse s where s.sbiLov.lovId="+lovId;
 			String hql = "from SbiParuse s where s.sbiLov.lovId=? or s.sbiLovForDefault.lovId=?";
 
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, lovId.intValue());
 			query.setInteger(1, lovId.intValue());
-			List result = query.list();
+			List<SbiParuse> result = query.list();
 
-			Iterator it = result.iterator();
+			Iterator<SbiParuse> it = result.iterator();
 			while (it.hasNext()) {
-				realResult.add(toParameterUse((SbiParuse) it.next(), true));
+				realResult.add(toParameterUse(it.next(), true));
 			}
 
 			tx.commit();
 
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 
 		return realResult;
@@ -853,44 +789,39 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Erase from hibSession all things related to parameter with parId
 	 *
-	 * @param parId
-	 *            the par id
-	 * @param sSession
-	 *            the hibernate session
+	 * @param parId    the par id
+	 * @param sSession the hibernate session
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IParameterUseDAO#eraseParameterUseByParId(java.lang.Integer)
 	 */
 	@Override
 	public void eraseParameterUseByParIdSameSession(Integer parId, Session sessionCurrDB) throws EMFUserError {
 		logger.debug("IN");
-		List parUseList = null;
 		IParameterUseDAO parUseDAO = DAOFactory.getParameterUseDAO();
-		parUseList = parUseDAO.loadParametersUseByParId(parId);
-		Iterator i = parUseList.iterator();
+		List<ParameterUse> parUseList = parUseDAO.loadParametersUseByParId(parId);
 		// run all parameters Use related to Parameter
 		try {
 
-			for (Iterator iterator = parUseList.iterator(); iterator.hasNext();) {
+			for (Iterator<ParameterUse> iterator = parUseList.iterator(); iterator.hasNext();) {
 
 				Object o = iterator.next();
 				ParameterUse parameterUse = (ParameterUse) o;
 				SbiParuse sbiParuse = (SbiParuse) sessionCurrDB.load(SbiParuse.class, parameterUse.getUseID());
 
-				Set checks = sbiParuse.getSbiParuseCks();
-				Set dets = sbiParuse.getSbiParuseDets();
+				Set<SbiParuseCk> checks = sbiParuse.getSbiParuseCks();
+				Set<SbiParuseDet> dets = sbiParuse.getSbiParuseDets();
 
 				logger.debug("Delete details");
 
-				for (Iterator iterator2 = dets.iterator(); iterator2.hasNext();) {
-					SbiParuseDet det = (SbiParuseDet) iterator2.next();
+				for (Iterator<SbiParuseDet> iterator2 = dets.iterator(); iterator2.hasNext();) {
+					SbiParuseDet det = iterator2.next();
 					sessionCurrDB.delete(det);
 				}
 				logger.debug("Delete checks");
-				for (Iterator iterator2 = checks.iterator(); iterator2.hasNext();) {
-					SbiParuseCk check = (SbiParuseCk) iterator2.next();
+				for (Iterator<SbiParuseCk> iterator2 = checks.iterator(); iterator2.hasNext();) {
+					SbiParuseCk check = iterator2.next();
 					sessionCurrDB.delete(check);
 				}
 
@@ -914,13 +845,14 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	@Override
 	public void eraseParameterObjUseByParuseIdSameSession(Integer parUseId, Session sessionCurrDB) throws EMFUserError {
 		logger.debug("IN");
-		String q = "from SbiObjParuse use where use.id.sbiParuse.useId = '" + parUseId + "' order by use.prog desc";
+		String q = "from SbiObjParuse use where use.id.sbiParuse.useId = :parUseId order by use.prog desc";
 		Query hqlQuery = sessionCurrDB.createQuery(q);
+		hqlQuery.setParameter("parUseId", parUseId);
 		try {
-			List hibUse = hqlQuery.list();
+			List<SbiObjParuse> hibUse = hqlQuery.list();
 
-			for (Iterator iterator = hibUse.iterator(); iterator.hasNext();) {
-				SbiObjParuse object = (SbiObjParuse) iterator.next();
+			for (Iterator<SbiObjParuse> iterator = hibUse.iterator(); iterator.hasNext();) {
+				SbiObjParuse object = iterator.next();
 				sessionCurrDB.delete(object);
 			}
 
@@ -935,35 +867,29 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	/**
 	 * Delete from hibernate session a parameter use
 	 *
-	 * @param Session
-	 *            hibernate Session
+	 * @param Session hibernate Session
 	 *
 	 * @return The list of parameter uses associated to the lov identified by the lovId at input
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 */
 	@Override
 	public void eraseParameterUseByIdSameSession(Integer parUseId, Session sessionCurrDB) throws EMFUserError {
 		logger.debug("IN");
-		Session aSession = null;
 		Transaction tx = null;
 
 		try {
-			// aSession = getSession();
-			// tx = aSession.beginTransaction();
-
 			SbiParuse hibParuse = (SbiParuse) sessionCurrDB.load(SbiParuse.class, parUseId);
 
 			logger.debug("delete ParUSeDet");
-			Set parUseDets = hibParuse.getSbiParuseDets();
-			for (Iterator it = parUseDets.iterator(); it.hasNext();) {
+			Set<SbiParuseDet> parUseDets = hibParuse.getSbiParuseDets();
+			for (Iterator<SbiParuseDet> it = parUseDets.iterator(); it.hasNext();) {
 				sessionCurrDB.delete(it.next());
 			}
 
 			logger.debug("delete ParUSeCk");
-			Set parUseCks = hibParuse.getSbiParuseCks();
-			for (Iterator it = parUseCks.iterator(); it.hasNext();) {
+			Set<SbiParuseCk> parUseCks = hibParuse.getSbiParuseCks();
+			for (Iterator<SbiParuseCk> it = parUseCks.iterator(); it.hasNext();) {
 				sessionCurrDB.delete(it.next());
 			}
 			logger.debug("delete ParObjUse");
@@ -971,22 +897,15 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 
 			sessionCurrDB.delete(hibParuse);
 
-			// aSession.delete(hibParuse);
-			//
-			// tx.commit();
 		} catch (HibernateException he) {
 
 			logException(he);
 
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
+
 			logger.error("Error in deleting SbiParuse with id " + parUseId);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
-		} finally {
-			// if (aSession!=null){
-			// if (aSession.isOpen()) aSession.close();
-			// }
 		}
 
 		logger.debug("OUT");
@@ -996,8 +915,6 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 	@Override
 	public void eraseParameterUseDetAndCkSameSession(Integer parUseId, Session sessionCurrDB) throws EMFUserError {
 		logger.debug("IN");
-
-		// SbiParuse hibParuse = (SbiParuse)sessionCurrDB.load(SbiParuseCk.class, parUseId);
 
 		String qCk = "from SbiParuseCk ck where ck.id.sbiParuse.useId = ?";
 		Query hqlQueryCk = sessionCurrDB.createQuery(qCk);
@@ -1009,16 +926,16 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 
 		try {
 			logger.debug("delete ParUSeDet for paruse ");
-			List hibDet = hqlQueryDet.list();
-			for (Iterator iterator = hibDet.iterator(); iterator.hasNext();) {
-				SbiParuseDet hibParuseDet = (SbiParuseDet) iterator.next();
+			List<SbiParuseDet> hibDet = hqlQueryDet.list();
+			for (Iterator<SbiParuseDet> iterator = hibDet.iterator(); iterator.hasNext();) {
+				SbiParuseDet hibParuseDet = iterator.next();
 				sessionCurrDB.delete(hibParuseDet);
 			}
 
 			logger.debug("delete ParUSeCk for paruse ");
-			List hibCk = hqlQueryCk.list();
-			for (Iterator iterator = hibCk.iterator(); iterator.hasNext();) {
-				SbiParuseCk hibParuseCk = (SbiParuseCk) iterator.next();
+			List<SbiParuseCk> hibCk = hqlQueryCk.list();
+			for (Iterator<SbiParuseCk> iterator = hibCk.iterator(); iterator.hasNext();) {
+				SbiParuseCk hibParuseCk = iterator.next();
 				sessionCurrDB.delete(hibParuseCk);
 			}
 
@@ -1029,7 +946,6 @@ public class ParameterUseDAOHibImpl extends AbstractHibernateDAO implements IPar
 			logger.error("Error in deleting checks and dets associated to SbiParuse with id " + parUseId, he);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 
-		} finally {
 		}
 
 		logger.debug("OUT");

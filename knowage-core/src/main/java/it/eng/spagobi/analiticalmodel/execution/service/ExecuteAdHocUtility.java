@@ -19,17 +19,13 @@ package it.eng.spagobi.analiticalmodel.execution.service;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 
 import org.apache.log4j.LogMF;
 import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.safehaus.uuid.UUID;
-import org.safehaus.uuid.UUIDGenerator;
-
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.engines.config.bo.Engine;
@@ -46,11 +42,6 @@ public class ExecuteAdHocUtility {
 		return getEngineByDriver("it.eng.spagobi.engines.drivers.qbe.QbeDriver");
 	}
 
-	public static Engine getGeoreportEngine() {
-		return getEngineByDriver("it.eng.spagobi.engines.drivers.gis.GisDriver");
-
-	}
-
 	public static Engine getCockpitEngine() {
 		return getEngineByDriver("it.eng.spagobi.engines.drivers.cockpit.CockpitDriver");
 	}
@@ -58,6 +49,14 @@ public class ExecuteAdHocUtility {
 	public static Engine getKPIEngine() {
 		return getEngineByDriver("it.eng.spagobi.engines.drivers.kpi.KpiDriver");
 	}
+
+	public static Engine getDossierEngine() {
+		return getEngineByDriver("it.eng.spagobi.engines.drivers.dossier.DossierDriver");
+	}
+
+    public static Engine getDashboardEngine() {
+        return getEngineByDriver("it.eng.spagobi.engines.drivers.dashboard.DashboardDriver");
+    }
 
 	public static Engine getEngineByDriver(String driver) {
 		Engine engine;
@@ -67,10 +66,12 @@ public class ExecuteAdHocUtility {
 			Assert.assertNotNull(DAOFactory.getEngineDAO(), "EngineDao cannot be null");
 			engine = DAOFactory.getEngineDAO().loadEngineByDriver(driver);
 			if (engine == null) {
-				throw new SpagoBIRuntimeException("There are no engines with driver equal to [" + driver + "] available");
+				throw new SpagoBIRuntimeException(
+						"There are no engines with driver equal to [" + driver + "] available");
 			}
-		} catch (Throwable t) {
-			throw new SpagoBIRuntimeException("Impossible to load a valid engine whose drover is equal to [" + driver + "]", t);
+		} catch (Exception t) {
+			throw new SpagoBIRuntimeException(
+					"Impossible to load a valid engine whose drover is equal to [" + driver + "]", t);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -79,22 +80,21 @@ public class ExecuteAdHocUtility {
 	}
 
 	public static Engine getEngineByDocumentType(String type) {
-		Engine engine;
-		List<Engine> engines;
-
-		engine = null;
+		Engine engine = null;
 		try {
 			Assert.assertNotNull(DAOFactory.getEngineDAO(), "EngineDao cannot be null");
-			engines = DAOFactory.getEngineDAO().loadAllEnginesForBIObjectType(type);
-			if (engines == null || engines.size() == 0) {
-				throw new SpagoBIRuntimeException("There are no engines for documents of type [" + type + "] available");
+			List<Engine> engines = DAOFactory.getEngineDAO().loadAllEnginesForBIObjectType(type);
+			if (engines == null || engines.isEmpty()) {
+				throw new SpagoBIRuntimeException(
+						"There are no engines for documents of type [" + type + "] available");
 			} else {
 				engine = engines.get(0);
-				LogMF.warn(logger, "There are more than one engine for document of type [" + type + "]. We will use the one whose label is equal to [{0}]",
-						engine.getLabel());
+				LogMF.warn(logger, "There are more than one engine for document of type [" + type
+						+ "]. We will use the one whose label is equal to [{0}]", engine.getLabel());
 			}
-		} catch (Throwable t) {
-			throw new SpagoBIRuntimeException("Impossible to load a valid engine for document of type [" + type + "]", t);
+		} catch (Exception t) {
+			throw new SpagoBIRuntimeException("Impossible to load a valid engine for document of type [" + type + "]",
+					t);
 		} finally {
 			logger.debug("OUT");
 		}
@@ -103,37 +103,31 @@ public class ExecuteAdHocUtility {
 	}
 
 	public static String createNewExecutionId() {
-		String executionId;
+		String executionId = null;
 
 		logger.debug("IN");
 
-		executionId = null;
-		try {
-			UUIDGenerator uuidGen = UUIDGenerator.getInstance();
-			UUID uuidObj = uuidGen.generateTimeBasedUUID();
-			executionId = uuidObj.toString();
-			executionId = executionId.replaceAll("-", "");
-		} catch (Throwable t) {
+		UUID uuidObj = UUID.randomUUID();
+		executionId = uuidObj.toString();
+		executionId = executionId.replace("-", "");
 
-		} finally {
-			logger.debug("OUT");
-		}
+		logger.debug("OUT");
 
 		return executionId;
 	}
 
 	// returns true if the dataset is geospazial
-	public static boolean hasGeoHierarchy(String meta) throws JsonMappingException, JsonParseException, JSONException, IOException {
+	public static boolean hasGeoHierarchy(String meta) throws JSONException, IOException {
 
 		JSONObject metadataObject = JSONUtils.toJSONObject(meta);
-		if (metadataObject == null)
+		if (metadataObject == null) {
 			return false;
+		}
 
 		JSONArray columnsMetadataArray = metadataObject.optJSONArray("columns");
 		if (columnsMetadataArray != null) {
 			for (int j = 0; j < columnsMetadataArray.length(); j++) {
 				JSONObject columnJsonObject = columnsMetadataArray.getJSONObject(j);
-				// String columnName = columnJsonObject.getString("column");
 				String propertyName = columnJsonObject.getString("pname");
 				String propertyValue = columnJsonObject.getString("pvalue");
 
@@ -148,4 +142,7 @@ public class ExecuteAdHocUtility {
 		return false;
 	}
 
+	private ExecuteAdHocUtility() {
+
+	}
 }

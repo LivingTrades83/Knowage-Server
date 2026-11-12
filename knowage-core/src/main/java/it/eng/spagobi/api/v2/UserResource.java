@@ -17,36 +17,32 @@
  */
 package it.eng.spagobi.api.v2;
 
-import java.net.URI;
-import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Set;
-
-import javax.validation.Valid;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import it.eng.knowage.commons.security.FileContentValidator;
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
+import it.eng.knowage.security.ProductProfiler;
 import it.eng.spago.error.EMFInternalError;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
+import it.eng.spagobi.commons.bo.Config;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.commons.dao.IConfigDAO;
+import it.eng.spagobi.commons.dao.IRoleDAO;
 import it.eng.spagobi.commons.metadata.SbiExtRoles;
+import it.eng.spagobi.commons.utilities.FileUtilities;
 import it.eng.spagobi.commons.utilities.UserUtilities;
+import it.eng.spagobi.commons.utilities.messages.MessageBuilder;
+import it.eng.spagobi.commons.validation.PasswordChecker;
 import it.eng.spagobi.dao.QueryFilters;
 import it.eng.spagobi.profiling.PublicProfile;
 import it.eng.spagobi.profiling.bean.SbiAttribute;
@@ -54,6 +50,7 @@ import it.eng.spagobi.profiling.bean.SbiUser;
 import it.eng.spagobi.profiling.bean.SbiUserAttributes;
 import it.eng.spagobi.profiling.bean.SbiUserAttributesId;
 import it.eng.spagobi.profiling.bo.UserBO;
+import it.eng.spagobi.profiling.bo.UserBOResult; //new
 import it.eng.spagobi.profiling.dao.ISbiAttributeDAO;
 import it.eng.spagobi.profiling.dao.ISbiUserDAO;
 import it.eng.spagobi.profiling.dao.SbiUserDAOHibImpl;
@@ -62,21 +59,47 @@ import it.eng.spagobi.security.Password;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.jboss.resteasy.plugins.providers.multipart.InputPart;
+import org.jboss.resteasy.plugins.providers.multipart.MultipartFormDataInput;
+import org.owasp.esapi.Encoder;
+
+import javax.validation.Valid;
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.io.*;
+import java.net.URI;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.*;
+import java.util.Map.Entry;
+
+import static it.eng.knowage.commons.security.FilesValidator.validateStringFilenameUsingContains;
+import static it.eng.spagobi.commons.utilities.FileUtilities.getFileName;
+import static it.eng.spagobi.commons.utilities.UserDataParsing.parseWithApachePOI;
+import static it.eng.spagobi.commons.utilities.UserDataParsing.parseWithOpenCSV;
 
 @Path("/2.0/users")
 @ManageAuthorization
 public class UserResource extends AbstractSpagoBIResource {
-	private final String charset = "; charset=UTF-8";
+
+	private static final Logger LOGGER = LogManager.getLogger(UserResource.class);
+	private static final String[] ADMIN_ROLES = { "admin", "dev_role", "model_admin" };
+	private static final String[] USER_ROLES = { "user", "test_role" };
+	private static final String CHARSET = "; charset=UTF-8";
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT, SpagoBIConstants.FINAL_USERS_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+			CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
 	@Path("/")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getUserList(@QueryParam("dateFilter") String dateFilter) {
 		ISbiUserDAO usersDao = null;
 		List<UserBO> fullList = null;
-		List<SbiAttribute> attrList = null;
 		ISbiAttributeDAO objDao = null;
 		ArrayList<Integer> hiddenAttributesIds = new ArrayList<>();
 		ProfileAttributeResourceRoleProcessor roleFilter = new ProfileAttributeResourceRoleProcessor();
@@ -85,8 +108,7 @@ public class UserResource extends AbstractSpagoBIResource {
 			QueryFilters qp = new QueryFilters();
 			objDao = DAOFactory.getSbiAttributeDAO();
 			objDao.setUserProfile(getUserProfile());
-			attrList = objDao.loadSbiAttributes();
-			if (profile.isAbleToExecuteAction(SpagoBIConstants.PROFILE_MANAGEMENT)) {
+			if (profile.isAbleToExecuteAction(CommunityFunctionalityConstants.PROFILE_MANAGEMENT)) {
 				// administrator: he can see every user
 			} else {
 				// user with FINAL_USERS_MANAGEMENT (users with neither
@@ -114,26 +136,26 @@ public class UserResource extends AbstractSpagoBIResource {
 
 			return Response.ok(fullList).build();
 		} catch (Exception e) {
-			logger.error("Error with loading resource", e);
-			throw new SpagoBIRestServiceException("Error with loading resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error with loading resource", e);
+			throw new SpagoBIRestServiceException("Error with loading resource", getLocale(), e);
 		}
 	}
 
 	@GET
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT, SpagoBIConstants.FINAL_USERS_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+			CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
 	@Path("/{id}")
-	@Produces(MediaType.APPLICATION_JSON + charset)
+	@Produces(MediaType.APPLICATION_JSON + CHARSET)
 	public Response getUserById(@PathParam("id") Integer id) {
 		ISbiUserDAO usersDao = null;
 		SbiUserDAOHibImpl hib = new SbiUserDAOHibImpl();
-		List<SbiAttribute> attrList = null;
 		ISbiAttributeDAO objDao = null;
 		ArrayList<Integer> hiddenAttributesIds = new ArrayList<>();
 		ProfileAttributeResourceRoleProcessor roleFilter = new ProfileAttributeResourceRoleProcessor();
 		try {
 
-			SbiUser sbiUser = new SbiUser();
-			UserBO user = new UserBO();
+			SbiUser sbiUser = null;
+			UserBO user = null;
 			usersDao = DAOFactory.getSbiUserDAO();
 			usersDao.setUserProfile(getUserProfile());
 			sbiUser = usersDao.loadSbiUserById(id);
@@ -141,7 +163,6 @@ public class UserResource extends AbstractSpagoBIResource {
 
 			objDao = DAOFactory.getSbiAttributeDAO();
 			objDao.setUserProfile(getUserProfile());
-			attrList = objDao.loadSbiAttributes();
 
 			if (!UserUtilities.isTechnicalUser(getUserProfile())) {
 				hiddenAttributesIds = roleFilter.getHiddenAttributesIds();
@@ -149,34 +170,537 @@ public class UserResource extends AbstractSpagoBIResource {
 			}
 			return Response.ok(user).build();
 		} catch (Exception e) {
-			logger.error("User with selected id: " + id + " doesn't exists", e);
-			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists", buildLocaleFromSession(), e);
+			LOGGER.error("User with selected id: {} doesn't exists", id, e);
+			throw new SpagoBIRestServiceException("Item with selected id: " + id + " doesn't exists",
+					getLocale(), e);
 		}
 	}
+	
+    @POST
+    @Path("/massiveUpdateAttribute")
+    @UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+            CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Operation(
+            summary = "Aggiornamento massivo attributi utenti",
+            description = "Aggiorna i valori degli attributi esistenti per una lista di utenti sulla base dei dati forniti in UserBO.",
+            tags = {"Gestione Utenti"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Aggiornamento degli attributi completato (anche in caso di fallimenti parziali)",
+                    content = @Content(
+                            mediaType = "application_json",
+                            array = @ArraySchema(schema = @Schema(implementation = UserBOResult.class))
+                    )
+            ),
+            @ApiResponse(responseCode = "403", description = "Accesso negato: permessi insufficienti"),
+            @ApiResponse(responseCode = "500", description = "Errore generico del server")
+    })
+
+    public Response updateUserAttributesAll(@Parameter(description = "Lista di oggetti UserBO da processare", required = true) List <UserBO> requestDTO) {
+    	 
+        MessageBuilder msgBuilder = new MessageBuilder();
+        Locale locale = msgBuilder.getLocale(request);
+ 
+        ISbiUserDAO usersDao = DAOFactory.getSbiUserDAO();
+        usersDao.setUserProfile(getUserProfile());
+        List<UserBOResult> results = new ArrayList<>();
+ 
+        for (UserBO user : requestDTO) {
+ 
+            UserBOResult result = new UserBOResult();
+         
+            String userId = user.getUserId();
+  
+            SbiUser sbiUser = new SbiUser();
+            sbiUser = usersDao.loadSbiUserByUserId(userId);
+            HashMap<Integer, HashMap<String, String>> map = user.getSbiUserAttributeses();
+            
+            Set<SbiUserAttributes> currentAttributes = sbiUser.getSbiUserAttributeses(); 
+            
+            if (currentAttributes != null) {     
+            	for (SbiUserAttributes currentAttr : currentAttributes) {         
+            		Integer currentAttrId = currentAttr.getId().getAttributeId();                  
+            		if (map.containsKey(currentAttrId)) {             
+            			HashMap<String, String> incomingValues = map.get(currentAttrId);                          
+            			for (Entry<String, String> valueEntry : incomingValues.entrySet()) {                 
+            				currentAttr.setAttributeValue(valueEntry.getValue());             
+            				}         
+            			}     
+            		}     
+            	
+            	sbiUser.setSbiUserAttributeses(currentAttributes); }           
+       
+ 
+            try {
+            	Integer id = usersDao.fullSaveOrUpdateSbiUser(sbiUser);
+            	Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+            	String encodedUser = encoder.encodeForURL("" + id);
+ 
+            	result.setSuccess(true);
+            	result.setUserId(user.getUserId());
+            	result.setCreatedUserId(id);
+            	result.setMessage("User processed successfully");
+            	results.add (result);
+ 
+            } catch (Exception e) {
+            	LOGGER.error("Error while inserting resource", e);
+ 
+            	result.setSuccess(false);
+            	result.setUserId(user.getUserId());
+            	result.setMessage(e.getMessage());
+            	results.add (result);
+ 
+            }
+           }
+ 
+        return Response.ok(results).build();
+    }
+    
+
+    @POST
+    @Path("/massiveUpdateRoles")
+    @UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+            CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Operation(
+            summary = "Aggiornamento massivo ruoli utenti",
+            description = "Sovrascrive e aggiorna la lista dei ruoli applicati per un elenco di utenti.",
+            tags = {"Gestione Utenti"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Aggiornamento dei ruoli completato (anche in caso di fallimenti parziali)",
+                    content = @Content(
+                            mediaType = "application_json",
+                            array = @ArraySchema(schema = @Schema(implementation = UserBOResult.class))
+                    )
+            ),
+            @ApiResponse(responseCode = "403", description = "Accesso negato: permessi insufficienti"),
+            @ApiResponse(responseCode = "500", description = "Errore generico del server")
+    })
+
+    public Response updateUserRolesAll(@Parameter(description = "Lista di oggetti UserBO da processare", required = true) List <UserBO> requestDTO) {
+    	 
+        MessageBuilder msgBuilder = new MessageBuilder();
+        Locale locale = msgBuilder.getLocale(request);
+ 
+        ISbiUserDAO usersDao = DAOFactory.getSbiUserDAO();
+        usersDao.setUserProfile(getUserProfile());
+        List<UserBOResult> results = new ArrayList<>();
+ 
+        for (UserBO user : requestDTO) {
+ 
+            UserBOResult result = new UserBOResult();
+         
+            String userId = user.getUserId();
+  
+            SbiUser sbiUser = new SbiUser();
+            sbiUser = usersDao.loadSbiUserByUserId(userId);
+ 
+            List<?> list = user.getSbiExtUserRoleses();         
+            Set<SbiExtRoles> roles = new HashSet<>(0);                  
+            if (list != null) {             
+            	for (Object item : list) {                 
+            		Integer id = Integer.valueOf(item.toString());                 
+            		SbiExtRoles role = new SbiExtRoles(id);                 
+            		roles.add(role);             
+            		}         
+            	}         
+            sbiUser.setSbiExtUserRoleses(roles);
+
+            try {
+            	Integer id = usersDao.fullSaveOrUpdateSbiUser(sbiUser);
+            	Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+            	String encodedUser = encoder.encodeForURL("" + id);
+ 
+            	result.setSuccess(true);
+            	result.setUserId(user.getUserId());
+            	result.setCreatedUserId(id);
+            	result.setMessage("User processed successfully");
+            	results.add (result);
+ 
+            } catch (Exception e) {
+            	LOGGER.error("Error while inserting resource", e);
+ 
+            	result.setSuccess(false);
+            	result.setUserId(user.getUserId());
+            	result.setMessage(e.getMessage());
+            	results.add (result);
+ 
+            }
+           }
+ 
+        return Response.ok(results).build();
+    }
+    
+    
+    @POST
+    @Path("/unlockedUserAll")
+    @UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+            CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Operation(
+            summary = "Sblocco massivo utenze bloccate",
+            description = "Imposta il flag flgPwdBlocked a false per un elenco di utenti, riabilitando l'accesso al sistema.",
+            tags = {"Gestione Utenti"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Sblocco delle utenze completato (anche in caso di fallimenti parziali)",
+                    content = @Content(
+                            mediaType = "application_json",
+                            array = @ArraySchema(schema = @Schema(implementation = UserBOResult.class))
+                    )
+            ),
+            @ApiResponse(responseCode = "403", description = "Accesso negato: permessi insufficienti"),
+            @ApiResponse(responseCode = "500", description = "Errore generico del server")
+    })
+    public Response unlockedUserAll(@Parameter(description = "Lista di oggetti UserBO da processare", required = true) List <UserBO> requestDTO) {
+ 
+        ISbiUserDAO usersDao = DAOFactory.getSbiUserDAO();
+        usersDao.setUserProfile(getUserProfile());
+        List<UserBOResult> results = new ArrayList<>();
+        IConfigDAO configDao = null;
+        try {
+            configDao = DAOFactory.getSbiConfigDAO();
+        } catch (Exception e) {
+            LOGGER.error("Error instantiating configDao", e);
+        }
+ 
+        for (UserBO user : requestDTO) {
+ 
+            UserBOResult result = new UserBOResult();
+            String userId = user.getUserId();
+ 
+            SbiUser sbiUser = usersDao.loadSbiUserByUserId(userId);
+            sbiUser.setFlgPwdBlocked(false);
+ 
+            LocalDateTime beginDateTime = LocalDateTime.now();
+            Date beginDate = Date.from(beginDateTime.atZone(ZoneId.systemDefault()).toInstant());
+            sbiUser.setDtPwdBegin(beginDate);
+ 
+            if (configDao != null) {
+                try {
+                    Config check = configDao.loadConfigParametersByLabel(SpagoBIConstants.CHANGEPWD_EXPIRED_TIME);
+                    if (check != null && check.getValueCheck() != null && !check.getValueCheck().trim().isEmpty()) {
+                        int daysToAdds = Integer.parseInt(check.getValueCheck().trim());
+                        LocalDateTime endDateTime = beginDateTime.plusDays(daysToAdds);
+                        Date endDate = Date.from(endDateTime.atZone(ZoneId.systemDefault()).toInstant());
+                        sbiUser.setDtPwdEnd(endDate);
+                        LOGGER.debug("DT_PWD_END impostato per userID=" + userId + " a: " + endDate);
+                    } else {
+                        LOGGER.warn("Configurazione CHANGEPWD_EXPIRED_TIME non trovata o priva di valore.");
+                    }
+                } catch (NumberFormatException e) {
+                    LOGGER.error("Formato numerico non valido per CHANGEPWD_EXPIRED_TIME", e);
+                } catch (Exception e) {
+                    LOGGER.error("Errore durante il recupero di CHANGEPWD_EXPIRED_TIME", e);
+                }
+            }
+ 
+            try {
+                Integer id = usersDao.fullSaveOrUpdateSbiUser(sbiUser);
+                Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+                String encodedUser = encoder.encodeForURL("" + id);
+ 
+                result.setSuccess(true);
+                result.setUserId(user.getUserId());
+                result.setCreatedUserId(id);
+                result.setMessage("User processed successfully");
+                results.add(result);
+ 
+            } catch (Exception e) {
+                LOGGER.error("Error while inserting resource", e);
+ 
+                result.setSuccess(false);
+                result.setUserId(user.getUserId());
+                result.setMessage(e.getMessage());
+                results.add(result);
+            }
+        }
+ 
+        return Response.ok(results).build();
+    }
+    @POST
+    @Path("/massive")
+    @UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+            CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Operation(
+            summary = "Inserimento massivo utenti",
+            description = "Elabora una lista di utenti per l'inserimento nel sistema. Ritorna un report dettagliato per ogni utente inviato.",
+            tags = {"Gestione Utenti"}
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+             responseCode = "200",
+             description = "Operazione completata (anche in caso di fallimenti parziali dei singoli utenti)",
+             content = @Content(
+                            mediaType = "application_json",
+                            array = @ArraySchema(schema = @Schema(implementation = UserBOResult.class))
+                        )
+                       ),
+            @ApiResponse(responseCode = "403", description = "Accesso negato: permessi insufficienti"),
+            @ApiResponse(responseCode = "500", description = "Errore generico del server")
+   })
+
+    public Response insertUserAll(@Parameter(description = "Lista di oggetti UserBO da processare", required = true) List <UserBO> requestDTO) {
+    	 
+        MessageBuilder msgBuilder = new MessageBuilder();
+        Locale locale = msgBuilder.getLocale(request);
+ 
+        ISbiUserDAO usersDao = DAOFactory.getSbiUserDAO();
+        usersDao.setUserProfile(getUserProfile());
+        List<UserBOResult> results = new ArrayList<>();
+ 
+        for (UserBO user : requestDTO) {
+ 
+            UserBOResult result = new UserBOResult();
+            try {
+ 
+                if (user.getUserId() == null || user.getUserId().isBlank()) {
+                    LOGGER.error("The userid is required.");
+                    throw new Exception("The userid is required.");
+                }
+ 
+            } catch (Exception e) {
+ 
+                result.setSuccess(false);
+                result.setMessage(e.getMessage());
+                results.add (result);
+ 
+                continue;
+            }
+         
+            String userId = user.getUserId();
+            boolean isAdmin = UserUtilities.userRequestDtoIsAdmin(user);
+            SbiUser existingUser = usersDao.loadSbiUserByUserIdAllTenants(userId);
+            
+            if (existingUser != null) {
+            	
+                LOGGER.error("User already exists in the system");
+ 
+                result.setSuccess(false);
+                result.setUserId(user.getUserId());
+                result.setMessage(msgBuilder.getMessage("User already exists in the system", "messages", locale));
+                results.add (result);
+ 
+                continue;
+            	
+            } else {
+            
+            	try {
+            			if (!userCanBeAdded(usersDao, isAdmin)) {
+            				LOGGER.error("The limit for creating {} users has been reached.", isAdmin ? "admin " : "end ");
+            				throw new Exception("The limit for creating " + (isAdmin ? "admin " : "end ") + "users has been reached.");
+            			}
+ 
+            	} catch (Exception e) {
+            			result.setSuccess(false);
+            			result.setUserId(user.getUserId());
+            			result.setMessage(e.getMessage());
+            			results.add (result);
+ 
+            			continue;
+            	}
+ 
+            	SbiUser sbiUser = new SbiUser();
+            	sbiUser.setUserId(user.getUserId());
+            	sbiUser.setFullName(user.getFullName());
+            	sbiUser.setPassword(user.getPassword());
+            	sbiUser.setDefaultRoleId(user.getDefaultRoleId());
+ 
+            	List<Integer> list = user.getSbiExtUserRoleses();
+            	Set<SbiExtRoles> roles = new HashSet<>(0);
+            	for (Integer id : list) {
+            		SbiExtRoles role = new SbiExtRoles(id);
+ 
+            		roles.add(role);
+            	}
+            	sbiUser.setSbiExtUserRoleses(roles);
+ 
+            	HashMap<Integer, HashMap<String, String>> map = user.getSbiUserAttributeses();
+            	Set<SbiUserAttributes> attributes = new HashSet<>(0);
+ 
+            	for (Entry<Integer, HashMap<String, String>> entry : map.entrySet()) {
+            		SbiUserAttributes attribute = new SbiUserAttributes();
+            		SbiUserAttributesId attid = new SbiUserAttributesId(entry.getKey());
+            		attribute.setId(attid);
+            		for (Entry<String, String> value : entry.getValue().entrySet()) {
+ 
+            			attribute.setAttributeValue(value.getValue());
+ 
+            		}
+            		attributes.add(attribute);
+            	}
+            	sbiUser.setSbiUserAttributeses(attributes);
+ 
+            	String password;
+            	if (sbiUser.getPassword() == null || sbiUser.getPassword().isBlank()) {
+            		IConfigDAO configDAO = DAOFactory.getSbiConfigDAO();
+ 
+            		try {
+            			//Config config = configDAO.loadConfigParametersById(199);
+            			Config config = configDAO.loadConfigParametersByLabel(SpagoBIConstants.KNOWAGE_USERDEFAULT_PASSWORD);
+            			password = config.getValueCheck();
+            		} catch (Exception e) {
+            			LOGGER.debug("Impossible to retrive from the configuration the property ["
+            					+ SpagoBIConstants.JNDI_THREAD_MANAGER + "]");
+            			throw new SpagoBIRuntimeException("Impossible to retrive from the configuration the property ["
+            					+ SpagoBIConstants.JNDI_THREAD_MANAGER + "]");
+            		}
+ 
+            	} else {
+            		password = sbiUser.getPassword();
+ 
+            		try {
+            			PasswordChecker.getInstance().checkPwd(password);
+            		} catch (Exception e) {
+            			LOGGER.error("Password is not valid", e);
+ 
+            			result.setSuccess(false);
+            			result.setUserId(user.getUserId());
+            			result.setMessage(msgBuilder.getMessage("signup.check.pwdInvalid", "messages", locale));
+            			results.add (result);
+ 
+            			continue;
+            		}
+            	}
+ 
+            	try {
+            		sbiUser.setPassword(Password.hashPassword(password));
+            	} catch (Exception e) {
+            		LOGGER.error("Impossible to encrypt Password", e);
+            		throw new SpagoBIServiceException("SPAGOBI_SERVICE", "Impossible to encrypt Password", e);
+            	}
+ 
+            	try {
+            		Integer id = usersDao.fullSaveOrUpdateSbiUser(sbiUser);
+            		Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+            		String encodedUser = encoder.encodeForURL("" + id);
+ 
+            		result.setSuccess(true);
+            		result.setUserId(user.getUserId());
+            		result.setCreatedUserId(id);
+            		result.setMessage("User processed successfully");
+            		results.add (result);
+ 
+            	} catch (Exception e) {
+            		LOGGER.error("Error while inserting resource", e);
+ 
+            		result.setSuccess(false);
+            		result.setUserId(user.getUserId());
+            		result.setMessage(e.getMessage());
+            		results.add (result);
+ 
+            	}
+            }
+ 
+        }
+ 
+        return Response.ok(results).build();
+    }
+
+    @POST
+    @Path("/uploadFileForInsert")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Operation(
+            summary = "Caricamento file per inserimento utenti",
+            description = "Permette di caricare un file CSV o Excel (.xls, .xlsx) contenente i dati degli utenti da inserire.",
+            requestBody = @RequestBody(
+                    description = "File da caricare",
+                    required = true,
+                    content = @Content(
+                            mediaType = MediaType.MULTIPART_FORM_DATA,
+                            schema = @Schema(implementation = FileUtilities.FileUploadWrapper.class)
+                    )
+            ),
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "File processato e utenti inseriti",
+                            content = @Content(array = @ArraySchema(schema = @Schema(implementation = UserBOResult.class)))  ),
+                            @ApiResponse(responseCode = "500", description = "Errore durante il processamento del file")
+                    }
+                    )
+    public Response uploadFileForInsert(MultipartFormDataInput multipartFormDataInput) throws SpagoBIRuntimeException {
+
+        Map<String, List<InputPart>> formDataMap = multipartFormDataInput.getFormDataMap();
+        List<UserBO> users = new ArrayList<>();
+
+        if (!formDataMap.containsKey("file")) {
+            throw new SpagoBIRuntimeException("Cannot find the file part in input");
+        }
+
+        try {
+            InputPart inputPart = formDataMap.get("file").get(0);
+            String fileName = getFileName(inputPart.getHeaders());
+
+            if (fileName == null || !validateStringFilenameUsingContains(fileName)) {
+                throw new SpagoBIRuntimeException("Invalid file name or content");
+            }
+
+            try (InputStream is = inputPart.getBody(InputStream.class, null)) {
+                InputStream validatedStream = FileContentValidator.validateFileContent(is, fileName);
+
+                if (fileName.toLowerCase().endsWith(".csv")) {
+                    users = parseWithOpenCSV(validatedStream);
+                } else if (fileName.toLowerCase().endsWith(".xlsx") || fileName.toLowerCase().endsWith(".xls")) {
+                    users = parseWithApachePOI(validatedStream);
+
+                } else {
+                    throw new SpagoBIRuntimeException("Unsupported file format. Please upload CSV or Excel.");
+                }
+
+                return insertUserAll(users);
+            }
+        } catch (Exception e) {
+            throw new SpagoBIRuntimeException("Error processing file: " + e.getMessage());
+        }
+    }
+
+
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT, SpagoBIConstants.FINAL_USERS_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+			CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response insertUser(@Valid UserBO requestDTO) {
-		ISbiUserDAO usersDao = null;
+
+		MessageBuilder msgBuilder = new MessageBuilder();
+		Locale locale = msgBuilder.getLocale(request);
 
 		String userId = requestDTO.getUserId();
 		if (userId.startsWith(PublicProfile.PUBLIC_USER_PREFIX)) {
-			logger.error("public is reserved prefix for user id");
+			LOGGER.error("public is reserved prefix for user id");
 			throw new SpagoBIServiceException("SPAGOBI_SERVICE", "public_ is a reserved prefix for user name", null);
 		}
+		ISbiUserDAO usersDao = DAOFactory.getSbiUserDAO();
 
-		try {
-			usersDao = DAOFactory.getSbiUserDAO();
-			usersDao.setUserProfile(getUserProfile());
-			SbiUser existingUser = usersDao.loadSbiUserByUserId(userId);
-			if (existingUser != null && userId.equals(existingUser.getUserId())) {
-				logger.error("User already exists. User_ID is unique");
-				throw new SpagoBIRestServiceException("User with provided ID already exists.", buildLocaleFromSession(), new Throwable());
-			}
-		} catch (SpagoBIRestServiceException ex) {
-			throw ex;
+		boolean isAdmin = UserUtilities.userRequestDtoIsAdmin(requestDTO);
+
+		if (!userCanBeAdded(usersDao, isAdmin)) {
+			LOGGER.error("The limit for creating {} users has been reached.", isAdmin ? "admin " : "end ");
+			throw new SpagoBIServiceException("Create user", "The limit for creating " + (isAdmin ? "admin " : "end ") + "users has been reached.");
+		}
+
+		usersDao.setUserProfile(getUserProfile());
+		SbiUser existingUser = usersDao.loadSbiUserByUserId(userId);
+		if (existingUser != null && userId.equals(existingUser.getUserId())) {
+			LOGGER.error("User already exists. User_ID is unique");
+			throw new SpagoBIRestServiceException("User with provided ID already exists.", getLocale(),
+					new Throwable());
 		}
 
 		SbiUser sbiUser = new SbiUser();
@@ -186,21 +710,20 @@ public class UserResource extends AbstractSpagoBIResource {
 		sbiUser.setDefaultRoleId(requestDTO.getDefaultRoleId());
 
 		List<Integer> list = requestDTO.getSbiExtUserRoleses();
-		Set<SbiExtRoles> roles = new HashSet<SbiExtRoles>(0);
+		Set<SbiExtRoles> roles = new HashSet<>(0);
 		for (Integer id : list) {
-			SbiExtRoles role = new SbiExtRoles();
-			role.setExtRoleId(id);
+			SbiExtRoles role = new SbiExtRoles(id);
+
 			roles.add(role);
 		}
 		sbiUser.setSbiExtUserRoleses(roles);
 
 		HashMap<Integer, HashMap<String, String>> map = requestDTO.getSbiUserAttributeses();
-		Set<SbiUserAttributes> attributes = new HashSet<SbiUserAttributes>(0);
+		Set<SbiUserAttributes> attributes = new HashSet<>(0);
 
 		for (Entry<Integer, HashMap<String, String>> entry : map.entrySet()) {
 			SbiUserAttributes attribute = new SbiUserAttributes();
-			SbiUserAttributesId attid = new SbiUserAttributesId();
-			attid.setAttributeId(entry.getKey());
+			SbiUserAttributesId attid = new SbiUserAttributesId(entry.getKey());
 			attribute.setId(attid);
 			for (Entry<String, String> value : entry.getValue().entrySet()) {
 
@@ -212,80 +735,119 @@ public class UserResource extends AbstractSpagoBIResource {
 		sbiUser.setSbiUserAttributeses(attributes);
 
 		String password = sbiUser.getPassword();
-		if (password != null && password.length() > 0) {
-			try {
-				sbiUser.setPassword(Password.encriptPassword(password));
-			} catch (Exception e) {
-				logger.error("Impossible to encrypt Password", e);
-				throw new SpagoBIServiceException("SPAGOBI_SERVICE", "Impossible to encrypt Password", e);
+
+		try {
+			PasswordChecker.getInstance().checkPwd(password);
+		} catch (Exception e) {
+			LOGGER.error("Password is not valid", e);
+			String message = msgBuilder.getMessage("signup.check.pwdInvalid", "messages", locale);
+			if (e instanceof EMFUserError) {
+				throw new SpagoBIServiceException(((EMFUserError) e).getDescription(), message);
+			} else {
+				throw new SpagoBIServiceException(message, e);
 			}
 		}
 
+			try {
+				sbiUser.setPassword(Password.hashPassword(password));
+			} catch (Exception e) {
+				LOGGER.error("Impossible to encrypt Password", e);
+				throw new SpagoBIServiceException("SPAGOBI_SERVICE", "Impossible to encrypt Password", e);
+			}
+
 		try {
 			Integer id = usersDao.fullSaveOrUpdateSbiUser(sbiUser);
-			String encodedUser = URLEncoder.encode("" + id, "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedUser = encoder.encodeForURL("" + id);
 			return Response.created(new URI("2.0/users/" + encodedUser)).entity(encodedUser).build();
 		} catch (Exception e) {
-			logger.error("Error while inserting resource", e);
-			throw new SpagoBIRestServiceException("Error while inserting resource", buildLocaleFromSession(), e);
+			LOGGER.error("Error while inserting resource", e);
+			throw new SpagoBIRestServiceException("Error while inserting resource", getLocale(), e);
 		}
 	}
 
 	@PUT
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT, SpagoBIConstants.FINAL_USERS_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+			CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
 	@Consumes(MediaType.APPLICATION_JSON)
 	public Response updateUser(@PathParam("id") Integer id, @Valid UserBO requestDTO) {
 
-		SbiUser sbiUserOriginal = new SbiUser();
+		MessageBuilder msgBuilder = new MessageBuilder();
+		Locale locale = msgBuilder.getLocale(request);
+
+		SbiUser sbiUserOriginal = null;
 		ISbiUserDAO usersDao = null;
 		ProfileAttributeResourceRoleProcessor roleFilter = new ProfileAttributeResourceRoleProcessor();
 
 		String userId = requestDTO.getUserId();
 		if (userId.startsWith(PublicProfile.PUBLIC_USER_PREFIX)) {
-			logger.error("public is reserved prefix for user id");
+			LOGGER.error("public is reserved prefix for user id");
 			throw new SpagoBIServiceException("SPAGOBI_SERVICE", "public_ is a reserved prefix for user name", null);
 		}
 
+		usersDao = DAOFactory.getSbiUserDAO();
+		boolean isAdmin = UserUtilities.userRequestDtoIsAdmin(requestDTO);
+
+		if (isChangingRoles(isAdmin, id) && !userCanBeAdded(usersDao, isAdmin)) {
+			LOGGER.error("The limit for creating {} users has been reached.", isAdmin ? "admin " : "end ");
+			throw new SpagoBIServiceException("Update user", "The limit for creating " + (isAdmin ? "admin " : "end ") + "users has been reached.");
+		}
+
 		SbiUser sbiUser = new SbiUser();
-		sbiUser.setId(id);
+		sbiUser.changeId(id);
 		sbiUser.setUserId(requestDTO.getUserId());
 		sbiUser.setFullName(requestDTO.getFullName());
 		sbiUser.setPassword(requestDTO.getPassword());
 		sbiUser.setDefaultRoleId(requestDTO.getDefaultRoleId());
 		sbiUser.setFailedLoginAttempts(requestDTO.getFailedLoginAttempts());
+
 		// This reset the account lock enabled in case of too much failed login attempts
-//		sbiUser.setFailedLoginAttempts(0);
+		// sbiUser.setFailedLoginAttempts(0);
 
 		List<Integer> list = requestDTO.getSbiExtUserRoleses();
-		Set<SbiExtRoles> roles = new HashSet<SbiExtRoles>(0);
+		Set<SbiExtRoles> roles = new HashSet<>(0);
 		for (Integer i : list) {
-			SbiExtRoles role = new SbiExtRoles();
-			role.setExtRoleId(i);
+			SbiExtRoles role = new SbiExtRoles(i);
+
 			roles.add(role);
 		}
 		sbiUser.setSbiExtUserRoleses(roles);
 
 		HashMap<Integer, HashMap<String, String>> map = requestDTO.getSbiUserAttributeses();
-		Set<SbiUserAttributes> attributes = new HashSet<SbiUserAttributes>(0);
+		Set<SbiUserAttributes> attributes = new HashSet<>(0);
 		List<SbiAttribute> attrList = null;
 		ISbiAttributeDAO objDao = null;
 
 		try {
-			usersDao = DAOFactory.getSbiUserDAO();
 			usersDao.setUserProfile(getUserProfile());
 			sbiUserOriginal = usersDao.loadSbiUserById(sbiUser.getId());
 			objDao = DAOFactory.getSbiAttributeDAO();
 			objDao.setUserProfile(getUserProfile());
 			attrList = objDao.loadSbiAttributes();
 		} catch (EMFUserError e1) {
-			logger.error("Impossible get attributes", e1);
+			LOGGER.error("Impossible get attributes", e1);
 		}
+
+		/* KNOWAGE-8687: CheckPassword if changed */
+		if (requestDTO.getPassword() != null) {
+			try {
+				PasswordChecker.getInstance().isValid(sbiUserOriginal, sbiUserOriginal.getPassword(), true, requestDTO.getPassword(), requestDTO.getPassword());
+			} catch (Exception e) {
+				LOGGER.error("Password is not valid", e);
+				String message = msgBuilder.getMessage("signup.check.pwdInvalid", "messages", locale);
+				if (e instanceof EMFUserError) {
+					throw new SpagoBIServiceException(((EMFUserError) e).getDescription(), message);
+				} else {
+					throw new SpagoBIServiceException(message, e);
+				}
+			}
+		}
+
 
 		for (Entry<Integer, HashMap<String, String>> entry : map.entrySet()) {
 			SbiUserAttributes attribute = new SbiUserAttributes();
-			SbiUserAttributesId attid = new SbiUserAttributesId();
-			attid.setAttributeId(entry.getKey());
+			SbiUserAttributesId attid = new SbiUserAttributesId(entry.getKey());
 			attribute.setId(attid);
 			for (Entry<String, String> value : entry.getValue().entrySet()) {
 
@@ -298,10 +860,12 @@ public class UserResource extends AbstractSpagoBIResource {
 		// This method get hidden attributes from user and sets their value to last known in DB
 		// By this we are avoiding changing that value if user change some other attributes
 		try {
-			if (objDao.getUserProfile().getRoles().size() == 1 && objDao.getUserProfile().getRoles().toArray()[0].equals("user"))
+			if (objDao.getUserProfile().getRoles().size() == 1
+					&& objDao.getUserProfile().getRoles().toArray()[0].equals("user")) {
 				roleFilter.setAttributeHiddenFromUser(sbiUserOriginal, attributes, attrList);
+			}
 		} catch (EMFInternalError e1) {
-			logger.error(e1.getMessage(), e1);
+			LOGGER.error(e1.getMessage(), e1);
 		}
 
 		sbiUser.setSbiUserAttributeses(attributes);
@@ -309,9 +873,9 @@ public class UserResource extends AbstractSpagoBIResource {
 		String password = sbiUser.getPassword();
 		if (password != null && password.length() > 0) {
 			try {
-				sbiUser.setPassword(Password.encriptPassword(password));
+				sbiUser.setPassword(Password.hashPassword(password));
 			} catch (Exception e) {
-				logger.error("Impossible to encrypt Password", e);
+				LOGGER.error("Impossible to encrypt Password", e);
 				throw new SpagoBIServiceException("SPAGOBI_SERVICE", "Impossible to encrypt Password", e);
 			}
 		} else {
@@ -322,17 +886,74 @@ public class UserResource extends AbstractSpagoBIResource {
 			usersDao = DAOFactory.getSbiUserDAO();
 			usersDao.setUserProfile(getUserProfile());
 			Integer idToReturn = usersDao.fullSaveOrUpdateSbiUser(sbiUser);
-			String encodedUser = URLEncoder.encode("" + idToReturn, "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedUser = encoder.encodeForURL("" + idToReturn);
 			return Response.created(new URI("2.0/users/" + encodedUser)).entity(encodedUser).build();
 		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
-			throw new SpagoBIRestServiceException(e.getMessage(), buildLocaleFromSession(), e);
+			LOGGER.error(e.getMessage(), e);
+			throw new SpagoBIRestServiceException(e.getMessage(), getLocale(), e);
 		}
+	}
+
+    private boolean isChangingRoles(boolean isAdmin, Integer userId) {
+        ISbiUserDAO userDAO = DAOFactory.getSbiUserDAO();
+        IRoleDAO rolesDAO = DAOFactory.getRoleDAO();
+        List<SbiExtRoles> roles = userDAO.loadSbiUserRolesById(userId);
+
+        if (isAdmin) {
+            try {
+                for (int i = 0; i < roles.size(); i++) {
+                    SbiExtRoles role = rolesDAO.loadSbiExtRoleById(roles.get(i).getExtRoleId());
+                    if (UserUtilities.isRoleApplicable(role, true)) {
+                        return false;
+                    }
+                }
+            } catch (EMFUserError ue) {
+                LOGGER.error("Impossible to get roles", ue);
+                throw new SpagoBIRuntimeException("Impossible to get roles", ue);
+            }
+            return true;
+        } else {
+            try {
+                for (int i = 0; i < roles.size(); i++) {
+                    SbiExtRoles role = rolesDAO.loadSbiExtRoleById(roles.get(i).getExtRoleId());
+                    if (UserUtilities.isRoleApplicable(role, true)) {
+                        return true;
+                    }
+                }
+            } catch (EMFUserError ue) {
+                LOGGER.error("Impossible to get roles", ue);
+                throw new SpagoBIRuntimeException("Impossible to get roles", ue);
+            }
+            return false;
+        }
+    }
+
+
+    public boolean userCanBeAdded(ISbiUserDAO usersDao, boolean isAdmin) {
+		List<SbiUser> usersToCheck = UserUtilities.getAlreadyCreatedUsers(usersDao, isAdmin);
+		return ProductProfiler.canAddAUser(usersToCheck.size(), isAdmin);
+	}
+
+
+	@PUT
+	@Path("/{id}/resetOtp")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT, CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
+	@Consumes(MediaType.APPLICATION_JSON)
+	public Response resetOtp(@PathParam("id") Integer id) {
+		try {
+			ISbiUserDAO usersDao = DAOFactory.getSbiUserDAO();
+			usersDao.resetOtpSecret(id);
+		} catch (Exception e) {
+			Response.serverError().build();
+		}
+		return Response.ok().build();
 	}
 
 	@DELETE
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.PROFILE_MANAGEMENT, SpagoBIConstants.FINAL_USERS_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.PROFILE_MANAGEMENT,
+			CommunityFunctionalityConstants.FINAL_USERS_MANAGEMENT })
 	public Response deleteCheck(@PathParam("id") Integer id) {
 
 		ISbiUserDAO usersDao = null;
@@ -341,11 +962,13 @@ public class UserResource extends AbstractSpagoBIResource {
 			usersDao = DAOFactory.getSbiUserDAO();
 			usersDao.setUserProfile(getUserProfile());
 			usersDao.deleteSbiUserById(id);
-			String encodedUser = URLEncoder.encode("" + id, "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedUser = encoder.encodeForURL("" + id);
 			return Response.ok().entity(encodedUser).build();
 		} catch (Exception e) {
-			logger.error("Error with deleting resource with id: " + id, e);
-			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id, buildLocaleFromSession(), e);
+			LOGGER.error("Error with deleting resource with id: {}", id, e);
+			throw new SpagoBIRestServiceException("Error with deleting resource with id: " + id,
+					getLocale(), e);
 		}
 	}
 

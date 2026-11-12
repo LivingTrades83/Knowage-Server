@@ -32,7 +32,7 @@ import javax.ws.rs.core.Response;
 import org.apache.log4j.Logger;
 
 import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.services.rest.annotations.PublicService;
 import it.eng.spagobi.services.rest.annotations.UserConstraint;
@@ -52,7 +52,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 @Path("/2.0/databases")
 public class DataBaseResource extends AbstractSpagoBIResource {
 
-	static protected Logger logger = Logger.getLogger(DataBaseResource.class);
+	protected static Logger logger = Logger.getLogger(DataBaseResource.class);
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
@@ -80,7 +80,7 @@ public class DataBaseResource extends AbstractSpagoBIResource {
 	@GET
 	@Path("/{label}")
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	@UserConstraint(functionalities = { SpagoBIConstants.SELF_SERVICE_DATASET_MANAGEMENT })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SELF_SERVICE_DATASET_MANAGEMENT })
 	public IDataBase getDataBase(@PathParam("label") String label) {
 		try {
 			IDataSourceDAO dataSourceDAO = DAOFactory.getDataSourceDAO();

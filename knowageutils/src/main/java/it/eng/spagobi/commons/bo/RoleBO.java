@@ -17,12 +17,14 @@
  */
 package it.eng.spagobi.commons.bo;
 
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.List;
 
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import it.eng.spagobi.services.validation.Alphanumeric;
@@ -33,7 +35,7 @@ import it.eng.spagobi.services.validation.ExtendedAlphanumeric;
  *
  * @author Petrovic Stefan ( o_stpetrov, Stefan.Petrovic@mht.net )
  */
-
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class RoleBO implements Serializable {
 
 	/**
@@ -113,6 +115,7 @@ public class RoleBO implements Serializable {
 
 	private boolean ableToManageCalendar;
 	private boolean ableToUseFunctionsCatalog;
+	private boolean ableToManageFunctionsCatalog;
 
 	private boolean isAbleToManageInternationalization;
 
@@ -122,6 +125,13 @@ public class RoleBO implements Serializable {
 
 	private boolean ableToManageWidgetGallery;
 
+	private boolean isAbleToSeeHelpOnline;
+	private boolean isAbleToUseDataPreparation;
+	private boolean isAbleToUseDossier;
+	private boolean isAbleToUseDashboardThemeManagement;
+
+    private boolean isAbleToUseEngGPT;
+
 	private boolean defaultRole;
 
 	private List<RoleMetaModelCategory> roleMetaModelCategories;
@@ -130,7 +140,6 @@ public class RoleBO implements Serializable {
 	 * Class constructor.
 	 */
 	public RoleBO() {
-		super();
 
 	}
 
@@ -141,7 +150,6 @@ public class RoleBO implements Serializable {
 	 * @param description the description
 	 */
 	public RoleBO(String name, String description) {
-		super();
 		this.name = name;
 		this.description = description;
 	}
@@ -346,6 +354,14 @@ public class RoleBO implements Serializable {
 	public boolean isAbleToSaveIntoPersonalFolder() {
 		return ableToSaveIntoPersonalFolder;
 	}
+
+    public boolean isAbleToUseEngGPT() {
+        return isAbleToUseEngGPT;
+    }
+
+    public void setAbleToUseEngGPT(boolean isAbleToUseEngGPT) {
+        this.isAbleToUseEngGPT = isAbleToUseEngGPT;
+    }
 
 	public void setAbleToSaveIntoPersonalFolder(boolean ableToSaveIntoPersonalFolder) {
 		this.ableToSaveIntoPersonalFolder = ableToSaveIntoPersonalFolder;
@@ -591,6 +607,14 @@ public class RoleBO implements Serializable {
 		this.ableToUseFunctionsCatalog = ableToUseFunctionsCatalog;
 	}
 
+	public boolean isAbleToManageFunctionsCatalog() {
+		return ableToManageFunctionsCatalog;
+	}
+
+	public void setAbleToManageFunctionsCatalog(boolean ableToManageFunctionsCatalog) {
+		this.ableToManageFunctionsCatalog = ableToManageFunctionsCatalog;
+	}
+
 	public boolean isAbleToManageInternationalization() {
 		return isAbleToManageInternationalization;
 	}
@@ -605,10 +629,11 @@ public class RoleBO implements Serializable {
 
 	@JsonProperty(value = "isPublic")
 	public void setIsPublic(Boolean isPublic) {
-		if (isPublic == null)
+		if (isPublic == null) {
 			this.isPublic = false;
-		else
+		} else {
 			this.isPublic = isPublic;
+		}
 	}
 
 	public boolean isAbleToCreateSelfServiceCockpit() {
@@ -641,6 +666,42 @@ public class RoleBO implements Serializable {
 
 	public void setAbleToManageWidgetGallery(boolean ableToManageWidgetGallery) {
 		this.ableToManageWidgetGallery = ableToManageWidgetGallery;
+	}
+
+	public void setAbleToSeeHelpOnline(Boolean ableToSeeHelpOnline) {
+		this.isAbleToSeeHelpOnline = ableToSeeHelpOnline;
+	}
+
+	public Boolean isAbleToSeeHelpOnline() {
+		return isAbleToSeeHelpOnline;
+	}
+
+	public void setAbleToUseDataPreparation(Boolean ableToUseDataPreparation) {
+		this.isAbleToUseDataPreparation = ableToUseDataPreparation;
+	}
+
+	public Boolean isAbleToUseDataPreparation() {
+		return isAbleToUseDataPreparation;
+	}
+
+	public void setAbleToUseDossier(Boolean ableToUseDossier) {
+		this.isAbleToUseDossier = ableToUseDossier;
+	}
+
+	public Boolean isAbleToUseDossier() {
+		return isAbleToUseDossier;
+	}
+
+	public void setAbleToUseDashboardThemeManagement(Boolean ableToUseDashboardThemeManagement) {
+		this.isAbleToUseDashboardThemeManagement = ableToUseDashboardThemeManagement;
+	}
+
+	public Boolean isAbleToUseDashboardThemeManagement() {
+		return isAbleToUseDashboardThemeManagement;
+	}
+
+	private final void writeObject(ObjectOutputStream aOutputStream) {
+		  throw new UnsupportedOperationException("Security violation : cannot serialize object to a stream");
 	}
 
 }

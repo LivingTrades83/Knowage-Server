@@ -5,11 +5,31 @@
 		xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
-		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-		version="3.1" >
+		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+		version="4.0" >
 
-	<display-name>WhatIf</display-name>
+	<distributable/>
+
+	<display-name>knowagewhatifengine</display-name>
 	<description>Knowage What-If engine</description>
+	<distributable/>
+
+	<!-- 
+		Logger Setup Filter.
+		
+		Set the logger according the HTTP request data.
+	 -->
+	<filter>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<filter-class>it.eng.knowage.utils.filters.LoggerSetupFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+	</filter-mapping>
+
+
 
 	<filter>
 		<filter-name>EncodingFilter</filter-name>
@@ -120,45 +140,61 @@
 	<filter-mapping>
 		<filter-name>EncodingFilter</filter-name>
 		<url-pattern>/restful-services/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
 	</filter-mapping>
+	
+			<!--  ANTI CSRF FILTER -->
+	<filter>
+      <filter-name>KnowageAntiCsrfFilter</filter-name> 
+      <filter-class>it.eng.spagobi.security.utils.AntiCsrfFilter</filter-class> 
+     </filter>
+     
+     <filter-mapping>
+		<filter-name>KnowageAntiCsrfFilter</filter-name>
+		<url-pattern>/restful-services/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
+
+	<!--  CSP FILTER  	-->
+	<filter>
+		<filter-name>CspFilter</filter-name>
+		<filter-class>it.eng.spagobi.security.utils.CspFilter</filter-class>
+	</filter>
+
+	<filter-mapping>
+		<filter-name>CspFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
+
+
 	<filter-mapping>
 		<filter-name>EngineCheckSessionFilter</filter-name>
 		<url-pattern>/restful-services/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
 	</filter-mapping>
 	<filter-mapping>
 		<filter-name>SpagoBIAccessFilter</filter-name>
 		<url-pattern>/restful-services/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+		<dispatcher>FORWARD</dispatcher>
 	</filter-mapping>
-
-	<servlet>
-		<servlet-name>ConfigServlet</servlet-name>
-		<servlet-class>it.eng.spago.configuration.ConfigServlet</servlet-class>
-		<init-param>
-			<param-name>AF_CONFIG_FILE</param-name>
-			<param-value>/WEB-INF/conf/master.xml</param-value>
-		</init-param>
-		<load-on-startup>0</load-on-startup>
-	</servlet>
-
-	<servlet>
-		<servlet-name>AdapterHTTP</servlet-name>
-		<servlet-class>it.eng.spago.dispatching.httpchannel.AdapterHTTP</servlet-class>
-	</servlet>
+	<filter-mapping>
+		<filter-name>SpagoBIAccessFilter</filter-name>
+		<url-pattern>/WEB-INF/jsp/*</url-pattern>
+		<dispatcher>FORWARD</dispatcher>
+	</filter-mapping>
 
 	<servlet>
 		<servlet-name>EngineTestServlet</servlet-name>
 		<servlet-class>it.eng.spagobi.utilities.engines.EngineTestServlet</servlet-class>
 	</servlet>
 
-	<servlet-mapping>
-		<servlet-name>AdapterHTTP</servlet-name>
-		<url-pattern>/servlet/AdapterHTTP</url-pattern>
-	</servlet-mapping>
 
-	<servlet-mapping>
-		<servlet-name>AdapterHTTP</servlet-name>
-		<url-pattern>/servlet/AdapterHTTPBackEnd</url-pattern>
-	</servlet-mapping>
 
 	<servlet-mapping>
 		<servlet-name>EngineTestServlet</servlet-name>
@@ -207,5 +243,15 @@
 		<param-value>false</param-value>
 	</context-param>
 	 END jboss RES -->
+
+	<!-- 
+		This servlet comes from resteasy-jaxrs and is enabled by default mapped to "" URL. The empty string has
+		greater priority than "/": that is a big problem for us because our WARs have mixed resources, REST
+		services, JSPs, HTMLs, etc... The following disables this servlet.
+	 -->
+	<servlet-mapping>
+		<servlet-name>org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher</servlet-name>
+		<url-pattern>/restful-services-default</url-pattern>
+	</servlet-mapping>
 
 </web-app>

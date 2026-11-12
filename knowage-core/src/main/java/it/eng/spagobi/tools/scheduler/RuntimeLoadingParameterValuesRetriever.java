@@ -47,7 +47,7 @@ import it.eng.spagobi.commons.dao.DAOFactory;
  */
 public class RuntimeLoadingParameterValuesRetriever extends ParameterValuesRetriever {
 
-	static private Logger logger = Logger.getLogger(RuntimeLoadingParameterValuesRetriever.class);
+	private static Logger logger = Logger.getLogger(RuntimeLoadingParameterValuesRetriever.class);
 
 	private String roleToBeUsed;
 
@@ -56,7 +56,7 @@ public class RuntimeLoadingParameterValuesRetriever extends ParameterValuesRetri
 	@Override
 	public List<String> retrieveValues(BIObjectParameter parameter) throws Exception {
 		logger.debug("IN");
-		List<String> toReturn = new ArrayList<String>();
+		List<String> toReturn = new ArrayList<>();
 		IParameterUseDAO parusedao;
 		try {
 			parusedao = DAOFactory.getParameterUseDAO();
@@ -80,7 +80,7 @@ public class RuntimeLoadingParameterValuesRetriever extends ParameterValuesRetri
 
 	private List<String> loadList(Integer parId) throws Exception {
 		logger.debug("IN");
-		List<String> toReturn = new ArrayList<String>();
+		List<String> toReturn = new ArrayList<>();
 		try {
 			IParameterDAO pardao = DAOFactory.getParameterDAO();
 			Parameter par = pardao.loadForExecutionByParameterIDandRoleName(parId, roleToBeUsed, false);

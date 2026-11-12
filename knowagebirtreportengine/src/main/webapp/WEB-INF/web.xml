@@ -5,10 +5,31 @@
 		xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 		xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee
-		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
-		version="3.1" >
+		                    http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+		version="4.0" >
 
-	<display-name>Knowage BIRT Report Engine</display-name>
+	<distributable/>
+
+	<display-name>knowagebirtreportengine</display-name>
+	<description>Knowage BIRT Report Engine</description>
+	<distributable/>
+
+	<!-- 
+		Logger Setup Filter.
+		
+		Set the logger according the HTTP request data.
+	 -->
+	<filter>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<filter-class>it.eng.knowage.utils.filters.LoggerSetupFilter</filter-class>
+	</filter>
+	<filter-mapping>
+		<filter-name>LoggerSetupFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+		<dispatcher>REQUEST</dispatcher>
+	</filter-mapping>
+
+
 
 	<!-- Default locale setting. -->
 	<context-param>
@@ -180,8 +201,8 @@
 	<filter-mapping>
 		<filter-name>EncodingFilter</filter-name>
 		<url-pattern>/BirtReportServletBackEnd</url-pattern>
-	</filter-mapping>   
-
+	</filter-mapping>
+	
 	<!-- START-CAS  ${enable.cas.end}
 	<filter>
 		<filter-name>CAS Authentication Filter</filter-name>
@@ -281,6 +302,8 @@
 		<servlet-class>org.eclipse.birt.report.servlet.BirtEngineServlet</servlet-class>
 	</servlet>
 	-->
+
+	
 
 	<servlet>
 		<servlet-name>BirtReportServlet</servlet-name>

@@ -25,8 +25,8 @@ import it.eng.spagobi.utilities.database.DataBaseException;
 @RunWith(value = Parameterized.class)
 public class CachePerfTest extends AbstractCachePerfTest {
 
-	static private final String XML_FOLDER_PATH = "test/resources/dataset/files";
-	static private Logger logger = Logger.getLogger(GenericSQLDBCachePersistTableTest.class);
+	private static final String XML_FOLDER_PATH = "test/resources/dataset/files";
+	private static Logger logger = Logger.getLogger(GenericSQLDBCachePersistTableTest.class);
 	private List<String> datasetQueryes;
 	StringBuffer buffer = new StringBuffer();
 
@@ -110,10 +110,10 @@ public class CachePerfTest extends AbstractCachePerfTest {
 		ICache aCacahe = this.getDefaultCacheConfiguration(writing);
 		caches.add(aCacahe);
 
-		datasetQueryes = new ArrayList<String>();
+		datasetQueryes = new ArrayList<>();
 		datasetQueryes.add("select * from sales_fact_1998");
 
-		List<String> tableNames = new ArrayList<String>();
+		List<String> tableNames = new ArrayList<>();
 
 		for (int i = 0; i < datasetQueryes.size(); i++) {
 			buffer.append("\n");

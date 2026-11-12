@@ -67,7 +67,8 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			SbiObjParview sbiObjParview = (SbiObjParview) hqlQuery.uniqueResult();
 			if (sbiObjParview == null) {
 				SpagoBITracer.major(SpagoBIConstants.NAME_MODULE, this.getClass().getName(), "modifyObjParview",
-						"the ObjParview relevant to BIObjectParameter with " + "id=" + aObjParview.getParId() + "  does not exist.");
+						"the ObjParview relevant to BIObjectParameter with " + "id=" + aObjParview.getParId()
+								+ "  does not exist.");
 
 			}
 			// delete the existing object
@@ -85,7 +86,7 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			sbiObjParview.setSbiObjParFather(sbiObjParFather);
 			sbiObjParview.setOperation(aObjParview.getOperation());
 			sbiObjParview.setCompareValue(aObjParview.getCompareValue());
-			sbiObjParview.setId(aObjParview.getId());
+			sbiObjParview.changeId(aObjParview.getId());
 			sbiObjParview.setProg(aObjParview.getProg());
 			sbiObjParview.setViewLabel(aObjParview.getViewLabel());
 
@@ -95,14 +96,10 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new HibernateException(he.getLocalizedMessage(), he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		/*
 		 * Criterion aCriterion = Expression.and( Expression.eq("id.sbiObjPar.objParId", aObjParuse.getObjParId()), Expression.eq("id.sbiParuse.useId",
@@ -143,18 +140,14 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			view.setProg(aObjParview.getProg());
 			view.setViewLabel(aObjParview.getViewLabel());
 			updateSbiCommonInfo4Insert(view);
-			view.setId((Integer) aSession.save(view));
+			view.changeId((Integer) aSession.save(view));
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new HibernateException(he.getLocalizedMessage(), he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return view.getId();
 	}
@@ -181,14 +174,10 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new HibernateException(he.getLocalizedMessage(), he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		/*
 		 * Criterion aCriterion = Expression.and( Expression.eq("id.sbiObjPar.objParId", aObjParuse.getObjParId()), Expression.eq("id.sbiParuse.useId",
@@ -201,9 +190,8 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 	public void eraseObjParview(ObjParview aObjParview, Session aSession) {
 		// get the existing object
 		/*
-		 * String hql = "from SbiObjParuse s where s.id.sbiObjPar.objParId = " + aObjParuse.getObjParId() + " and s.id.sbiParuse.useId = " +
-		 * aObjParuse.getParuseId() + " and s.id.sbiObjParFather.objParId = " + aObjParuse.getObjParFatherId() + " and s.id.filterOperation = '" +
-		 * aObjParuse.getFilterOperation() + "'";
+		 * String hql = "from SbiObjParuse s where s.id.sbiObjPar.objParId = " + aObjParuse.getObjParId() + " and s.id.sbiParuse.useId = " + aObjParuse.getParuseId() +
+		 * " and s.id.sbiObjParFather.objParId = " + aObjParuse.getObjParFatherId() + " and s.id.filterOperation = '" + aObjParuse.getFilterOperation() + "'";
 		 */
 		String hql = "from SbiObjParview s where s.id = ?";
 
@@ -213,7 +201,8 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 		SbiObjParview sbiObjParview = (SbiObjParview) hqlQuery.uniqueResult();
 		if (sbiObjParview == null) {
 			SpagoBITracer.major(SpagoBIConstants.NAME_MODULE, this.getClass().getName(), "eraseObjParview",
-					"the ObjParview relevant to BIObjectParameter with " + "id=" + aObjParview.getParId() + " does not exist.");
+					"the ObjParview relevant to BIObjectParameter with " + "id=" + aObjParview.getParId()
+							+ " does not exist.");
 		}
 		aSession.delete(sbiObjParview);
 	}
@@ -249,14 +238,10 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new HibernateException(he.getLocalizedMessage(), he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return toReturn;
 	}
@@ -296,8 +281,8 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IObjParviewDAO#getDependencies(Integer)
 	 */
 	@Override
-	public List getDependencies(Integer objParFatherId) throws EMFUserError {
-		List toReturn = new ArrayList();
+	public List<String> getDependencies(Integer objParFatherId) throws EMFUserError {
+		List<String> toReturn = new ArrayList<>();
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -308,13 +293,13 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			String hql = "from SbiObjParview s where s.sbiObjParFather=? ";
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, objParFatherId.intValue());
-			List objParviews = query.list();
-			if (objParviews == null || objParviews.size() == 0)
+			List<SbiObjParview> objParviews = query.list();
+			if (objParviews == null || objParviews.isEmpty())
 				return toReturn;
 			// add to the list all the distinct labels of parameter which depend form the father parameter
-			Iterator it = objParviews.iterator();
+			Iterator<SbiObjParview> it = objParviews.iterator();
 			while (it.hasNext()) {
-				SbiObjParview objParviewHib = (SbiObjParview) it.next();
+				SbiObjParview objParviewHib = it.next();
 				Integer objParId = objParviewHib.getSbiObjPar().getObjParId();
 				SbiObjPar hibObjPar = (SbiObjPar) aSession.load(SbiObjPar.class, objParId);
 				String label = hibObjPar.getLabel();
@@ -325,14 +310,10 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return toReturn;
 	}
@@ -349,8 +330,8 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IObjParviewDAO#getAllDependenciesForParameterview(java.lang.Integer)
 	 */
 	@Override
-	public List getAllDependenciesForParameterview(Integer viewId) throws EMFUserError {
-		List toReturn = new ArrayList();
+	public List<ObjParview> getAllDependenciesForParameterview(Integer viewId) throws EMFUserError {
+		List<ObjParview> toReturn = new ArrayList<>();
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -360,66 +341,18 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			String hql = "from SbiObjParview s where s.sbiParview.viewId = ?";
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, viewId.intValue());
-			List result = query.list();
-			Iterator it = result.iterator();
+			List<SbiObjParview> result = query.list();
+			Iterator<SbiObjParview> it = result.iterator();
 			while (it.hasNext()) {
-				toReturn.add(toObjParview((SbiObjParview) it.next()));
+				toReturn.add(toObjParview(it.next()));
 			}
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-		}
-		return toReturn;
-	}
-
-	/**
-	 * Gets the document labels list with associated dependencies.
-	 *
-	 * @param viewId the view id
-	 *
-	 * @return the document labels list with associated dependencies
-	 *
-	 * @throws EMFviewrError the EMF user error
-	 *
-	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IObjParviewDAO#getDocumentLabelsListWithAssociatedDependencies(java.lang.Integer)
-	 */
-	@Override
-	public List getDocumentLabelsListWithAssociatedDependencies(Integer viewId) throws EMFUserError {
-		List toReturn = new ArrayList();
-		Session aSession = null;
-		Transaction tx = null;
-		try {
-			aSession = getSession();
-			tx = aSession.beginTransaction();
-			/*
-			 * String hql = "select " + "	distinct(obj.label) " + "from " + "	SbiObjects obj, SbiObjParview s " + "where " +
-			 * "	obj.sbiObjPars.objParId = s.id.sbiObjPar.objParId and " + "	s.id.sbiParview.viewId = " + viewId;
-			 */
-			String hql = "select " + "	distinct(obj.label) " + "from " + "	SbiObjects obj, SbiObjPar p, SbiObjParview s " + "where "
-					+ "	obj.biobjId = p.sbiObject.biobjId and " + "	p.objParId = s.sbiObjPar.objParId and ";
-			Query query = aSession.createQuery(hql);
-			query.setInteger(0, viewId.intValue());
-			List result = query.list();
-			toReturn = result;
-			tx.commit();
-		} catch (HibernateException he) {
-			logException(he);
-			if (tx != null)
-				tx.rollback();
-			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return toReturn;
 	}
@@ -437,47 +370,36 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 	 * @see it.eng.spagobi.behaviouralmodel.analyticaldriver.dao.IObjParviewDAO#loadObjParview(java.lang.Integer, java.lang.Integer)
 	 */
 	@Override
-	public List loadObjParview(Integer objParId, Integer parviewId) throws EMFUserError {
-		List objparviews = new ArrayList();
-		ObjParview toReturn = null;
+	public List<ObjParview> loadObjParview(Integer objParId, Integer parviewId) throws EMFUserError {
+		List<ObjParview> objparviews = new ArrayList<>();
 		Session aSession = null;
 		Transaction tx = null;
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			/*
-			 * Criterion aCriterion = Expression.and( Expression.eq("id.sbiObjPar.objParId", objParId), Expression.eq("id.sbiParview.viewId", parviewId));
-			 * Criteria aCriteria = aSession.createCriteria(SbiObjParview.class); aCriteria.add(aCriterion); List sbiObjParviews = (List) aCriteria.list();
-			 */
-			/*
-			 * String hql = "from SbiObjParview s where s.id.sbiObjPar.objParId=" + objParId + " and s.id.sbiParview.viewId=" + parviewId + " order by s.prog";
-			 */
-			String hql = "from SbiObjParview s where s.sbiObjPar.objParId=? " + " and s.sbiParview.viewId=? " + " order by s.prog";
+			String hql = "from SbiObjParview s where s.sbiObjPar.objParId=? " + " and s.sbiParview.viewId=? "
+					+ " order by s.prog";
 
 			Query query = aSession.createQuery(hql);
 			query.setInteger(0, objParId.intValue());
 			query.setInteger(1, parviewId.intValue());
 
-			List sbiObjParviews = query.list();
+			List<SbiObjParview> sbiObjParviews = query.list();
 			if (sbiObjParviews == null)
 				return objparviews;
-			Iterator itersbiOP = sbiObjParviews.iterator();
+			Iterator<SbiObjParview> itersbiOP = sbiObjParviews.iterator();
 			while (itersbiOP.hasNext()) {
-				SbiObjParview sbiop = (SbiObjParview) itersbiOP.next();
+				SbiObjParview sbiop = itersbiOP.next();
 				ObjParview op = toObjParview(sbiop);
 				objparviews.add(op);
 			}
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return objparviews;
 	}
@@ -495,7 +417,7 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 	 */
 	@Override
 	public List<ObjParview> loadObjParviewsFather(Integer objParId) throws HibernateException {
-		List<ObjParview> toReturn = new ArrayList();
+		List<ObjParview> toReturn = new ArrayList<>();
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -505,22 +427,18 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 			String hql = "from SbiObjParview s where s.sbiObjParFather = ? order by s.prog";
 			Query hqlQuery = aSession.createQuery(hql);
 			hqlQuery.setInteger(0, objParId.intValue());
-			List sbiObjParviews = hqlQuery.list();
-			Iterator it = sbiObjParviews.iterator();
+			List<SbiObjParview> sbiObjParviews = hqlQuery.list();
+			Iterator<SbiObjParview> it = sbiObjParviews.iterator();
 			while (it.hasNext()) {
-				toReturn.add(toObjParview((SbiObjParview) it.next()));
+				toReturn.add(toObjParview(it.next()));
 			}
 			tx.commit();
 		} catch (HibernateException he) {
 			logException(he);
-			if (tx != null)
-				tx.rollback();
+			rollbackIfActive(tx);
 			throw new HibernateException(he.getLocalizedMessage(), he);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return toReturn;
 	}
@@ -529,9 +447,8 @@ public class ObjParviewDAOHibImpl extends AbstractHibernateDAO implements IObjPa
 	public void eraseObjParviewIfExists(ObjParview aObjParview, Session aSession) throws HibernateException {
 		// get the existing object
 		/*
-		 * String hql = "from SbiObjParuse s where s.id.sbiObjPar.objParId = " + aObjParuse.getObjParId() + " and s.id.sbiParuse.useId = " +
-		 * aObjParuse.getParuseId() + " and s.id.sbiObjParFather.objParId = " + aObjParuse.getObjParFatherId() + " and s.id.filterOperation = '" +
-		 * aObjParuse.getFilterOperation() + "'";
+		 * String hql = "from SbiObjParuse s where s.id.sbiObjPar.objParId = " + aObjParuse.getObjParId() + " and s.id.sbiParuse.useId = " + aObjParuse.getParuseId() +
+		 * " and s.id.sbiObjParFather.objParId = " + aObjParuse.getObjParFatherId() + " and s.id.filterOperation = '" + aObjParuse.getFilterOperation() + "'";
 		 */
 		String hql = "from SbiObjParview s where s.id = ? ";
 

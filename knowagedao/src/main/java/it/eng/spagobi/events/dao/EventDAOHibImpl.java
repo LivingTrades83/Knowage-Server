@@ -48,8 +48,6 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 		Session aSession = null;
 		Transaction tx = null;
 		Event realResult = null;
-		String hql = null;
-		Query hqlQuery = null;
 
 		try {
 			aSession = getSession();
@@ -60,18 +58,11 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 			realResult = toEvent(hibEvent);
 			tx.commit();
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return realResult;
 	}
@@ -85,7 +76,7 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 	public List loadEvents(String user) throws EMFUserError {
 		Session aSession = null;
 		Transaction tx = null;
-		List realResult = new ArrayList();
+		List<Event> realResult = new ArrayList<>();
 		String hql = null;
 		Query hqlQuery = null;
 
@@ -93,35 +84,24 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 
-			/*
-			 * hql = "from SbiEvents as event " + "where event.user = '" + user + "'";
-			 */
-
 			hql = "from SbiEvents as event where event.user = ?";
 
 			hqlQuery = aSession.createQuery(hql);
 			hqlQuery.setString(0, user);
-			List hibList = hqlQuery.list();
+			List<SbiEvents> hibList = hqlQuery.list();
 
-			Iterator it = hibList.iterator();
+			Iterator<SbiEvents> it = hibList.iterator();
 
 			while (it.hasNext()) {
-				realResult.add(toEvent((SbiEvents) it.next()));
+				realResult.add(toEvent(it.next()));
 			}
 			tx.commit();
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 		return realResult;
 	}
@@ -145,18 +125,11 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 			tx.commit();
 			return hibEvent.getId();
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logException(he);
-
-			if (tx != null)
-				tx.rollback();
-
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
@@ -169,8 +142,6 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 	public void unregisterEvent(Integer id, String user) throws EMFUserError {
 		Session aSession = null;
 		Transaction tx = null;
-		String hql = null;
-		Query hqlQuery = null;
 
 		try {
 			aSession = getSession();
@@ -179,20 +150,15 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 			aSession.delete(hibEvent);
 			tx.commit();
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logException(he);
-			if (tx != null)
-				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} catch (Exception ex) {
+			rollbackIfActive(tx);
 			logException(ex);
-			if (tx != null)
-				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 
@@ -217,14 +183,10 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 		Transaction tx = null;
 		String hql = null;
 		Query hqlQuery = null;
-		List events = null;
+		List<SbiEvents> events = null;
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-
-			/*
-			 * hql = "from SbiEvents as event " + "where event.user = '" + user + "'";
-			 */
 
 			hql = "from SbiEvents as event where event.user = ?";
 
@@ -232,26 +194,21 @@ public class EventDAOHibImpl extends AbstractHibernateDAO implements IEventDAO {
 			hqlQuery.setString(0, user);
 			events = hqlQuery.list();
 
-			Iterator it = events.iterator();
+			Iterator<SbiEvents> it = events.iterator();
 			while (it.hasNext()) {
 				aSession.delete(it.next());
 			}
 			tx.commit();
 		} catch (HibernateException he) {
+			rollbackIfActive(tx);
 			logException(he);
-			if (tx != null)
-				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} catch (Exception ex) {
+			rollbackIfActive(tx);
 			logException(ex);
-			if (tx != null)
-				tx.rollback();
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
+			closeSessionIfOpen(aSession);
 		}
 	}
 

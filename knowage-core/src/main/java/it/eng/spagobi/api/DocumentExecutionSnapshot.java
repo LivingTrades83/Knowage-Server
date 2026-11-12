@@ -1,8 +1,9 @@
 package it.eng.spagobi.api;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,25 +13,28 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import it.eng.spago.error.EMFInternalError;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
-import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.analiticalmodel.document.bo.Snapshot;
 import it.eng.spagobi.analiticalmodel.document.bo.SnapshotMainInfo;
 import it.eng.spagobi.analiticalmodel.document.dao.ISnapshotDAO;
-import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.utilities.GeneralUtilities;
-import it.eng.spagobi.commons.utilities.ObjectsAccessVerifier;
+import it.eng.spagobi.commons.utilities.SnapshotAccessVerifier;
 import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
+import it.eng.spagobi.services.rest.annotations.UserConstraint;
 import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRestServiceException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
@@ -40,127 +44,124 @@ import it.eng.spagobi.utilities.rest.RestUtilities;
 @ManageAuthorization
 public class DocumentExecutionSnapshot extends AbstractSpagoBIResource {
 
+	private static final Logger LOGGER = LogManager.getLogger(DocumentExecutionSnapshot.class);
+
 	public static final String SERVICE_NAME = "SNAPSHOT_SERVICE";
 
 	@GET
 	@Path("/getSnapshots")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SEE_SNAPSHOTS_FUNCTIONALITY })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response getSnapshots(@QueryParam("id") Integer biobjectId, @Context HttpServletRequest req) {
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 		List<SnapshotMainInfo> snapshotsList = null;
 		try {
+			SnapshotAccessVerifier.checkDocument(biobjectId, getUserProfile());
 			snapshotsList = DAOFactory.getSnapshotDAO().getSnapshotMainInfos(biobjectId);
 		} catch (EMFUserError e) {
 			throw new SpagoBIServiceException("Cannot load scheduled executions", e);
+		} catch (EMFInternalError e) {
+			throw new SpagoBIServiceException("Cannot check snapshot permissions", e);
 		}
 		resultAsMap.put("schedulers", snapshotsList);
-		resultAsMap.put("urlPath", GeneralUtilities.getSpagoBIProfileBaseUrl(this.getUserProfile().getUserUniqueIdentifier().toString()));
+		resultAsMap.put("urlPath",
+				GeneralUtilities.getSpagoBIProfileBaseUrl(this.getUserProfile().getUserUniqueIdentifier().toString()));
 		return Response.ok(resultAsMap).build();
 	}
 
 	@GET
 	@Path("/getSnapshootBySchedulation")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SEE_SNAPSHOTS_FUNCTIONALITY })
 	public Map<String, Map<Integer, List<Snapshot>>> getSnapshoots(@QueryParam("schedulation") String schedulation) {
 		try {
 			ISnapshotDAO snapdao = DAOFactory.getSnapshotDAO();
-			return snapdao.getSnapshotsBySchedulation(schedulation, true, false);
+			Map<String, Map<Integer, List<Snapshot>>> snapshots = snapdao.getSnapshotsBySchedulation(schedulation, true, false);
+			Map<String, Map<Integer, List<Snapshot>>> visible = new LinkedHashMap<>();
+			Map<Integer, Boolean> access = new HashMap<>();
+			for (Map.Entry<String, Map<Integer, List<Snapshot>>> trigger : snapshots.entrySet()) {
+				Map<Integer, List<Snapshot>> runs = new LinkedHashMap<>();
+				for (Map.Entry<Integer, List<Snapshot>> run : trigger.getValue().entrySet()) {
+					List<Snapshot> items = new ArrayList<>();
+					for (Snapshot snapshot : run.getValue()) {
+						Integer id = snapshot.getBiobjId();
+						if (!access.containsKey(id)) {
+							access.put(id, SnapshotAccessVerifier.canSeeDocument(id, getUserProfile()));
+						}
+						if (access.get(id)) {
+							items.add(snapshot);
+						}
+					}
+					if (!items.isEmpty()) {
+						runs.put(run.getKey(), items);
+					}
+				}
+				if (!runs.isEmpty()) {
+					visible.put(trigger.getKey(), runs);
+				}
+			}
+			return visible;
 		} catch (EMFUserError e) {
-			logger.error(e);
+			LOGGER.error(e);
 			throw new SpagoBIRestServiceException(getLocale(), e);
+		} catch (EMFInternalError e) {
+			throw new SpagoBIServiceException("Cannot check snapshot permissions", e);
 		}
 	}
 
 	@GET
 	@Path("/getSnapshotsForSchedulationAndDocument")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SEE_SNAPSHOTS_FUNCTIONALITY })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
-	public Response getSnapshotsForSchedulationAndDocument(@QueryParam("id") Integer biobjectId, @QueryParam("scheduler") String scheduler,
-			@Context HttpServletRequest req) {
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+	public Response getSnapshotsForSchedulationAndDocument(@QueryParam("id") Integer biobjectId,
+			@QueryParam("scheduler") String scheduler, @Context HttpServletRequest req) {
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 
 		// workaround , should pass an Id or a label cause name cannot contain spaces otherwise
 		scheduler = scheduler.replaceAll("%2520", " ");
 
 		List<Snapshot> snapshotsList = null;
 		try {
-			snapshotsList = DAOFactory.getSnapshotDAO().getSnapshotsForSchedulationAndDocument(biobjectId, scheduler, false);
+			SnapshotAccessVerifier.checkDocument(biobjectId, getUserProfile());
+			snapshotsList = DAOFactory.getSnapshotDAO().getSnapshotsForSchedulationAndDocument(biobjectId, scheduler,
+					false);
 		} catch (EMFUserError e) {
 			throw new SpagoBIServiceException("Cannot load scheduled executions", e);
+		} catch (EMFInternalError e) {
+			throw new SpagoBIServiceException("Cannot check snapshot permissions", e);
 		}
 
 		resultAsMap.put("schedulers", snapshotsList);
-		resultAsMap.put("urlPath", GeneralUtilities.getSpagoBIProfileBaseUrl(this.getUserProfile().getUserUniqueIdentifier().toString()));
+		resultAsMap.put("urlPath",
+				GeneralUtilities.getSpagoBIProfileBaseUrl(this.getUserProfile().getUserUniqueIdentifier().toString()));
 
 		return Response.ok(resultAsMap).build();
 	}
 
 	@GET
 	@Path("/getSnapshotContent")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SEE_SNAPSHOTS_FUNCTIONALITY })
 	@Produces("application/octet-stream")
-	public String getSnapshotContent(@QueryParam("biobjectId") Integer objectId, @QueryParam("idSnap") Integer idSnap, @Context HttpServletRequest req) {
+	public String getSnapshotContent(@QueryParam("biobjectId") Integer objectId, @QueryParam("idSnap") Integer idSnap,
+			@Context HttpServletRequest req) {
 
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
-
-		IEngUserProfile profile = this.getUserProfile();
-		Snapshot snap = null;
-		BIObject obj;
 		try {
-			obj = DAOFactory.getBIObjectDAO().loadBIObjectById(objectId);
-			byte[] content = null;
-			String contentType = "text/html";
-			try {
-				if (ObjectsAccessVerifier.canSee(obj, profile)) {
-					logger.debug("Current user [" + ((UserProfile) profile).getUserId().toString() + "] can see snapshot with id = " + idSnap
-							+ " of document with id = " + objectId);
-					ISnapshotDAO snapdao = DAOFactory.getSnapshotDAO();
-					snap = snapdao.loadSnapshot(idSnap);
-					content = snap.getContent();
-					if (snap.getContentType() != null) {
-						contentType = snap.getContentType();
-					}
-				} else {
-					logger.error("Current user [" + ((UserProfile) profile).getUserId().toString() + "] CANNOT see snapshot with id = " + idSnap
-							+ " of document with id = " + objectId);
-					// content = "You cannot see required snapshot.".getBytes();
-					content = "You cannot see required snapshot.".getBytes("UTF-8");
-				}
-			} catch (EMFInternalError e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (UnsupportedEncodingException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			if (idSnap == null) {
+				throw new WebApplicationException(Response.Status.BAD_REQUEST);
 			}
-
-		} catch (EMFUserError e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Snapshot snapshot = DAOFactory.getSnapshotDAO().loadSnapshot(idSnap);
+			SnapshotAccessVerifier.checkSnapshot(snapshot, objectId, getUserProfile());
+			return new JSONObject().put("snapshot", snapshot.getContent()).toString();
+		} catch (EMFUserError | EMFInternalError | JSONException e) {
+			throw new SpagoBIServiceException("Cannot load snapshot content", e);
 		}
-
-		resultAsMap.put("snapshot", snap);
-		JSONObject object = new JSONObject();
-
-		try {
-			object.put("snapshot", snap.getContent());
-		} catch (EMFUserError e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (EMFInternalError e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (JSONException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-		return object.toString();
-		// return Response.ok(resultAsMap).build();
 	}
 
 	@POST
 	@Path("/deleteSnapshot")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.SEE_SNAPSHOTS_FUNCTIONALITY })
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public Response deleteSnapshot(@Context HttpServletRequest req) {
-		HashMap<String, Object> resultAsMap = new HashMap<String, Object>();
+		HashMap<String, Object> resultAsMap = new HashMap<>();
 		IEngUserProfile userProfile;
 		ISnapshotDAO snapdao;
 		Snapshot snapshot;
@@ -181,10 +182,14 @@ public class DocumentExecutionSnapshot extends AbstractSpagoBIResource {
 					snapdao = DAOFactory.getSnapshotDAO();
 					snapshot = snapdao.loadSnapshot(Integer.valueOf(ids[i]));
 					Assert.assertNotNull(snapshot, "Snapshot [" + ids[i] + "] does not exist on the database");
+					SnapshotAccessVerifier.checkSnapshot(snapshot, null, userProfile);
 					snapdao.deleteSnapshot(snapshot.getId());
 				} catch (EMFUserError e) {
-					logger.error("Impossible to delete snapshot with name [" + ids[i] + "] already exists", e);
-					throw new SpagoBIServiceException("Impossible to delete snapshot with name [" + ids[i] + "] already exists", e);
+					LOGGER.error("Impossible to delete snapshot with name [{}] already exists", ids[i], e);
+					throw new SpagoBIServiceException(
+							"Impossible to delete snapshot with name [" + ids[i] + "] already exists", e);
+				} catch (EMFInternalError e) {
+					throw new SpagoBIServiceException("Cannot check snapshot permissions", e);
 				}
 			}
 
@@ -193,7 +198,7 @@ public class DocumentExecutionSnapshot extends AbstractSpagoBIResource {
 		} catch (JSONException e1) {
 			throw new SpagoBIServiceException(SERVICE_NAME, e1.getMessage());
 		}
-
+ 
 		return Response.ok(resultAsMap).build();
 	}
 

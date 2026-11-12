@@ -42,24 +42,22 @@ import it.eng.spagobi.commons.metadata.SbiDomains;
 
 public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesValueDAO {
 
-	private static transient Logger logger = Logger.getLogger(LovDAOHibImpl.class);
+	private static final Logger LOGGER = Logger.getLogger(LovDAOHibImpl.class);
 
 	/**
 	 * Load modalities value by id.
 	 *
-	 * @param modalitiesValueID
-	 *            the modalities value id
+	 * @param modalitiesValueID the modalities value id
 	 *
 	 * @return the modalities value
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#loadModalitiesValueByID(Integer)
 	 */
 	@Override
 	public ModalitiesValue loadModalitiesValueByID(Integer modalitiesValueID) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		ModalitiesValue modVal = null;
 		Session aSession = null;
 		Transaction tx = null;
@@ -72,19 +70,12 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			tx.commit();
 
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("OUT");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 
 		return modVal;
@@ -93,19 +84,17 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 	/**
 	 * Load modalities value by label.
 	 *
-	 * @param label
-	 *            the label
+	 * @param label the label
 	 *
 	 * @return the modalities value
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#loadModalitiesValueByID(Integer)
 	 */
 	@Override
 	public ModalitiesValue loadModalitiesValueByLabel(String label) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		ModalitiesValue modVal = null;
 		Session aSession = null;
 		Transaction tx = null;
@@ -120,13 +109,14 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			modVal = toModalityValue(hibLov);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-			if (tx != null)
-				tx.rollback();
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
 		} finally {
-			aSession.close();
-			logger.debug("OUT");
+			if (aSession != null) {
+				aSession.close();
+			}
+			LOGGER.debug("OUT");
 		}
 		return modVal;
 	}
@@ -134,17 +124,15 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 	/**
 	 * Modify modalities value.
 	 *
-	 * @param aModalitiesValue
-	 *            the a modalities value
+	 * @param aModalitiesValue the a modalities value
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#modifyModalitiesValue(it.eng.spagobi.behaviouralmodel.lov.bo.ModalitiesValue)
 	 */
 	@Override
 	public void modifyModalitiesValue(ModalitiesValue aModalitiesValue) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -154,43 +142,35 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			hibLov.setName(aModalitiesValue.getName());
 			hibLov.setLabel(aModalitiesValue.getLabel());
 			hibLov.setDescr(aModalitiesValue.getDescription());
-			SbiDomains inpType = (SbiDomains) aSession.load(SbiDomains.class, new Integer(aModalitiesValue.getITypeId()));
+			SbiDomains inpType = (SbiDomains) aSession.load(SbiDomains.class,
+					new Integer(aModalitiesValue.getITypeId()));
 			hibLov.setInputType(inpType);
 			hibLov.setInputTypeCd(aModalitiesValue.getITypeCd());
 			hibLov.setLovProvider(aModalitiesValue.getLovProvider());
 			updateSbiCommonInfo4Update(hibLov);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("OUT");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 	}
 
 	/**
 	 * Insert modalities value.
 	 *
-	 * @param aModalitiesValue
-	 *            the a modalities value
+	 * @param aModalitiesValue the a modalities value
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#insertModalitiesValue(it.eng.spagobi.behaviouralmodel.lov.bo.ModalitiesValue)
 	 */
 	@Override
 	public Integer insertModalitiesValue(ModalitiesValue aModalitiesValue) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		Integer id = null;
@@ -201,7 +181,8 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			hibLov.setName(aModalitiesValue.getName());
 			hibLov.setLabel(aModalitiesValue.getLabel());
 			hibLov.setDescr(aModalitiesValue.getDescription());
-			SbiDomains inpType = (SbiDomains) aSession.load(SbiDomains.class, new Integer(aModalitiesValue.getITypeId()));
+			SbiDomains inpType = (SbiDomains) aSession.load(SbiDomains.class,
+					new Integer(aModalitiesValue.getITypeId()));
 			hibLov.setInputType(inpType);
 			hibLov.setInputTypeCd(aModalitiesValue.getITypeCd());
 			hibLov.setLovProvider(aModalitiesValue.getLovProvider());
@@ -210,36 +191,27 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			tx.commit();
 			return id;
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("OUT");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 	}
 
 	/**
 	 * Erase modalities value.
 	 *
-	 * @param aModalitiesValue
-	 *            the a modalities value
+	 * @param aModalitiesValue the a modalities value
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#eraseModalitiesValue(it.eng.spagobi.behaviouralmodel.lov.bo.ModalitiesValue)
 	 */
 	@Override
 	public void eraseModalitiesValue(ModalitiesValue aModalitiesValue) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		try {
@@ -249,19 +221,12 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			aSession.delete(hibLov);
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.debug("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.debug("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("OUT");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 	}
 
@@ -270,15 +235,14 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 	 *
 	 * @return the list
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#loadAllModalitiesValue()
 	 */
 
 	@Override
 	public List loadAllModalitiesValue() throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		List realResult = new ArrayList();
@@ -294,35 +258,29 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 				realResult.add(toModalityValue((SbiLov) it.next()));
 			}
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("IN");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("IN");
 		}
 		return realResult;
 	}
 
 	@Override
 	public List<ModalitiesValue> loadModalitiesValueByParamaterId(Integer idParameter) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		List realResult = new ArrayList();
 		try {
 			aSession = getSession();
 			tx = aSession.beginTransaction();
-			Query hibQuery = aSession.createQuery("select lov from SbiParameters as param " + "inner join param.sbiParuses as paruses "
-					+ "inner join paruses.sbiLov as lov " + "where  param.parId = " + idParameter);
-			;
+			Query hibQuery = aSession
+					.createQuery("select lov from SbiParameters as param " + "inner join param.sbiParuses as paruses "
+							+ "inner join paruses.sbiLov as lov " + "where  param.parId = :idParameter");
+			hibQuery.setParameter("idParameter", idParameter);
 			List hibList = hibQuery.list();
 
 			Iterator it = hibList.iterator();
@@ -333,19 +291,12 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			realResult = lovListAnDr(realResult);
 
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("IN");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("IN");
 		}
 
 		return realResult;
@@ -353,7 +304,7 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 
 	@Override
 	public List<ModalitiesValue> loadModalitiesValueByBIObjectLabel(String label) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		List realResult = new ArrayList();
@@ -361,8 +312,10 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			aSession = getSession();
 			tx = aSession.beginTransaction();
 			Query hibQuery = aSession
-					.createQuery("select lov from SbiObjects as obj " + "inner join obj.sbiObjPars as objPars " + "inner join objPars.sbiParameter as param "
-							+ "inner join param.sbiParuses as paruses " + "inner join paruses.sbiLov as lov " + "where  obj.label = '" + label + "'");
+					.createQuery("select lov from SbiObjects as obj " + "inner join obj.sbiObjPars as objPars "
+							+ "inner join objPars.sbiParameter as param " + "inner join param.sbiParuses as paruses "
+							+ "inner join paruses.sbiLov as lov " + "where  obj.label = :label");
+			hibQuery.setParameter("label", label);
 			List hibList = hibQuery.list();
 			Iterator it = hibList.iterator();
 			while (it.hasNext()) {
@@ -373,19 +326,12 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			realResult = lovList(realResult);
 
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("IN");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("IN");
 		}
 		return realResult;
 	}
@@ -395,14 +341,13 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 	 *
 	 * @return the list
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#loadAllModalitiesValueOrderByCode()
 	 */
 	@Override
 	public List loadAllModalitiesValueOrderByCode() throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		Session aSession = null;
 		Transaction tx = null;
 		List realResult = new ArrayList();
@@ -418,19 +363,12 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			}
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.error("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.error("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("OUT");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 		return realResult;
 
@@ -439,19 +377,17 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 	/**
 	 * Checks for parameters.
 	 *
-	 * @param lovId
-	 *            the lov id
+	 * @param lovId the lov id
 	 *
 	 * @return true, if checks for parameters
 	 *
-	 * @throws EMFUserError
-	 *             the EMF user error
+	 * @throws EMFUserError the EMF user error
 	 *
 	 * @see it.eng.spagobi.behaviouralmodel.lov.dao.IModalitiesValueDAO#hasParameters(java.lang.String)
 	 */
 	@Override
 	public boolean hasParameters(String lovId) throws EMFUserError {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		boolean result = true;
 		Session aSession = null;
 		Transaction tx = null;
@@ -466,7 +402,7 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 			hibQuery.setInteger("lovIdInt", lovIdInt);
 			List hibList = hibQuery.list();
 
-			if (hibList.size() > 0) {
+			if (!hibList.isEmpty()) {
 				result = true;
 			} else {
 				result = false;
@@ -474,19 +410,12 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 
 			tx.commit();
 		} catch (HibernateException he) {
-			logger.debug("HibernateException", he);
-
-			if (tx != null)
-				tx.rollback();
-
+			LOGGER.debug("HibernateException", he);
+			rollbackIfActive(tx);
 			throw new EMFUserError(EMFErrorSeverity.ERROR, 100);
-
 		} finally {
-			if (aSession != null) {
-				if (aSession.isOpen())
-					aSession.close();
-			}
-			logger.debug("OUT");
+			closeSessionIfOpen(aSession);
+			LOGGER.debug("OUT");
 		}
 
 		return result;
@@ -496,12 +425,11 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 	/**
 	 * From the hibernate LOV at input, gives the corrispondent <code>ModalitiesValue</code> object.
 	 *
-	 * @param hiObjPar
-	 *            The hybernate LOV
+	 * @param hiObjPar The hybernate LOV
 	 * @return The corrispondent <code>ModalitiesValue</code> object
 	 */
 	private ModalitiesValue toModalityValue(SbiLov hibLov) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		ModalitiesValue modVal = new ModalitiesValue();
 		modVal.setDescription(hibLov.getDescr());
 		modVal.setId(hibLov.getLovId());
@@ -512,7 +440,7 @@ public class LovDAOHibImpl extends AbstractHibernateDAO implements IModalitiesVa
 		modVal.setLovProvider(hibLov.getLovProvider());
 		modVal.setName(hibLov.getName());
 		modVal.setLabel(hibLov.getLabel());
-		logger.debug("OUT");
+		LOGGER.debug("OUT");
 		return modVal;
 	}
 

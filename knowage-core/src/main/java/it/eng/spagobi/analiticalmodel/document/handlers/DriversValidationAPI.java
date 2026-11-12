@@ -1,13 +1,14 @@
 package it.eng.spagobi.analiticalmodel.document.handlers;
 
-import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
 import org.apache.log4j.Logger;
+import org.owasp.esapi.Encoder;
 
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
 import it.eng.spago.error.EMFErrorSeverity;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
@@ -29,12 +30,12 @@ import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.validation.SpagoBIValidationImpl;
 import it.eng.spagobi.tools.catalogue.metadata.IDrivableBIResource;
 import it.eng.spagobi.utilities.objects.Couple;
+import org.owasp.esapi.errors.EncodingException;
 
 public class DriversValidationAPI {
 
-	static private Logger logger = Logger.getLogger(DriversValidationAPI.class);
+	private static Logger logger = Logger.getLogger(DriversValidationAPI.class);
 	private static final String TREE_INNER_LOV_TYPE = "treeinner";
-
 	private IEngUserProfile userProfile = null;
 	private Locale locale = null;
 
@@ -72,10 +73,11 @@ public class DriversValidationAPI {
 	/*
 	 * ERRORS HANDLER
 	 */
-	public List getParametersErrors(IDrivableBIResource object, String role, AbstractBIResourceRuntime dum) throws Exception {
+	public List getParametersErrors(IDrivableBIResource object, String role, AbstractBIResourceRuntime dum)
+			throws Exception {
 		logger.debug("IN");
 		List toReturn = new ArrayList();
-		List drivers = object.getDrivers();
+ 		List drivers = object.getDrivers();
 		if (drivers.isEmpty()) {
 			return toReturn;
 		}
@@ -92,16 +94,17 @@ public class DriversValidationAPI {
 			logger.debug("Evaluating errors for driver " + driver.getLabel() + " ...");
 			List errorsOnChecks = getValidationErrorsOnChecks(driver);
 			List values = driver.getParameterValues();
-			if (driver.isRequired() && (values == null || values.isEmpty() || normalizeList(values).size() == 0)) {
-				EMFValidationError error = SpagoBIValidationImpl.validateField(driver.getParameterUrlName(), driver.getLabel(), null, "MANDATORY", null, null,
-						null);
+			if (driver.isRequired() && (values == null || values.isEmpty() || normalizeList(values).isEmpty())) {
+				EMFValidationError error = SpagoBIValidationImpl.validateField(driver.getParameterUrlName(),
+						driver.getLabel(), null, "MANDATORY", null, null, null);
 				errorsOnChecks.add(error);
 			}
 			if (errorsOnChecks != null && !errorsOnChecks.isEmpty()) {
 				logger.warn("Found " + errorsOnChecks.size() + " errors on checks for driver " + driver.getLabel());
 			}
 			toReturn.addAll(errorsOnChecks);
-			if (values != null && values.size() >= 1 && !(values.size() == 1 && (values.get(0) == null || values.get(0).toString().trim().equals("")))) {
+			if (values != null && values.size() >= 1
+					&& !(values.size() == 1 && (values.get(0) == null || values.get(0).toString().trim().equals("")))) {
 				List errorsOnValues = getValidationErrorsOnValues(driver, object, role, dum);
 				if (errorsOnValues != null && !errorsOnValues.isEmpty()) {
 					logger.warn("Found " + errorsOnValues.size() + " errors on values for driver " + driver.getLabel());
@@ -140,11 +143,13 @@ public class DriversValidationAPI {
 					Iterator errorsIt = errors.iterator();
 					while (errorsIt.hasNext()) {
 						EMFValidationError error = (EMFValidationError) errorsIt.next();
-						logger.warn("Found an error applying check [" + check.getLabel() + "] for biparameter [" + label + "]: " + error.getDescription());
+						logger.warn("Found an error applying check [" + check.getLabel() + "] for biparameter [" + label
+								+ "]: " + error.getDescription());
 					}
 					toReturn.addAll(errors);
 				} else {
-					logger.debug("No errors found applying check [" + check.getLabel() + "] to biparameter [" + label + "].");
+					logger.debug("No errors found applying check [" + check.getLabel() + "] to biparameter [" + label
+							+ "].");
 				}
 			}
 			logger.debug("OUT");
@@ -160,7 +165,8 @@ public class DriversValidationAPI {
 		List values = driver.getParameterValues();
 		if (check.getValueTypeCd().equalsIgnoreCase("MANDATORY")) {
 			if (values == null || values.isEmpty()) {
-				EMFValidationError error = SpagoBIValidationImpl.validateField(urlName, label, null, "MANDATORY", null, null, null);
+				EMFValidationError error = SpagoBIValidationImpl.validateField(urlName, label, null, "MANDATORY", null,
+						null, null);
 				toReturn.add(error);
 			} else {
 				Iterator valuesIt = values.iterator();
@@ -173,7 +179,8 @@ public class DriversValidationAPI {
 					}
 				}
 				if (!hasAtLeastOneValue) {
-					EMFValidationError error = SpagoBIValidationImpl.validateField(urlName, label, null, "MANDATORY", null, null, null);
+					EMFValidationError error = SpagoBIValidationImpl.validateField(urlName, label, null, "MANDATORY",
+							null, null, null);
 					toReturn.add(error);
 				}
 			}
@@ -184,40 +191,49 @@ public class DriversValidationAPI {
 					String aValue = (String) valuesIt.next();
 					EMFValidationError error = null;
 					if (check.getValueTypeCd().equalsIgnoreCase("LETTERSTRING")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "LETTERSTRING", null, null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "LETTERSTRING", null, null,
+								null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("ALFANUMERIC")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "ALFANUMERIC", null, null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "ALFANUMERIC", null, null,
+								null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("NUMERIC")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "NUMERIC", null, null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "NUMERIC", null, null,
+								null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("EMAIL")) {
 						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "EMAIL", null, null, null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("FISCALCODE")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "FISCALCODE", null, null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "FISCALCODE", null, null,
+								null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("INTERNET ADDRESS")) {
 						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "URL", null, null, null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("DECIMALS")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "DECIMALS", check.getFirstValue(), check.getSecondValue(), null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "DECIMALS",
+								check.getFirstValue(), check.getSecondValue(), null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("RANGE")) {
 						if (driver.getParameter().getType().equalsIgnoreCase("DATE")) {
 							// In a Parameter where parameterType == DATE the mask represent the date format
-							error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "DATERANGE", check.getFirstValue(), check.getSecondValue(),
-									driver.getParameter().getMask());
+							error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "DATERANGE",
+									check.getFirstValue(), check.getSecondValue(), driver.getParameter().getMask());
 						} else if (driver.getParameter().getType().equalsIgnoreCase("NUM")) {
 							// In a Parameter where parameterType == NUM the mask represent the decimal format
-							error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "NUMERICRANGE", check.getFirstValue(), check.getSecondValue(),
-									driver.getParameter().getMask());
+							error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "NUMERICRANGE",
+									check.getFirstValue(), check.getSecondValue(), driver.getParameter().getMask());
 						} else if (driver.getParameter().getType().equalsIgnoreCase("STRING")) {
-							error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "STRINGRANGE", check.getFirstValue(), check.getSecondValue(),
-									null);
+							error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "STRINGRANGE",
+									check.getFirstValue(), check.getSecondValue(), null);
 						}
 					} else if (check.getValueTypeCd().equalsIgnoreCase("MAXLENGTH")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "MAXLENGTH", check.getFirstValue(), null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "MAXLENGTH",
+								check.getFirstValue(), null, null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("MINLENGTH")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "MINLENGTH", check.getFirstValue(), null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "MINLENGTH",
+								check.getFirstValue(), null, null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("REGEXP")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "REGEXP", check.getFirstValue(), null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "REGEXP",
+								check.getFirstValue(), null, null);
 					} else if (check.getValueTypeCd().equalsIgnoreCase("DATE")) {
-						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "DATE", check.getFirstValue(), null, null);
+						error = SpagoBIValidationImpl.validateField(urlName, label, aValue, "DATE",
+								check.getFirstValue(), null, null);
 					}
 					if (error != null)
 						toReturn.add(error);
@@ -228,7 +244,8 @@ public class DriversValidationAPI {
 		return toReturn;
 	}
 
-	private List getValidationErrorsOnValues(AbstractDriver driver, IDrivableBIResource object, String role, AbstractBIResourceRuntime dum) throws Exception {
+	private List getValidationErrorsOnValues(AbstractDriver driver, IDrivableBIResource object, String role,
+			AbstractBIResourceRuntime dum) throws Exception {
 		logger.debug("IN");
 		String biparamLabel = driver.getLabel();
 		// outputType parameter is not validated
@@ -245,28 +262,30 @@ public class DriversValidationAPI {
 		}
 		// patch for default date value
 		if (driver.getParameter().getType().equalsIgnoreCase("DATE")) {
-			logger.debug("Parameter [" + biparamLabel + "] has lov defined just for default value: any other chose allowed");
+			logger.debug(
+					"Parameter [" + biparamLabel + "] has lov defined just for default value: any other chose allowed");
 			return new ArrayList();
 		}
 		// we need to process default values and non-default values separately: default values do not require validation,
 		// non-default values instead require validation
 		DefaultValuesRetriever retriever = new DefaultValuesRetriever();
-		DefaultValuesList allDefaultValues = retriever.getDefaultValuesDum(driver, object, this.userProfile, this.locale, role);
+		DefaultValuesList allDefaultValues = retriever.getDefaultValuesDum(driver, object, this.userProfile,
+				this.locale, role);
 		// from the complete list of values, get the values that are default values
 		DefaultValuesList selectedDefaultValue = this.getSelectedDefaultValues(driver, allDefaultValues);
 		// validation must proceed only with non-default values
 		// from the complete list of values, get the values that are not default values
-		List nonDefaultValues = null;
-		if (lov.getITypeCd().equalsIgnoreCase("QUERY")) {
-			DefaultValuesList allDefaultQueryValues = retriever.getDefaultQueryValuesDum(driver, dum, this.userProfile, object, this.locale, role);
-			nonDefaultValues = this.getNonDefaultQueryValues(driver, allDefaultQueryValues);
-		} else {
-			nonDefaultValues = this.getNonDefaultValues(driver, allDefaultValues);
-		}
-		if (nonDefaultValues.isEmpty()) {
-			logger.debug("All selected values are default values; no need to validate them");
-			return new ArrayList();
-		}
+//		List nonDefaultValues = null;
+//		if (lov.getITypeCd().equalsIgnoreCase("QUERY")) {
+//			DefaultValuesList allDefaultQueryValues = retriever.getDefaultQueryValuesDum(driver, dum, this.userProfile, object, this.locale, role);
+//			nonDefaultValues = this.getNonDefaultQueryValues(driver, allDefaultQueryValues);
+//		} else {
+//			nonDefaultValues = this.getNonDefaultValues(driver, allDefaultValues);
+//		}
+//		if (nonDefaultValues.isEmpty()) {
+//			logger.debug("All selected values are default values; no need to validate them");
+//			return new ArrayList();
+//		}
 		AbstractDriver clone;
 		if (driver instanceof BIObjectParameter) {
 			BIObjectParameter biParam = (BIObjectParameter) driver;
@@ -278,7 +297,7 @@ public class DriversValidationAPI {
 			clone = biMetaParam;
 		}
 		// BIObjectParameter clone = driver.clone();
-		clone.setParameterValues(nonDefaultValues);
+		clone.setParameterValues(driver.getParameterValues());
 		// get the lov provider detail
 		String lovProv = lov.getLovProvider();
 		ILovDetail lovProvDet = LovDetailFactory.getLovFromXML(lovProv);
@@ -289,7 +308,8 @@ public class DriversValidationAPI {
 			toReturn = getValidationErrorsOnValuesForQueries((QueryDetail) lovProvDet, clone, object, role, dum);
 		} else {
 			LovResultCacheManager executionCacheManager = new LovResultCacheManager();
-			lovResult = executionCacheManager.getLovResultDum(this.userProfile, lovProvDet, dum.getDependencies(clone, role), object, true, this.locale);
+			lovResult = executionCacheManager.getLovResultDum(this.userProfile, lovProvDet,
+					dum.getDependencies(clone, role), object, true, this.locale);
 			toReturn = getValidationErrorsOnValuesByLovResult(lovResult, clone, lovProvDet, role);
 		}
 		mergeDescriptions(driver, selectedDefaultValue, clone);
@@ -297,32 +317,34 @@ public class DriversValidationAPI {
 		return toReturn;
 	}
 
-	private List getValidationErrorsOnValuesForQueries(QueryDetail queryDetail, AbstractDriver driver, IDrivableBIResource object, String role,
-			AbstractBIResourceRuntime dum) throws Exception {
+	private List getValidationErrorsOnValuesForQueries(QueryDetail queryDetail, AbstractDriver driver,
+			IDrivableBIResource object, String role, AbstractBIResourceRuntime dum) throws Exception {
 		List toReturn = null;
 		LovResultCacheManager executionCacheManager = new LovResultCacheManager();
+		List<ObjParuse> dependencies = dum.getDependencies(driver, role);
+		List<? extends AbstractDriver> drivers = object.getDrivers();
 		// if query is not in cache, do not execute it as it is!!!
-		String lovResult = executionCacheManager.getLovResultDum(this.userProfile, dum.getLovDetail(driver), dum.getDependencies(driver, role), object, false,
-				this.locale);
+		String lovResult = executionCacheManager.getLovResultDum(this.userProfile, dum.getLovDetail(driver),
+				dependencies, drivers, false, this.locale);
 		if (lovResult == null) {
 			// lov is not in cache: we must validate values
-			toReturn = queryDetail.validateValues(this.userProfile, driver);
+			toReturn = queryDetail.validateValues(this.userProfile, driver, drivers, dependencies);
 		} else {
 			toReturn = getValidationErrorsOnValuesByLovResult(lovResult, driver, queryDetail, role);
 			if (toReturn.isEmpty()) {
 				// values are ok, this should be most often the case
 			} else {
 				// if there are dependencies, we should not consider them since they are not mandatory
-				List<ObjParuse> dependencies = dum.getDependencies(driver, role);
 				if (!dependencies.isEmpty()) {
-					toReturn = queryDetail.validateValues(this.userProfile, driver);
+					toReturn = queryDetail.validateValues(this.userProfile, driver, drivers, dependencies);
 				}
 			}
 		}
 		return toReturn;
 	}
 
-	private List getValidationErrorsOnValuesByLovResult(String lovResult, AbstractDriver driver, ILovDetail lovProvDet, String role) throws Exception {
+	private List getValidationErrorsOnValuesByLovResult(String lovResult, AbstractDriver driver, ILovDetail lovProvDet,
+			String role) throws Exception {
 		logger.debug("IN");
 		List toReturn = new ArrayList();
 		boolean valueFound = false;
@@ -338,7 +360,13 @@ public class DriversValidationAPI {
 				if (val.equalsIgnoreCase("%")) {
 					value = "%";
 				} else {
-					value = URLDecoder.decode(val, "UTF-8");
+					Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+					try {
+						value = encoder.decodeFromURL(val);
+					} catch (EncodingException ex) {
+						logger.error("Error decoding value from URL encoding: " + val, ex);
+						value = val;
+					}
 				}
 				String description = null;
 				if (value.equals("")) {
@@ -359,10 +387,12 @@ public class DriversValidationAPI {
 					valueFound = true;
 				}
 				if (valueFound) {
-					description = lovResultHandler.getValueDescription(value, lovProvDet.getValueColumnName(), lovProvDet.getDescriptionColumnName());
+					description = lovResultHandler.getValueDescription(value, lovProvDet.getValueColumnName(),
+							lovProvDet.getDescriptionColumnName());
 				} else {
-					logger.error("Parameter '" + driver.getLabel() + "' cannot assume value '" + value + "'" + " for user '"
-							+ ((UserProfile) this.userProfile).getUserId().toString() + "' with role '" + role + "'.");
+					logger.error("Parameter '" + driver.getLabel() + "' cannot assume value '" + value + "'"
+							+ " for user '" + ((UserProfile) this.userProfile).getUserId().toString() + "' with role '"
+							+ role + "'.");
 					List l = new ArrayList();
 					l.add(driver.getLabel());
 					l.add(value);
@@ -419,7 +449,7 @@ public class DriversValidationAPI {
 
 	private List<String> getNonDefaultQueryValues(AbstractDriver driver, DefaultValuesList defaultValues) {
 		logger.debug("IN");
-		List<String> toReturn = new ArrayList<String>();
+		List<String> toReturn = new ArrayList<>();
 		List<String> values = driver.getParameterValues();
 		if (values != null && values.size() > 0) {
 			for (int i = 0; i < values.size(); i++) {
@@ -448,7 +478,8 @@ public class DriversValidationAPI {
 		return toReturn;
 	}
 
-	private void mergeDescriptions(AbstractDriver driver, DefaultValuesList selectedDefaultValue, AbstractDriver cloned) {
+	private void mergeDescriptions(AbstractDriver driver, DefaultValuesList selectedDefaultValue,
+			AbstractDriver cloned) {
 		int valuePosition;
 		List nonDefaultValues = cloned.getParameterValues();
 		List nonDefaultDescriptions = cloned.getParameterValuesDescription();

@@ -18,9 +18,11 @@
 
 package it.eng.spagobi.utilities.database;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 /**
  * @author Marco Libanori
@@ -30,6 +32,7 @@ public class BigQueryDataBase extends AbstractDataBase implements CacheDataBase 
 	private static transient Logger logger = Logger.getLogger(BigQueryDataBase.class);
 
 	private static int MAX_VARCHAR_VALUE = 10485760;
+	public static final String ALIAS_DELIMITER = "`";
 
 	private int varcharLength = 255;
 
@@ -44,7 +47,7 @@ public class BigQueryDataBase extends AbstractDataBase implements CacheDataBase 
 	 */
 	@Override
 	public String getAliasDelimiter() {
-		return "";
+		return ALIAS_DELIMITER;
 	}
 
 	@Override
@@ -95,12 +98,13 @@ public class BigQueryDataBase extends AbstractDataBase implements CacheDataBase 
 	 */
 	@Override
 	public String getUsedMemorySizeQuery(String schema, String tableNamePrefix) {
-		String query = " SELECT " + " CASE count(*) " + " WHEN 0 THEN 0 "
-				+ " ELSE SUM(pg_total_relation_size('\"' || table_schema || '\".\"' || table_name || '\"')) " + " END AS size "
-				+ " FROM information_schema.tables " + " WHERE " + " table_name like '" + tableNamePrefix + "%'";
-		if ((schema != null) && (!schema.isEmpty())) {
-			query += " AND table_schema = '" + schema + "'";
+
+		if (StringUtils.isEmpty(schema)) {
+			throw new SpagoBIRuntimeException("Schema cannot be empty for BigQuery");
 		}
+
+		String query = "SELECT size_bytes FROM " + schema + ".__TABLES__ WHERE table_id LIKE '" + tableNamePrefix + "%'";
+
 		return query;
 	}
 

@@ -18,9 +18,9 @@
 package it.eng.spagobi.utilities.database;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -30,7 +30,7 @@ import org.apache.log4j.Logger;
 import org.json.JSONException;
 
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
-import it.eng.spagobi.utilities.StringUtils;
+import it.eng.spagobi.utilities.KnowageStringUtils;
 
 /**
  * @author Andrea Gioia (andrea.gioia@eng.it)
@@ -118,14 +118,14 @@ public class OracleDataBase extends AbstractDataBase implements CacheDataBase, M
 		Map<String, Map<String, String>> tableContent = new LinkedHashMap<>();
 		try (Connection conn = dataSource.getConnection()) {
 
-			Statement stmt = conn.createStatement();
-			try (ResultSet rs = stmt.executeQuery(SELECT_ALL_COLS)) {
+			PreparedStatement stmt = conn.prepareStatement(SELECT_ALL_COLS);
+			try (ResultSet rs = stmt.executeQuery()) {
 				while (rs.next()) {
 					String tableName = rs.getString(1);
 					String columnName = rs.getString(2);
 					String columnType = rs.getString(3);
 
-					if (StringUtils.matchesLikeNotLikeCriteria(tableName, tableNamePatternLike, tableNamePatternNotLike)) {
+					if (KnowageStringUtils.matchesLikeNotLikeCriteria(tableName, tableNamePatternLike, tableNamePatternNotLike)) {
 
 						tableContent.putIfAbsent(tableName, new LinkedHashMap<>());
 						tableContent.get(tableName).put(columnName, columnType);

@@ -17,40 +17,53 @@
  */
 package it.eng.spagobi.api.common;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
+import java.io.IOException;
+import java.net.URL;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.*;
 import java.util.regex.Pattern;
 
+import javax.naming.InitialContext;
 import javax.validation.ValidationException;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.core.Response;
 
+import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.TokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.DecimalNode;
 import com.jamonapi.Monitor;
 import com.jamonapi.MonitorFactory;
 
+import it.eng.knowage.commons.security.KnowageSystemConfiguration;
+import it.eng.knowage.encryption.DecryptionDataStoreTransformer;
 import it.eng.knowage.functionscatalog.utils.CatalogFunctionException;
+import it.eng.knowage.functionscatalog.utils.CatalogFunctionRuntimeConfigDTO;
 import it.eng.knowage.functionscatalog.utils.CatalogFunctionTransformer;
 import it.eng.knowage.parsers.CaseChangingCharStream;
 import it.eng.knowage.parsers.SQLiteLexer;
 import it.eng.knowage.parsers.SQLiteParser;
 import it.eng.knowage.parsers.ThrowingErrorListener;
+import it.eng.knowage.privacymanager.PrivacyManagerDataStoreTransformer;
 import it.eng.qbe.dataset.FederatedDataSet;
 import it.eng.qbe.dataset.QbeDataSet;
 import it.eng.spago.error.EMFInternalError;
@@ -59,9 +72,11 @@ import it.eng.spagobi.analiticalmodel.execution.service.ExecuteAdHocUtility;
 import it.eng.spagobi.api.AbstractSpagoBIResource;
 import it.eng.spagobi.commons.SingletonConfig;
 import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
 import it.eng.spagobi.commons.serializer.SerializerFactory;
+import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
 import it.eng.spagobi.commons.utilities.StringUtilities;
 import it.eng.spagobi.engines.config.bo.Engine;
 import it.eng.spagobi.sdk.datasets.bo.SDKDataSetParameter;
@@ -70,14 +85,22 @@ import it.eng.spagobi.tools.dataset.bo.AbstractJDBCDataset;
 import it.eng.spagobi.tools.dataset.bo.DatasetEvaluationStrategyType;
 import it.eng.spagobi.tools.dataset.bo.FlatDataSet;
 import it.eng.spagobi.tools.dataset.bo.IDataSet;
+import it.eng.spagobi.tools.dataset.bo.PreparedDataSet;
 import it.eng.spagobi.tools.dataset.bo.SolrDataSet;
 import it.eng.spagobi.tools.dataset.bo.VersionedDataSet;
+import it.eng.spagobi.tools.dataset.cache.CacheFactory;
+import it.eng.spagobi.tools.dataset.cache.ICache;
+import it.eng.spagobi.tools.dataset.cache.SpagoBICacheConfiguration;
+import it.eng.spagobi.tools.dataset.cache.impl.sqldbcache.SQLDBCache;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
 import it.eng.spagobi.tools.dataset.common.datawriter.IDataWriter;
 import it.eng.spagobi.tools.dataset.common.datawriter.JSONDataWriter;
+import it.eng.spagobi.tools.dataset.common.metadata.IFieldMetaData;
 import it.eng.spagobi.tools.dataset.common.query.AggregationFunctions;
 import it.eng.spagobi.tools.dataset.common.query.IAggregationFunction;
+import it.eng.spagobi.tools.dataset.common.transformer.DataStoreStatsTransformer;
 import it.eng.spagobi.tools.dataset.common.transformer.IDataStoreTransformer;
+import it.eng.spagobi.tools.dataset.common.transformer.SyncMetaDataDataStoreTransformer;
 import it.eng.spagobi.tools.dataset.constants.DataSetConstants;
 import it.eng.spagobi.tools.dataset.dao.DataSetFactory;
 import it.eng.spagobi.tools.dataset.dao.IDataSetDAO;
@@ -97,6 +120,7 @@ import it.eng.spagobi.tools.dataset.metasql.query.item.SimpleFilter;
 import it.eng.spagobi.tools.dataset.metasql.query.item.SimpleSelectionField;
 import it.eng.spagobi.tools.dataset.metasql.query.item.Sorting;
 import it.eng.spagobi.tools.dataset.metasql.query.item.UnsatisfiedFilter;
+import it.eng.spagobi.tools.dataset.utils.OracleClobHashSupport;
 import it.eng.spagobi.tools.dataset.utils.DataSetUtilities;
 import it.eng.spagobi.tools.dataset.utils.datamart.SpagoBICoreDatamartRetriever;
 import it.eng.spagobi.user.UserProfileManager;
@@ -104,31 +128,144 @@ import it.eng.spagobi.utilities.assertion.Assert;
 import it.eng.spagobi.utilities.database.DataBaseException;
 import it.eng.spagobi.utilities.database.DataBaseFactory;
 import it.eng.spagobi.utilities.database.IDataBase;
+import it.eng.spagobi.utilities.cache.CacheItem;
+import it.eng.spagobi.utilities.exceptions.ActionNotPermittedException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 
 public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 
-	private static final String REGEX_FIELDS_VALIDATION = "(?:\\\"[a-zA-Z0-9\\-\\_\\s]*\\\")";
-	static protected Logger logger = Logger.getLogger(AbstractDataSetResource.class);
+	private static final Logger LOGGER = LogManager.getLogger(AbstractDataSetResource.class);
+
+	private static final String REGEX_FIELDS_VALIDATION = "\\(([^)]{1,50})\\)";
 	private static final int SOLR_FACETS_DEFAULT_LIMIT = 10;
-	private static final String VALIDATION_OK = "OK";
-	private static final String VALIDATION_KO = "KO";
+	protected static final String VALIDATION_OK = "OK";
 
 	// ===================================================================
 	// UTILITY METHODS
 	// ===================================================================
 
 	protected DatasetManagementAPI getDatasetManagementAPI() {
-		DatasetManagementAPI managementAPI = new DatasetManagementAPI(getUserProfile());
-		return managementAPI;
+		return new DatasetManagementAPI(getUserProfile());
 	}
 
 	protected Map<String, Object> getDataSetWriterProperties() throws JSONException {
-		Map<String, Object> properties = new HashMap<String, Object>();
+		Map<String, Object> properties = new HashMap<>();
 		JSONArray fieldOptions = new JSONArray("[{id: 1, options: {measureScaleFactor: 0.5}}]");
 		properties.put(JSONDataWriter.PROPERTY_FIELD_OPTION, fieldOptions);
 		return properties;
+	}
+
+	protected static final class OracleClobHashContext {
+		private final IDataSet dataSet;
+		private final List<String> originalFieldNames = new ArrayList<>();
+		private final Set<String> hashableFieldNames = new HashSet<>();
+		private final Map<String, String> projectedHashFields = new LinkedHashMap<>();
+		private boolean enabled = false;
+
+		private OracleClobHashContext(IDataSet dataSet) {
+			this.dataSet = dataSet;
+			if (dataSet != null && dataSet.getMetadata() != null) {
+				for (int i = 0; i < dataSet.getMetadata().getFieldCount(); i++) {
+					IFieldMetaData fieldMetaData = dataSet.getMetadata().getFieldMeta(i);
+					if (!OracleClobHashSupport.isHashField(fieldMetaData)) {
+						originalFieldNames.add(fieldMetaData.getName());
+					}
+				}
+			}
+		}
+
+		private void enable() {
+			OracleClobHashSupport.enrichDataSetMetadata(dataSet);
+			hashableFieldNames.clear();
+			for (IFieldMetaData clobField : OracleClobHashSupport.getClobFields(dataSet.getMetadata())) {
+				hashableFieldNames.add(clobField.getName());
+			}
+			enabled = !hashableFieldNames.isEmpty();
+		}
+
+		private boolean isEnabled() {
+			return enabled;
+		}
+
+		private String resolveProjectionColumnName(String columnName, IAggregationFunction function, boolean isFormula,
+				String projectedFieldName) {
+			if (!isEnabled() || isFormula || function == null
+					|| !AggregationFunctions.NONE.equals(function.getName())) {
+				return columnName;
+			}
+
+			IFieldMetaData sourceField = resolveSourceField(columnName);
+			if (sourceField == null) {
+				return columnName;
+			}
+
+			String outputFieldName = projectedFieldName;
+			if (outputFieldName == null || outputFieldName.isEmpty()) {
+				outputFieldName = sourceField.getAlias();
+			}
+			projectedHashFields.put(outputFieldName, sourceField.getName());
+			return OracleClobHashSupport.getHashColumnName(sourceField);
+		}
+
+		public String resolveFilterColumnName(String columnName) {
+			if (!isEnabled()) {
+				return columnName;
+			}
+
+			IFieldMetaData sourceField = resolveSourceField(columnName);
+			return sourceField != null ? OracleClobHashSupport.getHashColumnName(sourceField) : columnName;
+		}
+
+		public Object resolveFilterValue(String columnName, Object value) {
+			if (!isEnabled() || value == null) {
+				return value;
+			}
+
+			IFieldMetaData sourceField = resolveSourceField(columnName);
+			return sourceField != null ? OracleClobHashSupport.hashValue(value) : value;
+		}
+
+		private List<AbstractSelectionField> getOriginalProjections() {
+			List<AbstractSelectionField> projections = new ArrayList<>(originalFieldNames.size());
+			for (String fieldName : originalFieldNames) {
+				projections.add(new Projection(dataSet, fieldName));
+			}
+			return projections;
+		}
+
+		private boolean hasProjectedHashFields() {
+			return !projectedHashFields.isEmpty();
+		}
+
+		private Map<String, String> getProjectedHashFields() {
+			return projectedHashFields;
+		}
+
+		private IFieldMetaData resolveSourceField(String columnName) {
+			try {
+				IFieldMetaData fieldMetaData = DataSetUtilities.getFieldMetaData(dataSet, columnName);
+				if (fieldMetaData == null || OracleClobHashSupport.isHashField(fieldMetaData)
+						|| !hashableFieldNames.contains(fieldMetaData.getName())) {
+					return null;
+				}
+				return fieldMetaData;
+			} catch (Exception e) {
+				return null;
+			}
+		}
+	}
+
+	private static final class MaterializedTableReference {
+		private final IDataSource dataSource;
+		private final String tableName;
+		private final UserProfile userProfile;
+
+		private MaterializedTableReference(IDataSource dataSource, String tableName, UserProfile userProfile) {
+			this.dataSource = dataSource;
+			this.tableName = tableName;
+			this.userProfile = userProfile;
+		}
 	}
 
 	protected Integer[] getIdsAsIntegers(String ids) {
@@ -143,50 +280,233 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return idArray;
 	}
 
+	private OracleClobHashContext prepareOracleClobHashContext(IDataSet dataSet, boolean isNearRealtime,
+			boolean requiresHashSupport) throws Exception {
+		OracleClobHashContext oracleClobHashContext = new OracleClobHashContext(dataSet);
+		if (!requiresHashSupport || isNearRealtime || !OracleClobHashSupport.shouldMaterializeHashColumns(dataSet)) {
+			return oracleClobHashContext;
+		}
+
+		if (dataSet.isPersisted() || dataSet.isFlatDataset() || dataSet.isPreparedDataSet()) {
+			if (OracleClobHashSupport.hasAllHashColumns(dataSet.getDataSourceForReading(), dataSet.getUserProfile(),
+					dataSet.getTableNameForReading(), dataSet.getMetadata())) {
+				oracleClobHashContext.enable();
+			}
+			return oracleClobHashContext;
+		}
+
+		if (getSqlDbCache() == null) {
+			return oracleClobHashContext;
+		}
+
+		refreshOracleClobCacheIfNeeded(dataSet);
+		SQLDBCache cache = getSqlDbCache();
+		CacheItem cacheItem = cache != null ? cache.getMetadata().getCacheItem(dataSet.getSignature()) : null;
+		if (cacheItem != null && OracleClobHashSupport.hasAllHashColumns(cache.getDataSource(), getUserProfile(),
+				cacheItem.getTable(), dataSet.getMetadata())) {
+			oracleClobHashContext.enable();
+		}
+		return oracleClobHashContext;
+	}
+
+	private void refreshOracleClobCacheIfNeeded(IDataSet dataSet) throws Exception {
+		SQLDBCache cache = getSqlDbCache();
+		if (cache == null) {
+			return;
+		}
+
+		CacheItem cacheItem = cache.getMetadata().getCacheItem(dataSet.getSignature());
+		if (cacheItem != null && !OracleClobHashSupport.hasAllHashColumns(cache.getDataSource(), getUserProfile(),
+				cacheItem.getTable(), dataSet.getMetadata())) {
+			cache.refresh(dataSet);
+		}
+	}
+
+	private SQLDBCache getSqlDbCache() throws Exception {
+		ICache cache = CacheFactory.getCache(SpagoBICacheConfiguration.getInstance());
+		cache.setUserProfile(getUserProfile());
+		if (cache instanceof SQLDBCache) {
+			return (SQLDBCache) cache;
+		}
+		return null;
+	}
+
+	private void restoreOracleClobValues(IDataStore dataStore, IDataSet dataSet,
+			OracleClobHashContext oracleClobHashContext) throws Exception {
+		if (dataStore == null || oracleClobHashContext == null || !oracleClobHashContext.hasProjectedHashFields()) {
+			return;
+		}
+
+		MaterializedTableReference tableReference = resolveMaterializedTableReference(dataSet);
+		if (tableReference == null) {
+			return;
+		}
+
+		Map<String, List<String>> resultFieldsBySourceField = new LinkedHashMap<>();
+		for (Map.Entry<String, String> entry : oracleClobHashContext.getProjectedHashFields().entrySet()) {
+			resultFieldsBySourceField.computeIfAbsent(entry.getValue(), key -> new ArrayList<>()).add(entry.getKey());
+		}
+
+		for (Map.Entry<String, List<String>> entry : resultFieldsBySourceField.entrySet()) {
+			try {
+				IFieldMetaData sourceField = DataSetUtilities.getFieldMetaData(dataSet, entry.getKey());
+				Map<String, String> valuesByHash = loadOracleClobValuesByHash(tableReference, sourceField,
+						collectHashValues(dataStore, entry.getValue()));
+				if (valuesByHash.isEmpty()) {
+					continue;
+				}
+				for (String resultFieldName : entry.getValue()) {
+					int fieldIndex = dataStore.getMetaData().getFieldIndex(resultFieldName);
+					if (fieldIndex < 0) {
+						continue;
+					}
+					for (int i = 0; i < dataStore.getRecordsCount(); i++) {
+						Object hashValue = dataStore.getRecordAt(i).getFieldAt(fieldIndex).getValue();
+						if (hashValue != null && valuesByHash.containsKey(hashValue.toString())) {
+							dataStore.getRecordAt(i).getFieldAt(fieldIndex).setValue(valuesByHash.get(hashValue.toString()));
+						}
+					}
+				}
+			} catch (Exception e) {
+				throw new SpagoBIRuntimeException("Error while restoring Oracle CLOB values from hash column", e);
+			}
+		}
+	}
+
+	private MaterializedTableReference resolveMaterializedTableReference(IDataSet dataSet) throws Exception {
+		if (dataSet.isPersisted() || dataSet.isFlatDataset() || dataSet.isPreparedDataSet()) {
+			if (dataSet.getDataSourceForReading() == null || dataSet.getTableNameForReading() == null) {
+				return null;
+			}
+			return new MaterializedTableReference(dataSet.getDataSourceForReading(), dataSet.getTableNameForReading(),
+					dataSet.getUserProfile());
+		}
+
+		SQLDBCache cache = getSqlDbCache();
+		if (cache == null) {
+			return null;
+		}
+		CacheItem cacheItem = cache.getMetadata().getCacheItem(dataSet.getSignature());
+		if (cacheItem == null) {
+			return null;
+		}
+		return new MaterializedTableReference(cache.getDataSource(), cacheItem.getTable(), getUserProfile());
+	}
+
+	private Set<String> collectHashValues(IDataStore dataStore, List<String> resultFieldNames) {
+		Set<String> hashValues = new LinkedHashSet<>();
+		for (String resultFieldName : resultFieldNames) {
+			int fieldIndex = dataStore.getMetaData().getFieldIndex(resultFieldName);
+			if (fieldIndex < 0) {
+				continue;
+			}
+			for (int i = 0; i < dataStore.getRecordsCount(); i++) {
+				Object value = dataStore.getRecordAt(i).getFieldAt(fieldIndex).getValue();
+				if (value != null) {
+					hashValues.add(value.toString());
+				}
+			}
+		}
+		return hashValues;
+	}
+
+	private Map<String, String> loadOracleClobValuesByHash(MaterializedTableReference tableReference,
+			IFieldMetaData sourceField, Set<String> hashValues) throws Exception {
+		Map<String, String> valuesByHash = new HashMap<>();
+		if (tableReference == null || hashValues.isEmpty()) {
+			return valuesByHash;
+		}
+
+		String hashColumnName = AbstractJDBCDataset.encapsulateColumnName(
+				OracleClobHashSupport.getHashColumnName(sourceField), tableReference.dataSource);
+		String sourceColumnName = AbstractJDBCDataset.encapsulateColumnName(
+				OracleClobHashSupport.getMaterializedColumnName(sourceField), tableReference.dataSource);
+		List<String> hashes = new ArrayList<>(hashValues);
+
+		try (Connection connection = getMaterializedConnection(tableReference)) {
+			for (int i = 0; i < hashes.size(); i += 900) {
+				List<String> currentBatch = hashes.subList(i, Math.min(i + 900, hashes.size()));
+				String placeholders = String.join(",", Collections.nCopies(currentBatch.size(), "?"));
+				String query = "SELECT " + hashColumnName + ", " + sourceColumnName + " FROM "
+						+ tableReference.tableName + " WHERE " + hashColumnName + " IN (" + placeholders + ")";
+				try (PreparedStatement statement = connection.prepareStatement(query)) {
+					for (int j = 0; j < currentBatch.size(); j++) {
+						statement.setString(j + 1, currentBatch.get(j));
+					}
+					try (ResultSet resultSet = statement.executeQuery()) {
+						while (resultSet.next()) {
+							valuesByHash.put(resultSet.getString(1),
+									OracleClobHashSupport.readValueAsString(resultSet.getObject(2)));
+						}
+					}
+				}
+			}
+		}
+		return valuesByHash;
+	}
+
+	private Connection getMaterializedConnection(MaterializedTableReference tableReference) throws Exception {
+		if (tableReference.userProfile != null) {
+			Connection connection = tableReference.dataSource.getConnectionByUserProfile(tableReference.userProfile);
+			if (connection != null) {
+				return connection;
+			}
+		}
+		return tableReference.dataSource.getConnection();
+	}
+
 	/**
 	 * TODO is isNearRealtime really needed? It comes from frontend, isn't it a specific info of the dataset?
 	 *
 	 * @deprecated
 	 */
 	@Deprecated
-	public String getDataStore(String label, String parameters, Map<String, Object> drivers, String selections, String likeSelections, int maxRowCount,
-			String aggregations, String summaryRow, int offset, int fetchSize, Boolean isNearRealtime, Set<String> indexes, String widgetName) {
-		return getDataStore(label, parameters, drivers, selections, likeSelections, maxRowCount, aggregations, summaryRow, offset, fetchSize, isNearRealtime,
-				null, indexes, widgetName);
+	public String getDataStore(String label, String parameters, Map<String, Object> drivers, String selections,
+			String likeSelections, int maxRowCount, String aggregations, String summaryRow, int offset, int fetchSize,
+			Boolean isNearRealtime, Set<String> indexes, String widgetName, boolean useGroupBy) {
+		return getDataStore(label, parameters, drivers, selections, likeSelections, null, maxRowCount, aggregations,
+				summaryRow, offset, fetchSize, isNearRealtime, null, indexes, widgetName, useGroupBy);
 	}
 
-	public String getDataStore(String label, String parameters, Map<String, Object> drivers, String selections, String likeSelections, int maxRowCount,
-			String aggregations, String summaryRow, int offset, int fetchSize, Set<String> indexes, String widgetName) {
-		return getDataStore(label, parameters, drivers, selections, likeSelections, maxRowCount, aggregations, summaryRow, offset, fetchSize, null, null,
-				indexes, widgetName);
+	public String getDataStore(String label, String parameters, Map<String, Object> drivers, String selections,
+			String likeSelections, int maxRowCount, String aggregations, String summaryRow, int offset, int fetchSize,
+			Set<String> indexes, String widgetName, boolean useGroupBy) {
+		return getDataStore(label, parameters, drivers, selections, likeSelections, null, maxRowCount, aggregations,
+				summaryRow, offset, fetchSize, null, null, indexes, widgetName, useGroupBy);
 	}
 
-	public String getDataStore(String label, String parameters, Map<String, Object> drivers, String selections, String likeSelections, int maxRowCount,
-			String aggregations, String summaryRow, int offset, int fetchSize, Boolean isNearRealtime, String options, Set<String> indexes, String widgetName) {
-		logger.debug("IN");
+	public String getDataStore(String label, String parameters, Map<String, Object> drivers, String selections,
+			String likeSelections, String drilldown, int maxRowCount, String aggregations, String summaryRow, int offset, int fetchSize,
+			Boolean isNearRealtime, String options, Set<String> indexes, String widgetName, boolean useGroupBy) {
+		LOGGER.debug("IN");
+		DatasetManagementAPI datasetManagementAPI = getDatasetManagementAPI();
 		Monitor totalTiming = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore");
 		try {
 			Monitor timing = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore:validateParams");
 
-			int maxResults = Integer.parseInt(SingletonConfig.getInstance().getConfigValue("SPAGOBI.API.DATASET.MAX_ROWS_NUMBER"));
-			logger.debug("Offset [" + offset + "], fetch size [" + fetchSize + "], max results[" + maxResults + "]");
+			int maxResults = Integer
+					.parseInt(SingletonConfig.getInstance().getConfigValue("SPAGOBI.API.DATASET.MAX_ROWS_NUMBER"));
+			LOGGER.debug("Offset {}, fetch size {}, max results {}", offset, fetchSize, maxResults);
 
 			if (maxResults <= 0) {
-				throw new SpagoBIRuntimeException("SPAGOBI.API.DATASET.MAX_ROWS_NUMBER value cannot be a non-positive integer");
+				throw new SpagoBIRuntimeException(
+						"SPAGOBI.API.DATASET.MAX_ROWS_NUMBER value cannot be a non-positive integer");
 			}
 			if (offset < 0) {
-				logger.debug("Offset size is not valid. Setting it to [0] by default.");
+				LOGGER.debug("Offset size is not valid. Setting it to [0] by default.");
 				offset = 0;
 			}
 			if (fetchSize < -1) {
-				logger.debug("Fetch size is not valid. Setting it to [-1] by default.");
+				LOGGER.debug("Fetch size is not valid. Setting it to [-1] by default.");
 				fetchSize = -1;
 			}
 			if (fetchSize > maxResults) {
-				throw new IllegalArgumentException("The page requested is too big. Max page size is equals to [" + maxResults + "]");
+				throw new IllegalArgumentException(
+						"The page requested is too big. Max page size is equals to [" + maxResults + "]");
 			}
 			if (maxRowCount > maxResults) {
-				throw new IllegalArgumentException("The dataset requested is too big. Max row count is equals to [" + maxResults + "]");
+				throw new IllegalArgumentException(
+						"The dataset requested is too big. Max row count is equals to [" + maxResults + "]");
 			}
 
 			IDataSetDAO dataSetDao = DAOFactory.getDataSetDAO();
@@ -202,10 +522,13 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 			timing.stop();
 			timing = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore:getQueryDetails");
 
-			List<AbstractSelectionField> projections = new ArrayList<AbstractSelectionField>(0);
-			List<AbstractSelectionField> groups = new ArrayList<AbstractSelectionField>(0);
-			List<Sorting> sortings = new ArrayList<Sorting>(0);
-			Map<String, String> columnAliasToName = new HashMap<String, String>();
+			List<AbstractSelectionField> projections = new ArrayList<>(0);
+			List<AbstractSelectionField> groups = new ArrayList<>(0);
+			List<Sorting> sortings = new ArrayList<>(0);
+			Map<String, String> columnAliasToName = new HashMap<>();
+			OracleClobHashContext oracleClobHashContext = prepareOracleClobHashContext(dataSet, isNearRealtime,
+					(aggregations != null && !aggregations.isEmpty()) || (selections != null && !selections.isEmpty())
+							|| (drilldown != null && !drilldown.isEmpty()));
 			if (aggregations != null && !aggregations.isEmpty()) {
 				JSONObject aggregationsObject = new JSONObject(aggregations);
 				JSONArray categoriesObject = aggregationsObject.getJSONArray("categories");
@@ -217,16 +540,20 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 				Map<String, Object> optionMap;
 				if (options != null && !options.isEmpty()) {
 					ObjectMapper objectMapper = new ObjectMapper();
-					optionMap = new HashMap<>((Map<? extends String, ?>) objectMapper.readValue(options, new TypeReference<Map<String, Object>>() {
-					}));
+					optionMap = new HashMap<>(objectMapper.readValue(options,
+							new TypeReference<Map<String, Object>>() {
+							}));
 				} else {
 					optionMap = new HashMap<>();
 				}
 				applyOptions(dataSet, optionMap);
 
-				projections.addAll(getProjections(dataSet, categoriesObject, measuresObject, columnAliasToName));
-				groups.addAll(getGroups(dataSet, categoriesObject, measuresObject, columnAliasToName, hasSolrFacetPivotOption(dataSet, optionMap)));
-				sortings.addAll(getSortings(dataSet, categoriesObject, measuresObject, columnAliasToName));
+				projections.addAll(getProjections(dataSet, categoriesObject, measuresObject, columnAliasToName,
+						oracleClobHashContext));
+				groups.addAll(getGroups(dataSet, categoriesObject, measuresObject, columnAliasToName,
+						hasSolrFacetPivotOption(dataSet, optionMap), oracleClobHashContext));
+				sortings.addAll(getSortings(dataSet, categoriesObject, measuresObject, columnAliasToName,
+						oracleClobHashContext));
 
 				if (isSolrDataset(dataSet)) {
 					IDataSet dataSetCopy = null;
@@ -242,9 +569,12 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 
 			List<Filter> filters = new ArrayList<>(0);
 			if (selections != null && !selections.isEmpty()) {
+				LOGGER.debug("Converting selections to filters for label {}, with selection {} and column2alias map {}",
+						label, selections, columnAliasToName);
 				JSONObject selectionsObject = new JSONObject(selections);
 				if (selectionsObject.names() != null) {
-					filters.addAll(getFilters(label, selectionsObject, columnAliasToName));
+					filters.addAll(getFilters(dataSet, label, selectionsObject, columnAliasToName,
+							oracleClobHashContext));
 				}
 			}
 
@@ -252,31 +582,60 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 			if (likeSelections != null && !likeSelections.equals("")) {
 				JSONObject likeSelectionsObject = new JSONObject(likeSelections);
 				if (likeSelectionsObject.names() != null) {
-					likeFilters.addAll(getLikeFilters(label, likeSelectionsObject, columnAliasToName));
+					likeFilters.addAll(getLikeFilters(dataSet, label, likeSelectionsObject, columnAliasToName));
 				}
 			}
 
+			List<Filter> drilldownFilters = new ArrayList<>(0);
+			if (drilldown != null && !drilldown.equals("")) {
+				JSONObject drilldownObject = new JSONObject(drilldown);
+				if (drilldownObject.names() != null) {
+					drilldownFilters.addAll(getDrilldownFilters(dataSet, label, drilldownObject, columnAliasToName,
+							oracleClobHashContext));
+				}
+			}
+
+			if (oracleClobHashContext.isEnabled() && projections.isEmpty()
+					&& ((selections != null && !selections.isEmpty()) || (drilldown != null && !drilldown.isEmpty()))) {
+				projections.addAll(oracleClobHashContext.getOriginalProjections());
+			}
+
 			Monitor timingMinMax = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore:calculateMinMax");
-			filters = getDatasetManagementAPI().calculateMinMaxFilters(dataSet, isNearRealtime, DataSetUtilities.getParametersMap(parameters), filters,
+			Map<String, String> parametersMap = DataSetUtilities.getParametersMap(parameters);
+			filters = datasetManagementAPI.calculateMinMaxFilters(dataSet, isNearRealtime, parametersMap, filters,
 					likeFilters, indexes);
 			timingMinMax.stop();
 
-			Filter where = getDatasetManagementAPI().getWhereFilter(filters, likeFilters);
+			filters.addAll(drilldownFilters);
+
+			Filter where = datasetManagementAPI.getWhereFilter(filters, likeFilters);
 
 			timing.stop();
 
-			List<List<AbstractSelectionField>> summaryRowArray = getSummaryRowArray(summaryRow, dataSet, columnAliasToName);
+			List<List<AbstractSelectionField>> summaryRowArray = getSummaryRowArray(summaryRow, dataSet,
+					columnAliasToName, oracleClobHashContext);
 
-			IDataStore dataStore = getDatasetManagementAPI().getDataStore(dataSet, isNearRealtime, DataSetUtilities.getParametersMap(parameters), projections,
-					where, groups, sortings, summaryRowArray, offset, fetchSize, maxRowCount, indexes);
+			IDataStore dataStore = datasetManagementAPI.getDataStore(dataSet, isNearRealtime, parametersMap,
+					projections, where, groups, sortings, summaryRowArray, offset, fetchSize, maxRowCount, indexes, useGroupBy);
 
 			// if required apply function from catalog
 			String catalogFuncId = getCatalogFunctionUuid(projections);
 			if (catalogFuncId != null) {
-				JSONObject catalogFunctionConfig = getCatalogFunctionConfiguration(projections);
-				IDataStoreTransformer functionTransformer = new CatalogFunctionTransformer(catalogFuncId, catalogFunctionConfig);
+				CatalogFunctionRuntimeConfigDTO catalogFunctionConfig = getCatalogFunctionConfiguration(projections);
+				IDataStoreTransformer functionTransformer = new CatalogFunctionTransformer(getUserProfile(),
+						catalogFuncId, catalogFunctionConfig);
 				functionTransformer.transform(dataStore);
 			}
+
+			IDataStoreTransformer transformer = new SyncMetaDataDataStoreTransformer(dataSet);
+			transformer.transform(dataStore);
+			restoreOracleClobValues(dataStore, dataSet, oracleClobHashContext);
+			transformer = new DecryptionDataStoreTransformer(dataStore);
+			transformer.transform(dataStore);
+			transformer = new PrivacyManagerDataStoreTransformer(dataSet);
+			transformer.transform(dataStore);
+			transformer = new DataStoreStatsTransformer();
+			transformer.transform(dataStore);
 
 			IDataWriter dataWriter = getDataStoreWriter();
 
@@ -284,8 +643,7 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 			Object gridDataFeed = dataWriter.write(dataStore);
 			timing.stop();
 
-			String stringFeed = gridDataFeed.toString();
-			return stringFeed;
+			return gridDataFeed.toString();
 		} catch (ValidationException v) {
 			throw v;
 		} catch (ParametersNotValorizedException p) {
@@ -293,42 +651,269 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		} catch (CatalogFunctionException c) {
 			throw c;
 		} catch (Throwable t) {
-			throw new SpagoBIServiceException(this.request.getPathInfo(), "An unexpected error occured while executing service", t);
+			throw new SpagoBIServiceException(this.request.getPathInfo(),
+					"An unexpected error occured while executing service", t);
 		} finally {
 			totalTiming.stop();
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
-	private String getCatalogFunctionUuid(List<AbstractSelectionField> projections) {
+
+	public String getDataStoreAI(String label, String parameters, Map<String, Object> drivers, String selections,
+                               String likeSelections, Integer maxRowCount, String aggregations, String summaryRow, int offset, int fetchSize, Integer maxRows,
+                               Boolean isNearRealtime, String options, Set<String> indexes) {
+        LOGGER.debug("IN");
+        DatasetManagementAPI datasetManagementAPI = getDatasetManagementAPI();
+        Monitor totalTiming = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore");
+        try {
+            Monitor timing = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore:validateParams");
+
+            LOGGER.debug("Offset {}, fetch size {}, max results {}", offset, fetchSize, maxRowCount);
+
+            IDataSetDAO dataSetDao = DAOFactory.getDataSetDAO();
+            dataSetDao.setUserProfile(getUserProfile());
+            IDataSet dataSet = dataSetDao.loadDataSetByLabel(label);
+            if (isNearRealtime == null) {
+                isNearRealtime = isNearRealtimeSupported(dataSet);
+            }
+            Assert.assertNotNull(dataSet, "Unable to load dataset with label [" + label + "]");
+            dataSet.setUserProfile(getUserProfile());
+            dataSet.setDrivers(drivers);
+
+            timing.stop();
+            timing = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore:getQueryDetails");
+
+            List<AbstractSelectionField> projections = new ArrayList<>(0);
+            List<AbstractSelectionField> groups = new ArrayList<>(0);
+            List<Sorting> sortings = new ArrayList<>(0);
+            Map<String, String> columnAliasToName = new HashMap<>();
+            OracleClobHashContext oracleClobHashContext = prepareOracleClobHashContext(dataSet, isNearRealtime,
+                    (aggregations != null && !aggregations.isEmpty()) || (selections != null && !selections.isEmpty()));
+            if (aggregations != null && !aggregations.isEmpty()) {
+                JSONObject aggregationsObject = new JSONObject(aggregations);
+                JSONArray categoriesObject = aggregationsObject.getJSONArray("categories");
+                JSONArray measuresObject = aggregationsObject.getJSONArray("measures");
+
+                loadColumnAliasToName(categoriesObject, columnAliasToName);
+                loadColumnAliasToName(measuresObject, columnAliasToName);
+
+                Map<String, Object> optionMap;
+                if (options != null && !options.isEmpty()) {
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    optionMap = new HashMap<>(objectMapper.readValue(options,
+                            new TypeReference<Map<String, Object>>() {
+                            }));
+                } else {
+                    optionMap = new HashMap<>();
+                }
+                applyOptions(dataSet, optionMap);
+
+                projections.addAll(getProjections(dataSet, categoriesObject, measuresObject, columnAliasToName,
+                        oracleClobHashContext));
+                groups.addAll(getGroups(dataSet, categoriesObject, measuresObject, columnAliasToName,
+                        hasSolrFacetPivotOption(dataSet, optionMap), oracleClobHashContext));
+                sortings.addAll(getSortings(dataSet, categoriesObject, measuresObject, columnAliasToName,
+                        oracleClobHashContext));
+
+                if (isSolrDataset(dataSet)) {
+                    IDataSet dataSetCopy = null;
+                    if (dataSet instanceof VersionedDataSet) {
+                        dataSetCopy = ((VersionedDataSet) dataSet).getWrappedDataset();
+                    }
+                    SolrDataSet solrDS = (SolrDataSet) dataSetCopy;
+                    solrDS.setFacetsLimitOption(getSolrFacetLimitOption(optionMap));
+                    ((VersionedDataSet) dataSet).setWrappedDataset(solrDS);
+                }
+
+            }
+
+            List<Filter> filters = new ArrayList<>(0);
+            if (selections != null && !selections.isEmpty()) {
+                LOGGER.debug("Converting selections to filters for label {}, with selection {} and column2alias map {}",
+                        label, selections, columnAliasToName);
+                JSONObject selectionsObject = new JSONObject(selections);
+                if (selectionsObject.names() != null) {
+                    filters.addAll(getFilters(dataSet, label, selectionsObject, columnAliasToName,
+                            oracleClobHashContext));
+                }
+            }
+
+            List<SimpleFilter> likeFilters = new ArrayList<>(0);
+            if (likeSelections != null && !likeSelections.equals("")) {
+                JSONObject likeSelectionsObject = new JSONObject(likeSelections);
+                if (likeSelectionsObject.names() != null) {
+                    likeFilters.addAll(getLikeFilters(dataSet, label, likeSelectionsObject, columnAliasToName));
+                }
+            }
+
+            if (oracleClobHashContext.isEnabled() && projections.isEmpty()
+                    && (selections != null && !selections.isEmpty())) {
+                projections.addAll(oracleClobHashContext.getOriginalProjections());
+            }
+
+            Monitor timingMinMax = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore:calculateMinMax");
+            Map<String, String> parametersMap = DataSetUtilities.getParametersMap(parameters);
+            filters = datasetManagementAPI.calculateMinMaxFilters(dataSet, isNearRealtime, parametersMap, filters,
+                    likeFilters, indexes);
+            timingMinMax.stop();
+
+            Filter where = datasetManagementAPI.getWhereFilter(filters, likeFilters);
+
+            timing.stop();
+
+            List<List<AbstractSelectionField>> summaryRowArray = getSummaryRowArray(summaryRow, dataSet,
+                    columnAliasToName, oracleClobHashContext);
+
+            IDataStore dataStore = datasetManagementAPI.getDataStore(dataSet, isNearRealtime, parametersMap,
+                    projections, where, groups, sortings, summaryRowArray, offset, fetchSize, maxRowCount, indexes, false);
+
+            // if required apply function from catalog
+            String catalogFuncId = getCatalogFunctionUuid(projections);
+            if (catalogFuncId != null) {
+                CatalogFunctionRuntimeConfigDTO catalogFunctionConfig = getCatalogFunctionConfiguration(projections);
+                IDataStoreTransformer functionTransformer = new CatalogFunctionTransformer(getUserProfile(),
+                        catalogFuncId, catalogFunctionConfig);
+                functionTransformer.transform(dataStore);
+            }
+
+            IDataStoreTransformer transformer = new SyncMetaDataDataStoreTransformer(dataSet);
+            transformer.transform(dataStore);
+            restoreOracleClobValues(dataStore, dataSet, oracleClobHashContext);
+            transformer = new DecryptionDataStoreTransformer(dataStore);
+            transformer.transform(dataStore);
+            transformer = new PrivacyManagerDataStoreTransformer(dataSet);
+            transformer.transform(dataStore);
+            transformer = new DataStoreStatsTransformer();
+            transformer.transform(dataStore);
+
+            IDataWriter dataWriter = getDataStoreWriter();
+
+            timing = MonitorFactory.start("Knowage.AbstractDataSetResource.getDataStore:convertToJson");
+            Object gridDataFeed = dataWriter.write(dataStore);
+
+            transformForAI(gridDataFeed, maxRows != null ? maxRows : 100);
+
+            timing.stop();
+
+            return gridDataFeed.toString();
+        } catch (ValidationException v) {
+            throw v;
+        } catch (IllegalArgumentException i) {
+            throw i;
+        } catch (ParametersNotValorizedException p) {
+            throw p;
+        } catch (CatalogFunctionException c) {
+            throw c;
+        } catch (Throwable t) {
+            throw new SpagoBIServiceException(this.request.getPathInfo(),
+                    "An unexpected error occured while executing service", t);
+        } finally {
+            totalTiming.stop();
+            LOGGER.debug("OUT");
+        }
+    }
+
+    private void transformForAI(Object gridDataFeed, int maxRows) throws JSONException {
+        if (gridDataFeed instanceof JSONObject) {
+            JSONObject jsonObject = (JSONObject) gridDataFeed;
+            JSONArray originalRows = jsonObject.getJSONArray("rows");
+            JSONArray slicedRows = new JSONArray();
+
+            for (int i = 0; i < originalRows.length() && i < maxRows; i++) {
+                slicedRows.put(originalRows.get(i));
+            }
+
+            jsonObject.put("rows", slicedRows);
+
+            JSONObject stats = jsonObject.getJSONObject("stats");
+
+            Iterator<String> keys = stats.keys();
+
+            while (keys.hasNext()) {
+                String key = keys.next();
+                JSONObject statsItem = stats.getJSONObject(key);
+                JSONArray distinct = statsItem.getJSONArray("distinct");
+
+                if (distinct.length() == 0) {
+                    statsItem.put("average", JSONObject.NULL);
+                    continue;
+                }
+                Object first;
+                try {
+                    first = distinct.get(0);
+                } catch (Exception e) {
+                    first = distinct.getJSONNode(0);
+                }
+                double sum = 0.0;
+                int count = distinct.length();
+
+                try {
+                    if (first instanceof Number) {
+                        for (int j = 0; j < count; j++) {
+                            sum += ((Number) distinct.get(j)).doubleValue();
+                        }
+                    } else if (first instanceof String) {
+                        for (int j = 0; j < count; j++) {
+                            sum += Double.parseDouble((String) distinct.get(j));
+                        }
+                    } else if (first instanceof DecimalNode) {
+                        for (int j = 0; j < count; j++) {
+                            sum += distinct.getJSONNode(j).asDouble();
+                        }
+                    } else {
+                        statsItem.put("average", JSONObject.NULL);
+                        continue;
+                    }
+
+                    double average = sum / count;
+                    statsItem.put("average", average);
+                } catch (NumberFormatException e) {
+                    statsItem.put("average", JSONObject.NULL);
+                }
+            }
+
+        }
+    }
+
+
+    private String getCatalogFunctionUuid(List<AbstractSelectionField> projections) {
 		String uuid = null;
 		for (AbstractSelectionField p : projections) {
 			if (p instanceof DataStoreCatalogFunctionField) {
 				String oldUuid = uuid;
 				uuid = ((DataStoreCatalogFunctionField) p).getCatalogFunctionUuid();
-				if (oldUuid != null && !oldUuid.equals(uuid))
+				if (oldUuid != null && !oldUuid.equals(uuid)) {
 					throw new SpagoBIRuntimeException("Only one function supported");
+				}
 			}
 		}
 		return uuid;
 	}
 
-	private JSONObject getCatalogFunctionConfiguration(List<AbstractSelectionField> projections) {
+	private CatalogFunctionRuntimeConfigDTO getCatalogFunctionConfiguration(List<AbstractSelectionField> projections) {
 		for (AbstractSelectionField p : projections) {
 			if (p instanceof DataStoreCatalogFunctionField) {
 				// we can take the first configuration since all the other ones will be identical
-				return ((DataStoreCatalogFunctionField) p).getCatalogFunctionConfig();
+				return CatalogFunctionRuntimeConfigDTO
+						.fromJSON(((DataStoreCatalogFunctionField) p).getCatalogFunctionConfig());
 			}
 		}
 		throw new SpagoBIRuntimeException("Couldn't retrieve function configuration");
 	}
 
 	@SuppressWarnings("unused")
-	private List<List<AbstractSelectionField>> getSummaryRowArray(String summaryJson, IDataSet dataSet, Map<String, String> columnAliasToName)
-			throws JSONException {
+	private List<List<AbstractSelectionField>> getSummaryRowArray(String summaryJson, IDataSet dataSet,
+			Map<String, String> columnAliasToName) throws JSONException {
+		return getSummaryRowArray(summaryJson, dataSet, columnAliasToName, null);
+	}
+
+	@SuppressWarnings("unused")
+	private List<List<AbstractSelectionField>> getSummaryRowArray(String summaryJson, IDataSet dataSet,
+			Map<String, String> columnAliasToName, OracleClobHashContext oracleClobHashContext) throws JSONException {
 		if (summaryJson != null && !summaryJson.isEmpty()) {
 
-			List<List<AbstractSelectionField>> returnList = new ArrayList<List<AbstractSelectionField>>();
+			List<List<AbstractSelectionField>> returnList = new ArrayList<>();
 			JSONArray summaryRowObject = new JSONArray(summaryJson);
 
 			if (summaryRowObject != null && summaryRowObject.length() == 1) {
@@ -338,9 +923,10 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 				JSONObject summaryRowObjectArray = summaryRowObject.getJSONObject(0);
 				JSONArray summaryRowMeasuresObject = summaryRowObjectArray.getJSONArray("measures");
 
-				List<AbstractSelectionField> summaryRowProjections = new ArrayList<AbstractSelectionField>(0);
+				List<AbstractSelectionField> summaryRowProjections = new ArrayList<>(0);
 
-				summaryRowProjections.addAll(getProjections(dataSet, new JSONArray(), summaryRowMeasuresObject, columnAliasToName));
+				summaryRowProjections.addAll(getProjections(dataSet, new JSONArray(), summaryRowMeasuresObject,
+						columnAliasToName, oracleClobHashContext));
 
 				returnList.add(summaryRowProjections);
 
@@ -354,9 +940,10 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 
 					JSONArray summaryRowMeasuresObject = jsonObj.getJSONArray("measures");
 
-					List<AbstractSelectionField> summaryRowProjections = new ArrayList<AbstractSelectionField>(0);
+					List<AbstractSelectionField> summaryRowProjections = new ArrayList<>(0);
 
-					summaryRowProjections.addAll(getProjections(dataSet, new JSONArray(), summaryRowMeasuresObject, columnAliasToName));
+					summaryRowProjections.addAll(getProjections(dataSet, new JSONArray(), summaryRowMeasuresObject,
+							columnAliasToName, oracleClobHashContext));
 
 					returnList.add(summaryRowProjections);
 
@@ -416,9 +1003,9 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return dataSet instanceof SolrDataSet;
 	}
 
-	protected List<AbstractSelectionField> getProjectionsSummary(IDataSet dataSet, JSONArray categories, JSONArray measures,
-			Map<String, String> columnAliasToName) throws JSONException {
-		ArrayList<AbstractSelectionField> projections = new ArrayList<AbstractSelectionField>(categories.length() + measures.length());
+	protected List<AbstractSelectionField> getProjectionsSummary(IDataSet dataSet, JSONArray categories,
+			JSONArray measures, Map<String, String> columnAliasToName) throws JSONException {
+		ArrayList<AbstractSelectionField> projections = new ArrayList<>(categories.length() + measures.length());
 
 		for (int i = 0; i < categories.length(); i++) {
 			JSONObject category = categories.getJSONObject(i);
@@ -435,23 +1022,41 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return projections;
 	}
 
-	protected List<AbstractSelectionField> getProjections(IDataSet dataSet, JSONArray categories, JSONArray measures, Map<String, String> columnAliasToName)
+	protected List<AbstractSelectionField> getProjections(IDataSet dataSet, JSONArray categories, JSONArray measures,
+			Map<String, String> columnAliasToName) throws JSONException, ValidationException {
+		return getProjections(dataSet, categories, measures, columnAliasToName, null);
+	}
+
+	protected List<AbstractSelectionField> getProjections(IDataSet dataSet, JSONArray categories, JSONArray measures,
+			Map<String, String> columnAliasToName, OracleClobHashContext oracleClobHashContext)
 			throws JSONException, ValidationException {
 		ArrayList<AbstractSelectionField> projections = new ArrayList<>(categories.length() + measures.length());
-		addProjections(dataSet, categories, columnAliasToName, projections);
-		addProjections(dataSet, measures, columnAliasToName, projections);
+		addProjections(dataSet, categories, columnAliasToName, projections, oracleClobHashContext);
+		addProjections(dataSet, measures, columnAliasToName, projections, oracleClobHashContext);
 		return projections;
 	}
 
-	private void addProjections(IDataSet dataSet, JSONArray categories, Map<String, String> columnAliasToName, ArrayList<AbstractSelectionField> projections)
+	private void addProjections(IDataSet dataSet, JSONArray categories, Map<String, String> columnAliasToName,
+			ArrayList<AbstractSelectionField> projections) throws JSONException, ValidationException {
+		addProjections(dataSet, categories, columnAliasToName, projections, null);
+	}
+
+	private void addProjections(IDataSet dataSet, JSONArray categories, Map<String, String> columnAliasToName,
+			ArrayList<AbstractSelectionField> projections, OracleClobHashContext oracleClobHashContext)
 			throws JSONException, ValidationException {
 		for (int i = 0; i < categories.length(); i++) {
 			JSONObject category = categories.getJSONObject(i);
-			addProjection(dataSet, projections, category, columnAliasToName);
+			addProjection(dataSet, projections, category, columnAliasToName, oracleClobHashContext);
 		}
 	}
 
-	private void addProjection(IDataSet dataSet, ArrayList<AbstractSelectionField> projections, JSONObject catOrMeasure, Map<String, String> columnAliasToName)
+	private void addProjection(IDataSet dataSet, ArrayList<AbstractSelectionField> projections, JSONObject catOrMeasure,
+			Map<String, String> columnAliasToName) throws JSONException, ValidationException {
+		addProjection(dataSet, projections, catOrMeasure, columnAliasToName, null);
+	}
+
+	private void addProjection(IDataSet dataSet, ArrayList<AbstractSelectionField> projections, JSONObject catOrMeasure,
+			Map<String, String> columnAliasToName, OracleClobHashContext oracleClobHashContext)
 			throws JSONException, ValidationException {
 
 		String functionObj = catOrMeasure.optString("funct");
@@ -460,18 +1065,26 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 			JSONArray functs = new JSONArray(functionObj);
 			for (int j = 0; j < functs.length(); j++) {
 				String functName = functs.getString(j);
-				AbstractSelectionField projection = getProjectionWithFunct(dataSet, catOrMeasure, columnAliasToName, functName);
+				AbstractSelectionField projection = getProjectionWithFunct(dataSet, catOrMeasure, columnAliasToName,
+						functName, oracleClobHashContext);
 				projections.add(projection);
 			}
 		} else {
 			// only one aggregation function
-			AbstractSelectionField projection = getProjection(dataSet, catOrMeasure, columnAliasToName);
+			AbstractSelectionField projection = getProjection(dataSet, catOrMeasure, columnAliasToName,
+					oracleClobHashContext);
 			projections.add(projection);
 		}
 
 	}
 
-	private AbstractSelectionField getProjectionWithFunct(IDataSet dataSet, JSONObject jsonObject, Map<String, String> columnAliasToName, String functName)
+	private AbstractSelectionField getProjectionWithFunct(IDataSet dataSet, JSONObject jsonObject,
+			Map<String, String> columnAliasToName, String functName) throws JSONException, ValidationException {
+		return getProjectionWithFunct(dataSet, jsonObject, columnAliasToName, functName, null);
+	}
+
+	private AbstractSelectionField getProjectionWithFunct(IDataSet dataSet, JSONObject jsonObject,
+			Map<String, String> columnAliasToName, String functName, OracleClobHashContext oracleClobHashContext)
 			throws JSONException, ValidationException {
 		String columnName = getColumnName(jsonObject, columnAliasToName);
 		String columnAlias = getColumnAlias(jsonObject, columnAliasToName);
@@ -484,112 +1097,178 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		if (jsonObject.has("catalogFunctionId")) { // check if the column is coming from catalog function
 			String catalogFuncUuid = jsonObject.getString("catalogFunctionId");
 			JSONObject catalogFuncConf = jsonObject.getJSONObject("catalogFunctionConfig");
-			projection = new DataStoreCatalogFunctionField(function, columnAlias, columnAlias, catalogFuncUuid, catalogFuncConf);
-		} else if (!function.equals(AggregationFunctions.COUNT_FUNCTION) && functionColumnName != null && !functionColumnName.isEmpty()) {
-			if (jsonObject.has("formula")) {
-				String formula = jsonObject.optString("formula");
-				DataStoreCalculatedField aggregatedProjection = new DataStoreCalculatedField(dataSet, functionColumnName, formula);
-				projection = new CoupledCalculatedFieldProjection(function, aggregatedProjection, dataSet, columnName, columnAlias);
-			} else {
-				Projection aggregatedProjection = new Projection(dataSet, functionColumnName);
-				projection = new CoupledProjection(function, aggregatedProjection, dataSet, columnName, columnAlias);
-			}
+			projection = new DataStoreCatalogFunctionField(function, columnAlias, columnAlias, catalogFuncUuid,
+					catalogFuncConf);
 		} else {
-			if (jsonObject.has("formula")) {
-				String formula = jsonObject.optString("formula");
-				projection = new DataStoreCalculatedField(function, dataSet, columnAlias, columnAlias, formula);
+			if (oracleClobHashContext != null) {
+				columnName = oracleClobHashContext.resolveProjectionColumnName(columnName, function,
+						jsonObject.has("formula"), columnAlias != null && !columnAlias.isEmpty() ? columnAlias : columnName);
+			}
+			if (!function.equals(AggregationFunctions.COUNT_FUNCTION) && functionColumnName != null
+					&& !functionColumnName.isEmpty()) {
+				if (jsonObject.has("formula")) {
+					String formula = jsonObject.optString("formula");
+					DataStoreCalculatedField aggregatedProjection = new DataStoreCalculatedField(dataSet,
+							functionColumnName, formula);
+					projection = new CoupledCalculatedFieldProjection(function, aggregatedProjection, dataSet, columnName,
+							columnAlias);
+				} else {
+					Projection aggregatedProjection = new Projection(dataSet, functionColumnName);
+					projection = new CoupledProjection(function, aggregatedProjection, dataSet, columnName, columnAlias);
+				}
 			} else {
-				projection = new Projection(function, dataSet, columnName, columnAlias);
+				if (jsonObject.has("formula")) {
+					String formula = jsonObject.optString("formula");
+					projection = new DataStoreCalculatedField(function, dataSet, columnAlias, columnAlias, formula);
+				} else {
+					projection = new Projection(function, dataSet, columnName, columnAlias);
+				}
 			}
 		}
 		return projection;
 	}
 
-	public String validateFormula(String formula, List<SimpleSelectionField> columns) throws ValidationException, JSONException {
+    public String validateFormula(String formula, List<SimpleSelectionField> columns) throws ValidationException {
 
-		validateBrackets(formula);
-		validateFields(formula, columns);
+        ParseTree root = parseFormula(formula);
 
-		formula = "select ".concat(formula);
-		CharStream inputStream = CharStreams.fromString(formula);
-		SQLiteLexer tokenSource = new SQLiteLexer(new CaseChangingCharStream(inputStream, true));
-		TokenStream tokenStream = new CommonTokenStream(tokenSource);
-		SQLiteParser sQLiteParser = new SQLiteParser(tokenStream);
+        Set<String> allowedFields = columns.stream()
+                .map(SimpleSelectionField::getName)
+                .collect(java.util.stream.Collectors.toSet());
 
-		sQLiteParser.addErrorListener(ThrowingErrorListener.INSTANCE);
-		try {
-			ParseTree root = sQLiteParser.select_stmt();
-			root.toStringTree();
-		} catch (Exception e) {
-			throw new ValidationException(e);
-		}
-		if (sQLiteParser.getNumberOfSyntaxErrors() > 0) {
-			throw new ValidationException();
+        validateTree(root, allowedFields);
 
-		}
+        return VALIDATION_OK;
+    }
 
-		return VALIDATION_OK;
+    private void validateTree(ParseTree node, Set<String> allowedFields) {
+
+        if (node instanceof SQLiteParser.ExprContext ctx) {
+
+            // blocca subquery
+            if (ctx.select_stmt() != null) {
+                throw new ValidationException("common.errors.formulas.subqueryNotAllowed");
+            }
+
+            // blocca CAST
+            if (ctx.K_CAST() != null) {
+                throw new ValidationException("common.errors.formulas.castNotAllowed");
+            }
+
+            // blocca table.column
+            if (ctx.table_name() != null) {
+                throw new ValidationException("common.errors.formulas.qualifiedNameNotAllowed");
+            }
+
+            // valida campo
+            if (ctx.column_name() != null) {
+                String columnName = normalizeIdentifier(ctx.column_name().getText());
+
+                if (!allowedFields.contains(columnName)) {
+                    throw new ValidationException("common.errors.formulas.unknownField");
+                }
+            }
+        }
+
+        // visita figli
+        for (int i = 0; i < node.getChildCount(); i++) {
+            validateTree(node.getChild(i), allowedFields);
+        }
+    }
+
+    private String normalizeFormula(String formula) {
+        if (formula == null || formula.isEmpty()) {
+            return formula;
+        }
+
+        StringBuilder normalizedFormula = new StringBuilder(formula.length());
+        boolean insideStringLiteral = false;
+
+        for (int i = 0; i < formula.length(); i++) {
+            char currentChar = formula.charAt(i);
+
+            if (currentChar == '\'') {
+                normalizedFormula.append(currentChar);
+
+                if (insideStringLiteral && i + 1 < formula.length() && formula.charAt(i + 1) == '\'') {
+                    normalizedFormula.append(formula.charAt(i + 1));
+                    i++;
+                } else {
+                    insideStringLiteral = !insideStringLiteral;
+                }
+                continue;
+            }
+
+            if (!insideStringLiteral && formula.startsWith("$F{", i)) {
+                int closingBraceIndex = formula.indexOf('}', i + 3);
+                if (closingBraceIndex > i + 3) {
+                    String fieldName = formula.substring(i + 3, closingBraceIndex).trim();
+                    if (!fieldName.isEmpty()) {
+                        normalizedFormula.append('"');
+                        normalizedFormula.append(fieldName.replace("\"", "\"\""));
+                        normalizedFormula.append('"');
+                        i = closingBraceIndex;
+                        continue;
+                    }
+                }
+            }
+
+            normalizedFormula.append(currentChar);
+        }
+
+        return normalizedFormula.toString();
+    }
+
+    private String normalizeIdentifier(String text) {
+        if (text == null) return null;
+
+        String s = text.trim();
+
+        if ((s.startsWith("\"") && s.endsWith("\"")) ||
+                (s.startsWith("`") && s.endsWith("`")) ||
+                (s.startsWith("[") && s.endsWith("]"))) {
+            s = s.substring(1, s.length() - 1);
+        }
+
+        return s;
+    }
+
+    private ParseTree parseFormula(String formula) {
+        String sql = "select " + normalizeFormula(formula);
+
+        CharStream inputStream = CharStreams.fromString(sql);
+        SQLiteLexer lexer = new SQLiteLexer(new CaseChangingCharStream(inputStream, true));
+        CommonTokenStream tokenStream = new CommonTokenStream(lexer);
+        SQLiteParser parser = new SQLiteParser(tokenStream);
+
+        lexer.removeErrorListeners();
+        parser.removeErrorListeners();
+        parser.addErrorListener(ThrowingErrorListener.INSTANCE);
+
+        try {
+            ParseTree root = parser.select_stmt();
+
+            if (parser.getNumberOfSyntaxErrors() > 0) {
+                throw new ValidationException("common.errors.formulas.invalidSyntax");
+            }
+
+            return root;
+        } catch (ValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ValidationException("common.errors.formulas.invalidSyntax", e);
+        }
+    }
+
+	private AbstractSelectionField getProjection(IDataSet dataSet, JSONObject jsonObject,
+			Map<String, String> columnAliasToName) throws JSONException {
+		return getProjection(dataSet, jsonObject, columnAliasToName, null);
 	}
 
-	private void validateBrackets(String formula) {
-		int roundBrackets = 0;
-		int squareBrackets = 0;
-		int curlyBrackets = 0;
-
-		for (int i = 0; i < formula.length(); i++) {
-			switch (formula.charAt(i)) {
-			case '(':
-				roundBrackets++;
-				break;
-			case ')':
-				roundBrackets--;
-				break;
-			case '[':
-				squareBrackets++;
-				break;
-			case ']':
-				squareBrackets--;
-				break;
-			case '{':
-				curlyBrackets++;
-				break;
-			case '}':
-				curlyBrackets--;
-				break;
-
-			default:
-				break;
-			}
-		}
-
-		if (roundBrackets != 0 || squareBrackets != 0 || curlyBrackets != 0)
-			throw new ValidationException();
-
-	}
-
-	private void validateFields(String formula, List<SimpleSelectionField> columns) {
-		String regex = REGEX_FIELDS_VALIDATION;
-		Pattern p = Pattern.compile(regex);
-		Matcher m = p.matcher(formula);
-
-		while (m.find()) {
-			boolean found = false;
-			for (SimpleSelectionField simpleSelectionField : columns) {
-
-				if (simpleSelectionField.getName().equals(m.group(0).replace("\"", ""))) {
-					found = true;
-					break;
-				}
-			}
-
-			if (!found)
-				throw new ValidationException();
-		}
-
-	}
-
-	private AbstractSelectionField getProjection(IDataSet dataSet, JSONObject jsonObject, Map<String, String> columnAliasToName) throws JSONException {
-		return getProjectionWithFunct(dataSet, jsonObject, columnAliasToName, jsonObject.optString("funct")); // caso in cui ci siano facets complesse (coupled
+	private AbstractSelectionField getProjection(IDataSet dataSet, JSONObject jsonObject,
+			Map<String, String> columnAliasToName, OracleClobHashContext oracleClobHashContext) throws JSONException {
+		return getProjectionWithFunct(dataSet, jsonObject, columnAliasToName, jsonObject.optString("funct"),
+				oracleClobHashContext); // caso in cui ci siano facets complesse (coupled
 		// proj)
 	}
 
@@ -607,9 +1286,11 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 			boolean isIdMatching = columnAliasToName.containsKey(id) || columnAliasToName.containsValue(id);
 
 			String columnName = jsonObject.getString("columnName");
-			boolean isColumnNameMatching = columnAliasToName.containsKey(columnName) || columnAliasToName.containsValue(columnName);
+			boolean isColumnNameMatching = columnAliasToName.containsKey(columnName)
+					|| columnAliasToName.containsValue(columnName);
 
-			Assert.assertTrue(isIdMatching || isColumnNameMatching, "Column name [" + columnName + "] not found in dataset metadata");
+			Assert.assertTrue(isIdMatching || isColumnNameMatching,
+					"Column name [" + columnName + "] not found in dataset metadata");
 			return isColumnNameMatching ? columnName : id;
 		}
 	}
@@ -621,8 +1302,14 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return columnAlias;
 	}
 
-	protected List<AbstractSelectionField> getGroups(IDataSet dataSet, JSONArray categories, JSONArray measures, Map<String, String> columnAliasToName,
-			boolean forceGroups) throws JSONException {
+	protected List<AbstractSelectionField> getGroups(IDataSet dataSet, JSONArray categories, JSONArray measures,
+			Map<String, String> columnAliasToName, boolean forceGroups) throws JSONException {
+		return getGroups(dataSet, categories, measures, columnAliasToName, forceGroups, null);
+	}
+
+	protected List<AbstractSelectionField> getGroups(IDataSet dataSet, JSONArray categories, JSONArray measures,
+			Map<String, String> columnAliasToName, boolean forceGroups,
+			OracleClobHashContext oracleClobHashContext) throws JSONException {
 		ArrayList<AbstractSelectionField> groups = new ArrayList<>(0);
 
 		// hasAggregationInCategory se categoria di aggregazione del for ha una funzione di aggregazione
@@ -632,8 +1319,10 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		for (int i = 0; i < categories.length(); i++) {
 			JSONObject category = categories.getJSONObject(i);
 			String functionName = category.optString("funct");
-			if (forceGroups || hasAggregatedMeasures || hasAggregationInCategory(category) || hasCountAggregation(functionName)) {
-				AbstractSelectionField projection = getProjection(dataSet, category, columnAliasToName);
+			if (forceGroups || hasAggregatedMeasures || hasAggregationInCategory(category)
+					|| hasCountAggregation(functionName)) {
+				AbstractSelectionField projection = getProjection(dataSet, category, columnAliasToName,
+						oracleClobHashContext);
 				groups.add(projection);
 			}
 		}
@@ -643,7 +1332,8 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 				JSONObject measure = measures.getJSONObject(i);
 				String functionName = measure.optString("funct");
 				if (hasNoneAggregation(functionName)) {
-					AbstractSelectionField selection = getProjection(dataSet, measure, columnAliasToName);
+					AbstractSelectionField selection = getProjection(dataSet, measure, columnAliasToName,
+							oracleClobHashContext);
 
 					if (selection instanceof Projection) {
 						groups.add(selection);
@@ -671,22 +1361,24 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		for (int i = 0; i < fields.length(); i++) {
 			JSONObject field = fields.getJSONObject(i);
 			String functionName = field.optString("funct");
-			if (!AggregationFunctions.get(functionName).getName().equals(AggregationFunctions.NONE) && !field.has("formula")) {
+			if (!AggregationFunctions.get(functionName).getName().equals(AggregationFunctions.NONE)
+					&& !field.has("formula")) {
 				return true;
 			}
 			if (field.has("formula")) {
 				for (String aggr : AggregationFunctions.getAggregationsList()) {
 					String regex = ".*" + aggr + ".*";
 					boolean hasAggregationFunction = Pattern.matches(regex, field.getString("formula"));
-					if (hasAggregationFunction)
+					if (hasAggregationFunction) {
 						return true;
+					}
 				}
 			}
 		}
 		return false;
 	}
 
-	private boolean hasAggregationInCategory(JSONObject field) throws JSONException {
+	private boolean hasAggregationInCategory(JSONObject field) {
 		String functionName = field.optString("funct");
 		if (!AggregationFunctions.get(functionName).getName().equals(AggregationFunctions.NONE)) {
 			return true;
@@ -695,13 +1387,18 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return false;
 	}
 
-	protected List<Sorting> getSortings(IDataSet dataSet, JSONArray categories, JSONArray measures, Map<String, String> columnAliasToName)
-			throws JSONException {
-		ArrayList<Sorting> sortings = new ArrayList<Sorting>(0);
+	protected List<Sorting> getSortings(IDataSet dataSet, JSONArray categories, JSONArray measures,
+			Map<String, String> columnAliasToName) throws JSONException {
+		return getSortings(dataSet, categories, measures, columnAliasToName, null);
+	}
+
+	protected List<Sorting> getSortings(IDataSet dataSet, JSONArray categories, JSONArray measures,
+			Map<String, String> columnAliasToName, OracleClobHashContext oracleClobHashContext) throws JSONException {
+		ArrayList<Sorting> sortings = new ArrayList<>(0);
 
 		for (int i = 0; i < categories.length(); i++) {
 			JSONObject categoryObject = categories.getJSONObject(i);
-			Sorting sorting = getSorting(dataSet, categoryObject, columnAliasToName);
+			Sorting sorting = getSorting(dataSet, categoryObject, columnAliasToName, oracleClobHashContext);
 			if (sorting != null) {
 				sortings.add(sorting);
 			}
@@ -709,7 +1406,7 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 
 		for (int i = 0; i < measures.length(); i++) {
 			JSONObject measure = measures.getJSONObject(i);
-			Sorting sorting = getSorting(dataSet, measure, columnAliasToName);
+			Sorting sorting = getSorting(dataSet, measure, columnAliasToName, oracleClobHashContext);
 			if (sorting != null) {
 				sortings.add(sorting);
 			}
@@ -718,19 +1415,28 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return sortings;
 	}
 
-	private Sorting getSorting(IDataSet dataSet, JSONObject jsonObject, Map<String, String> columnAliasToName) throws JSONException {
+	private Sorting getSorting(IDataSet dataSet, JSONObject jsonObject, Map<String, String> columnAliasToName)
+			throws JSONException {
+		return getSorting(dataSet, jsonObject, columnAliasToName, null);
+	}
+
+	private Sorting getSorting(IDataSet dataSet, JSONObject jsonObject, Map<String, String> columnAliasToName,
+			OracleClobHashContext oracleClobHashContext) throws JSONException {
 		Sorting sorting = null;
 
 		String orderType = (String) jsonObject.opt("orderType");
-		if (orderType != null && !orderType.isEmpty() && ("ASC".equalsIgnoreCase(orderType) || "DESC".equalsIgnoreCase(orderType))) {
+		if (orderType != null && !orderType.isEmpty()
+				&& ("ASC".equalsIgnoreCase(orderType) || "DESC".equalsIgnoreCase(orderType))) {
 			IAggregationFunction function = AggregationFunctions.get(jsonObject.optString("funct"));
 			String orderColumn = (String) jsonObject.opt("orderColumn");
 
-			if (jsonObject.has("formula")) {
+            boolean orderArgumentsArePresent = orderColumn != null && !orderColumn.isEmpty() && !orderType.isEmpty();
+            if (jsonObject.has("formula")) {
 				DataStoreCalculatedField projection;
-				if (orderColumn != null && !orderColumn.isEmpty() && !orderType.isEmpty()) {
+				if (orderArgumentsArePresent) {
 					String alias = jsonObject.optString("alias");
-					projection = new DataStoreCalculatedField(function, dataSet, orderColumn, alias, jsonObject.getString("formula"));
+					projection = new DataStoreCalculatedField(function, dataSet, orderColumn, alias,
+							jsonObject.getString("formula"));
 				} else {
 					String columnName = getColumnName(jsonObject, columnAliasToName);
 					projection = new DataStoreCalculatedField(function, dataSet, columnName, orderColumn);
@@ -741,13 +1447,23 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 				sorting = new Sorting(projection, isAscending);
 			} else {
 				Projection projection;
-				if (orderColumn != null && !orderColumn.isEmpty() && !orderType.isEmpty()) {
-					String alias = jsonObject.optString("alias");
-					projection = new Projection(function, dataSet, orderColumn, alias);
-				} else {
-					String columnName = getColumnName(jsonObject, columnAliasToName);
-					projection = new Projection(function, dataSet, columnName, orderColumn);
+				String alias = jsonObject.optString("alias");
+				String resolvedOrderColumn = orderColumn;
+				if (oracleClobHashContext != null && orderArgumentsArePresent) {
+					resolvedOrderColumn = oracleClobHashContext.resolveFilterColumnName(orderColumn);
 				}
+                if (orderArgumentsArePresent &&
+                        !orderColumn.equals(alias) && !orderColumn.equals(getColumnName(jsonObject, columnAliasToName))) {
+                    projection = new Projection(function, dataSet, resolvedOrderColumn);
+                } else if (orderArgumentsArePresent) {
+                    projection = new Projection(function, dataSet, resolvedOrderColumn, alias);
+                } else {
+					String columnName = getColumnName(jsonObject, columnAliasToName);
+					columnName = oracleClobHashContext != null
+							? oracleClobHashContext.resolveFilterColumnName(columnName)
+							: columnName;
+					projection = new Projection(function, dataSet, columnName, alias);
+                }
 
 				boolean isAscending = "ASC".equalsIgnoreCase(orderType);
 
@@ -758,19 +1474,27 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return sorting;
 	}
 
-	protected List<Filter> getFilters(String datasetLabel, JSONObject selectionsObject, Map<String, String> columnAliasToColumnName) throws JSONException {
+	protected List<Filter> getFilters(String datasetLabel, JSONObject selectionsObject,
+			Map<String, String> columnAliasToColumnName) throws JSONException {
+		IDataSet dataSet = getDataSetDAO().loadDataSetByLabel(datasetLabel);
+		return getFilters(dataSet, datasetLabel, selectionsObject, columnAliasToColumnName, null);
+	}
+
+	protected List<Filter> getFilters(IDataSet dataSet, String datasetLabel, JSONObject selectionsObject,
+			Map<String, String> columnAliasToColumnName, OracleClobHashContext oracleClobHashContext)
+			throws JSONException {
 		List<Filter> filters = new ArrayList<>(0);
 
 		if (selectionsObject.has(datasetLabel)) {
+			LOGGER.debug("Getting filters for dataset {}", datasetLabel);
 			JSONObject datasetSelectionObject = selectionsObject.getJSONObject(datasetLabel);
 			Iterator<String> it = datasetSelectionObject.keys();
-
-			IDataSet dataSet = getDataSetDAO().loadDataSetByLabel(datasetLabel);
 
 			boolean isAnEmptySelection = false;
 
 			while (!isAnEmptySelection && it.hasNext()) {
 				String columnsString = it.next();
+				LOGGER.debug("Managing filter for column {}", columnsString);
 
 				JSONArray valuesJsonArray = datasetSelectionObject.getJSONArray(columnsString);
 				if (valuesJsonArray.length() == 0) {
@@ -781,7 +1505,10 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 				List<String> columnsList = getColumnList(columnsString, dataSet, columnAliasToColumnName);
 				List<Projection> projections = new ArrayList<>(columnsList.size());
 				for (String columnName : columnsList) {
-					projections.add(new Projection(dataSet, columnName));
+					String resolvedColumnName = oracleClobHashContext != null
+							? oracleClobHashContext.resolveFilterColumnName(columnName)
+							: columnName;
+					projections.add(new Projection(dataSet, resolvedColumnName));
 				}
 
 				List<Object> valueObjects = new ArrayList<>(0);
@@ -789,7 +1516,12 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 					String[] valuesArray = StringUtilities.splitBetween(valuesJsonArray.getString(i), "'", "','", "'");
 					for (int j = 0; j < valuesArray.length; j++) {
 						Projection projection = projections.get(j % projections.size());
-						valueObjects.add(DataSetUtilities.getValue(valuesArray[j], projection.getType()));
+						Object value = DataSetUtilities.getValue(valuesArray[j], projection.getType());
+						if (oracleClobHashContext != null) {
+							value = oracleClobHashContext.resolveFilterValue(columnsList.get(j % columnsList.size()), value);
+						}
+						LOGGER.debug("Column {} will have value {}", columnsString, value);
+						valueObjects.add(value);
 					}
 				}
 
@@ -806,12 +1538,17 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return filters;
 	}
 
-	protected List<SimpleFilter> getLikeFilters(String datasetLabel, JSONObject likeSelectionsObject, Map<String, String> columnAliasToColumnName)
-			throws JSONException {
+	protected List<SimpleFilter> getLikeFilters(String datasetLabel, JSONObject likeSelectionsObject,
+			Map<String, String> columnAliasToColumnName) throws JSONException {
+		IDataSet dataSet = getDataSetDAO().loadDataSetByLabel(datasetLabel);
+		return getLikeFilters(dataSet, datasetLabel, likeSelectionsObject, columnAliasToColumnName);
+	}
+
+	protected List<SimpleFilter> getLikeFilters(IDataSet dataSet, String datasetLabel, JSONObject likeSelectionsObject,
+			Map<String, String> columnAliasToColumnName) throws JSONException {
 		List<SimpleFilter> likeFilters = new ArrayList<>(0);
 
 		if (likeSelectionsObject.has(datasetLabel)) {
-			IDataSet dataSet = getDataSetDAO().loadDataSetByLabel(datasetLabel);
 			boolean isAnEmptySelection = false;
 
 			JSONObject datasetSelectionObject = likeSelectionsObject.getJSONObject(datasetLabel);
@@ -845,9 +1582,62 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		return likeFilters;
 	}
 
-	protected List<String> getColumnList(String columns, IDataSet dataSet, Map<String, String> columnAliasToColumnName) {
-		List<String> columnList = new ArrayList<>(Arrays.asList(columns.trim().split("\\s*,\\s*"))); // trim spaces while splitting
 
+	private List<Filter> getDrilldownFilters(String datasetLabel, JSONObject drilldownObject, Map<String, String> columnAliasToName) throws JSONException {
+		IDataSet dataSet = getDataSetDAO().loadDataSetByLabel(datasetLabel);
+		return getDrilldownFilters(dataSet, datasetLabel, drilldownObject, columnAliasToName, null);
+	}
+
+	private List<Filter> getDrilldownFilters(IDataSet dataSet, String datasetLabel, JSONObject drilldownObject,
+			Map<String, String> columnAliasToName, OracleClobHashContext oracleClobHashContext) throws JSONException {
+
+		List<Filter> drilldownFilters = new ArrayList<>(0);
+
+		if (drilldownObject.has(datasetLabel)) {
+			boolean isAnEmptySelection = false;
+
+			JSONObject drilldownObjectJSONObject = drilldownObject.getJSONObject(datasetLabel);
+			Iterator<String> it = drilldownObjectJSONObject.keys();
+			while (it.hasNext()) {
+				String columns = it.next();
+				String value = drilldownObjectJSONObject.getString(columns);
+				if (value == null || value.isEmpty()) {
+					isAnEmptySelection = true;
+					break;
+				}
+
+				List<String> columnsList = getColumnList(columns, dataSet, columnAliasToName);
+				List<Projection> projections = new ArrayList<>(columnsList.size());
+				for (String columnName : columnsList) {
+					String resolvedColumnName = oracleClobHashContext != null
+							? oracleClobHashContext.resolveFilterColumnName(columnName)
+							: columnName;
+					projections.add(new Projection(dataSet, resolvedColumnName));
+				}
+
+				for (int i = 0; i < projections.size(); i++) {
+					Projection projection = projections.get(i);
+					Object filterValue = oracleClobHashContext != null
+							? oracleClobHashContext.resolveFilterValue(columnsList.get(i), value)
+							: value;
+					SimpleFilter filter = new InFilter(projection, filterValue);
+					drilldownFilters.add(filter);
+				}
+			}
+
+			if (isAnEmptySelection) {
+				drilldownFilters.clear();
+				drilldownFilters.add(new UnsatisfiedFilter());
+			}
+		}
+
+		return drilldownFilters;
+	}
+
+
+	protected List<String> getColumnList(String columns, IDataSet dataSet,
+			Map<String, String> columnAliasToColumnName) {
+		List<String> columnList = new ArrayList<>(Arrays.asList(columns.trim().replaceAll("\\s+", " ").split("\\s?,\\s?")));
 		// transform QBE columns
 		for (int i = 0; i < columnList.size(); i++) {
 			String column = columnList.get(i);
@@ -860,7 +1650,7 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		// transform aliases
 		if (columnAliasToColumnName != null) {
 			Set<String> aliases = columnAliasToColumnName.keySet();
-			if (aliases.size() > 0) {
+			if (!aliases.isEmpty()) {
 				for (int i = 0; i < columnList.size(); i++) {
 					String column = columnList.get(i);
 					if (aliases.contains(column)) {
@@ -875,11 +1665,12 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 
 	protected IDataWriter getDataStoreWriter() throws JSONException {
 		JSONDataWriter dataWriter = new JSONDataWriter(getDataSetWriterProperties());
-		dataWriter.setLocale(buildLocaleFromSession());
+		dataWriter.setLocale(getLocale());
 		return dataWriter;
 	}
 
-	protected void loadColumnAliasToName(JSONArray jsonArray, Map<String, String> columnAliasToName) throws JSONException {
+	protected void loadColumnAliasToName(JSONArray jsonArray, Map<String, String> columnAliasToName)
+			throws JSONException {
 		for (int i = 0; i < jsonArray.length(); i++) {
 			JSONObject category = jsonArray.getJSONObject(i);
 			String alias = category.optString("alias");
@@ -899,7 +1690,8 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 
 	protected String serializeDataSet(IDataSet dataSet, String typeDocWizard) throws JSONException {
 		try {
-			JSONObject datasetsJSONObject = (JSONObject) SerializerFactory.getSerializer("application/json").serialize(dataSet, null);
+			JSONObject datasetsJSONObject = (JSONObject) SerializerFactory.getSerializer("application/json")
+					.serialize(dataSet, null);
 			JSONArray datasetsJSONArray = new JSONArray();
 			datasetsJSONArray.put(datasetsJSONObject);
 			JSONArray datasetsJSONReturn = putActions(getUserProfile(), datasetsJSONArray, typeDocWizard);
@@ -913,29 +1705,22 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 	 * @param profile
 	 * @param datasetsJSONArray
 	 * @param typeDocWizard     Usato dalla my analysis per visualizzare solo i dataset su cui è possi bile costruire un certo tipo di analisi selfservice. Al
-	 *                          momento filtra la lista dei dataset solo nel caso del GEO in cui vengono eliminati tutti i dataset che non contengono un
-	 *                          riferimento alla dimensione spaziale. Ovviamente il fatto che un metodo che si chiama putActions filtri in modo silente la lista
-	 *                          dei dataset è una follia che andrebbe rifattorizzata al più presto.
+	 *                          momento filtra la lista dei dataset solo nel caso del GEO in cui vengono eliminati tutti i dataset che non contengono un riferimento
+	 *                          alla dimensione spaziale. Ovviamente il fatto che un metodo che si chiama putActions filtri in modo silente la lista dei dataset è
+	 *                          una follia che andrebbe rifattorizzata al più presto.
 	 * @return
 	 * @throws JSONException
 	 * @throws EMFInternalError
 	 */
-	protected JSONArray putActions(IEngUserProfile profile, JSONArray datasetsJSONArray, String typeDocWizard) throws JSONException, EMFInternalError {
+	protected JSONArray putActions(IEngUserProfile profile, JSONArray datasetsJSONArray, String typeDocWizard)
+			throws JSONException, EMFInternalError {
 
 		Engine qbeEngine = null;
 		try {
 			qbeEngine = ExecuteAdHocUtility.getQbeEngine();
 		} catch (SpagoBIRuntimeException r) {
 			// the qbe engine is not found
-			logger.info("Engine not found. ", r);
-		}
-
-		Engine geoEngine = null;
-		try {
-			geoEngine = ExecuteAdHocUtility.getGeoreportEngine();
-		} catch (SpagoBIRuntimeException r) {
-			// the geo engine is not found
-			logger.info("Engine not found. ", r);
+			LOGGER.info("Engine not found. ", r);
 		}
 
 		JSONObject detailAction = new JSONObject();
@@ -946,9 +1731,6 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		deleteAction.put("name", "delete");
 		deleteAction.put("description", "Delete dataset");
 
-		JSONObject georeportAction = new JSONObject();
-		georeportAction.put("name", "georeport");
-		georeportAction.put("description", "Show Map");
 
 		JSONObject qbeAction = new JSONObject();
 		qbeAction.put("name", "qbe");
@@ -967,67 +1749,43 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 				}
 			}
 
-			boolean isGeoDataset = false;
-
-			try {
-				// String meta = datasetJSON.getString("meta"); // [A]
-				// isGeoDataset = ExecuteAdHocUtility.hasGeoHierarchy(meta); //
-				// [A]
-
-				String meta = datasetJSON.optString("meta");
-
-				if (meta != null && !meta.equals(""))
-					isGeoDataset = ExecuteAdHocUtility.hasGeoHierarchy(meta);
-
-			} catch (Exception e) {
-				logger.error("Error during check of Geo spatial column", e);
-			}
-
-			if (isGeoDataset && geoEngine != null) {
-				actions.put(georeportAction);
-			}
-
 			String dsType = datasetJSON.optString(DataSetConstants.DS_TYPE_CD);
 			if (dsType == null || !dsType.equals(DataSetFactory.FEDERATED_DS_TYPE)) {
 				if (qbeEngine != null && (typeDocWizard == null || typeDocWizard.equalsIgnoreCase("REPORT"))) {
-					if (profile.getFunctionalities() != null && profile.getFunctionalities().contains(SpagoBIConstants.BUILD_QBE_QUERIES_FUNCTIONALITY)) {
+					if (profile.getFunctionalities() != null && profile.getFunctionalities()
+							.contains(CommunityFunctionalityConstants.BUILD_QBE_QUERIES_FUNCTIONALITY)) {
 						actions.put(qbeAction);
 					}
 				}
 			}
 
 			datasetJSON.put("actions", actions);
-
-			if ("GEO".equalsIgnoreCase(typeDocWizard)) {
-				// if is caming from myAnalysis - create Geo Document - must
-				// shows only ds geospatial --> isGeoDataset == true
-				if (geoEngine != null && isGeoDataset) {
-					datasetsJSONReturn.put(datasetJSON);
-				}
-			} else {
-				datasetsJSONReturn.put(datasetJSON);
-			}
+			datasetsJSONReturn.put(datasetJSON);
 
 		}
 		return datasetsJSONReturn;
 	}
 
 	public String getDataSet(String label) {
-		logger.debug("IN");
+		LOGGER.debug("IN");
 		try {
-			IDataSet dataSet = getDatasetManagementAPI().getDataSet(label);
+			DatasetManagementAPI datasetManagementAPI = getDatasetManagementAPI();
+			IDataSet dataSet = DAOFactory.getDataSetDAO().loadDataSetByLabel(label);
+			datasetManagementAPI.canSee(dataSet);
 			return serializeDataSet(dataSet, null);
-		} catch (Throwable t) {
-			throw new SpagoBIServiceException(this.request.getPathInfo(), "An unexpected error occured while executing service", t);
+		} catch (Exception t) {
+			throw new SpagoBIServiceException(this.request.getPathInfo(),
+					"An unexpected error occured while executing service", t);
 		} finally {
-			logger.debug("OUT");
+			LOGGER.debug("OUT");
 		}
 	}
 
-	public Response deleteDataset(String label) {
+	protected Response deleteDataset(String label) throws ActionNotPermittedException {
 		IDataSetDAO datasetDao = DAOFactory.getDataSetDAO();
-
-		IDataSet dataset = getDatasetManagementAPI().getDataSet(label);
+		DatasetManagementAPI datasetManagementAPI = getDatasetManagementAPI();
+		IDataSet dataset = datasetManagementAPI.getDataSet(label);
+		getDatasetManagementAPI().canSee(dataset);
 
 		try {
 			datasetDao.deleteDataSet(dataset.getId());
@@ -1035,50 +1793,120 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 			String message = null;
 			if (e instanceof DatasetInUseException) {
 				DatasetInUseException dui = (DatasetInUseException) e;
-				message = dui.getMessage() + "Used by: objects" + dui.getObjectsLabel() + " federations: " + dui.getFederationsLabel();
+				message = dui.getMessage() + "Used by: objects" + dui.getObjectsLabel() + " federations: "
+						+ dui.getFederationsLabel();
 			} else {
 				message = "Error while deleting the specified dataset";
 			}
 
-			logger.error("Error while deleting the specified dataset", e);
+			LOGGER.error("Error while deleting the specified dataset", e);
 			throw new SpagoBIRuntimeException(message, e);
+		}
+
+		try {
+			if (dataset.getDsType().equalsIgnoreCase(DataSetConstants.PREPARED_DATASET)) {
+				if (dataset instanceof VersionedDataSet) {
+					dataset = ((VersionedDataSet) dataset).getWrappedDataset();
+				}
+				String instanceId = ((PreparedDataSet) dataset).getDataPreparationInstance();
+				Client restClient = ClientBuilder.newClient();
+				InitialContext context = new InitialContext();
+				String serviceUrl = (String) context.lookup("java:comp/env/service_url");
+				URL serviceUrlAsURL = new URL(serviceUrl);
+				serviceUrlAsURL = new URL(serviceUrlAsURL.getProtocol(), serviceUrlAsURL.getHost(),
+						serviceUrlAsURL.getPort(), "", null);
+				String token = getUserProfile().getUserUniqueIdentifier().toString();
+				// delete Avro resources
+				Response response = restClient
+						.target(serviceUrlAsURL + KnowageSystemConfiguration.getKnowageDataPreparationContext()
+								+ "/api/1.0/instance/" + instanceId)
+						.request().header("X-Kn-Authorization", token).get();
+				JSONObject instance = new JSONObject(response.readEntity(String.class));
+				int sourceDsId = instance.getInt("dataSetId");
+				deleteAvroFolder(sourceDsId);
+				// delete data preparation process instance
+				restClient
+						.target(serviceUrlAsURL + KnowageSystemConfiguration.getKnowageDataPreparationContext()
+								+ "/api/1.0/instance/" + instanceId)
+						.request().header("X-Kn-Authorization", token).delete();
+			}
+		} catch (Exception e) {
+			LOGGER.error("Cannot delete PreparedDataSet related resources (process instance, avro file) for dataset {}",
+					label, e);
 		}
 
 		return Response.ok().build();
 	}
 
-	public Response execute(String label, String body) {
-		SDKDataSetParameter[] parameters = null;
+	private void deleteAvroFolder(int dsId) {
+		try {
+			Path avroExportFolder = Paths.get(SpagoBIUtilities.getResourcePath(), "dataPreparation",
+					(String) getUserProfile().getUserId(), Integer.toString(dsId));
+			Files.walkFileTree(avroExportFolder, new SimpleFileVisitor<Path>() {
 
-		if (request.getParameterMap() != null && request.getParameterMap().size() > 0) {
+				// delete directories or folders
+				@Override
+				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+					Files.delete(dir);
+					return FileVisitResult.CONTINUE;
+				}
 
-			parameters = new SDKDataSetParameter[request.getParameterMap().size()];
-
-			int i = 0;
-			for (Iterator iterator = request.getParameterMap().keySet().iterator(); iterator.hasNext();) {
-				String key = (String) iterator.next();
-				String[] values = request.getParameterMap().get(key);
-				SDKDataSetParameter sdkDataSetParameter = new SDKDataSetParameter();
-				sdkDataSetParameter.setName(key);
-				sdkDataSetParameter.setValues(values);
-				parameters[i] = sdkDataSetParameter;
-				i++;
-			}
+				// delete files
+				@Override
+				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+					Files.delete(file);
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException e) {
+			LOGGER.error("Error while clearing status files", e);
 		}
-		return Response.ok(executeDataSet(label, parameters)).build();
 	}
 
-	protected String executeDataSet(String label, SDKDataSetParameter[] params) {
-		logger.debug("IN: label in input = " + label);
+	protected Response execute(String label, String body) {
+		try {
+			SDKDataSetParameter[] parameters = null;
+
+			if (request.getParameterMap() != null && request.getParameterMap().size() > 0) {
+
+				parameters = new SDKDataSetParameter[request.getParameterMap().size()];
+
+				int i = 0;
+				for (Iterator<String> iterator = request.getParameterMap().keySet().iterator(); iterator.hasNext();) {
+					String key = iterator.next();
+					String[] values = request.getParameterMap().get(key);
+					SDKDataSetParameter sdkDataSetParameter = new SDKDataSetParameter();
+					sdkDataSetParameter.setName(key);
+					sdkDataSetParameter.setValues(values);
+					parameters[i] = sdkDataSetParameter;
+					i++;
+				}
+			}
+			return Response.ok(executeDataSet(label, parameters)).build();
+		} catch (Exception t) {
+			throw new SpagoBIServiceException(this.request.getPathInfo(),
+					"An unexpected error occured while executing service", t);
+		} finally {
+			LOGGER.debug("OUT");
+		}
+
+	}
+
+	protected String executeDataSet(String label, SDKDataSetParameter[] params) throws ActionNotPermittedException {
+		LOGGER.debug("Executing dataset {}", label);
 
 		try {
 			if (label == null) {
-				logger.warn("DataSet identifier in input is null!");
+				LOGGER.warn("DataSet identifier in input is null!");
 				return null;
 			}
 			IDataSet dataSet = DAOFactory.getDataSetDAO().loadDataSetByLabel(label);
+			DatasetManagementAPI datasetManagementAPI = getDatasetManagementAPI();
+
+			datasetManagementAPI.canSeeContent(dataSet);
+
 			if (dataSet == null) {
-				logger.warn("DataSet with label [" + label + "] not existing.");
+				LOGGER.warn("DataSet with label {} not existing.", label);
 				return null;
 			}
 			if (params != null && params.length > 0) {
@@ -1086,14 +1914,14 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 				for (int i = 0; i < params.length; i++) {
 					SDKDataSetParameter par = params[i];
 					parametersFilled.put(par.getName(), par.getValues()[0]);
-					logger.debug("Add parameter: " + par.getName() + "/" + par.getValues()[0]);
+					LOGGER.debug("Add parameter: {}/{}", par.getName(), par.getValues()[0]);
 				}
 				dataSet.setParamsMap(parametersFilled);
 			}
 
 			// add the jar retriver in case of a Qbe DataSet
-			if (dataSet instanceof QbeDataSet
-					|| (dataSet instanceof VersionedDataSet && ((VersionedDataSet) dataSet).getWrappedDataset() instanceof QbeDataSet)) {
+			if (dataSet instanceof QbeDataSet || (dataSet instanceof VersionedDataSet
+					&& ((VersionedDataSet) dataSet).getWrappedDataset() instanceof QbeDataSet)) {
 				SpagoBICoreDatamartRetriever retriever = new SpagoBICoreDatamartRetriever();
 				Map parameters = dataSet.getParamsMap();
 				if (parameters == null) {
@@ -1112,15 +1940,16 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 
 			JSONDataWriter writer = new JSONDataWriter();
 			return (writer.write(dataSet.getDataStore())).toString();
+		} catch (ActionNotPermittedException e) {
+			throw e;
 		} catch (Exception e) {
-			logger.error("Error while executing dataset", e);
+			LOGGER.error("Error while executing dataset", e);
 			throw new SpagoBIRuntimeException("Error while executing dataset", e);
 		}
 	}
 
 	protected IDataSetDAO getDataSetDAO() {
-		IDataSetDAO dsDAO = DAOFactory.getDataSetDAO();
-		return dsDAO;
+		return DAOFactory.getDataSetDAO();
 	}
 
 	protected final boolean isNearRealtimeSupported(IDataSet dataSet) throws DataBaseException {
@@ -1128,13 +1957,16 @@ public abstract class AbstractDataSetResource extends AbstractSpagoBIResource {
 		dataSet = dataSet instanceof VersionedDataSet ? ((VersionedDataSet) dataSet).getWrappedDataset() : dataSet;
 		if (dataSet instanceof AbstractJDBCDataset) {
 			IDataBase database = DataBaseFactory.getDataBase(dataSet.getDataSource());
-			isNearRealtimeSupported = database.getDatabaseDialect().isInLineViewSupported() && !dataSet.hasDataStoreTransformer();
+			isNearRealtimeSupported = database.getDatabaseDialect().isInLineViewSupported()
+					&& !dataSet.hasDataStoreTransformers();
 		} else if (dataSet instanceof FederatedDataSet) {
 			isNearRealtimeSupported = false;
 		} else if (dataSet instanceof QbeDataSet) {
 			IDataBase database = DataBaseFactory.getDataBase(dataSet.getDataSource());
-			isNearRealtimeSupported = database.getDatabaseDialect().isInLineViewSupported() && !dataSet.hasDataStoreTransformer();
-		} else if (dataSet instanceof FlatDataSet || dataSet.isPersisted() || dataSet.getClass().equals(SolrDataSet.class)) {
+			isNearRealtimeSupported = database.getDatabaseDialect().isInLineViewSupported()
+					&& !dataSet.hasDataStoreTransformers();
+		} else if (dataSet instanceof FlatDataSet || dataSet.isPersisted() || dataSet instanceof PreparedDataSet
+				|| dataSet.getClass().equals(SolrDataSet.class)) {
 			isNearRealtimeSupported = true;
 		}
 		return isNearRealtimeSupported;

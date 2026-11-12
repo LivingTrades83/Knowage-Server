@@ -22,11 +22,11 @@ public final class Tuple {
 	private final List<Object> values;
 
 	public Tuple() {
-		values = new ArrayList<Object>();
+		values = new ArrayList<>();
 	}
 
 	public Tuple(int n) {
-		values = new ArrayList<Object>(n);
+		values = new ArrayList<>(n);
 	}
 
 	public Tuple(List<?> values) {
@@ -103,15 +103,17 @@ public final class Tuple {
 		StringBuilder tuple = new StringBuilder();
 		tuple.append(prefix);
 		for (int i = 0; i < values.size(); i++) {
-			if (i != 0) {
-				tuple.append(valueDelimiter);
-			}
 			String value = values.get(i) == null ? null : getProperValueString(values.get(i));
-			value = value.replaceAll(",", "&comma;");
-			String delimiter = value != null && value.startsWith(stringDelimiter) && value.endsWith(stringDelimiter) ? "" : stringDelimiter;
-			tuple.append(delimiter);
-			tuple.append(value != null ? value : "NULL");
-			tuple.append(delimiter);
+			if (value != null) {
+				if (i != 0) {
+					tuple.append(valueDelimiter);
+				}
+				value = value.replaceAll(",", "&comma;");
+				String delimiter = value.startsWith(stringDelimiter) && value.endsWith(stringDelimiter) ? "" : stringDelimiter;
+				tuple.append(delimiter);
+				tuple.append(value);
+				tuple.append(delimiter);
+			}
 		}
 		tuple.append(suffix);
 		return tuple.toString();
@@ -143,7 +145,7 @@ public final class Tuple {
 			if (values.size() != other.values.size())
 				return false;
 			for (int i = 0; i < values.size(); i++) {
-				if (!values.get(i).equals(other.values.get(i)))
+				if (values.get(i) == null || !values.get(i).equals(other.values.get(i)))
 					return false;
 			}
 		}

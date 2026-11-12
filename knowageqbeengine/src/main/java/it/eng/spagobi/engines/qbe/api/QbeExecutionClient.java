@@ -30,7 +30,7 @@ import it.eng.spagobi.utilities.engines.rest.SimpleRestClient;
 public class QbeExecutionClient extends SimpleRestClient {
 
 	private static final String SERVICE_URL = "/restful-services/domainsforfinaluser";
-	static private Logger logger = Logger.getLogger(QbeExecutionClient.class);
+	private static Logger logger = Logger.getLogger(QbeExecutionClient.class);
 
 	public String geCategoryDomain(String userId) {
 
@@ -57,7 +57,7 @@ public class QbeExecutionClient extends SimpleRestClient {
 		logger.debug("IN");
 		Response clientResponse;
 		String jsonResponse = null;
-		Map<String, Object> queryParams = new HashMap<String, Object>();
+		Map<String, Object> queryParams = new HashMap<>();
 		queryParams.put("DOMAIN_TYPE", "DS_SCOPE");
 		try {
 			logger.debug("executing get service to get domain's scope");

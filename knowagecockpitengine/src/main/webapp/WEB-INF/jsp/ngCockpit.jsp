@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <html ng-app="cockpitModule">
 <head>
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <%@include file="/WEB-INF/jsp/commons/angular/angularImport.jsp"%>
 <%@include file="/WEB-INF/jsp/commons/angular/cockpitImport.jsp"%>
 <%@include file="/WEB-INF/jsp/chart/designer/chartImport.jsp"%>
@@ -31,7 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <%@include file="/WEB-INF/jsp/chart/execution/chartRenderImport.jsp"%>
 <base href="/" />
 
-<script type="text/javascript">
+<script type="text/javascript" nonce="<%= request.getAttribute("cspNonce") %>">
 
 angular.module("cockpitModule").factory("cockpitModule_properties",function(){
 	return {
@@ -48,7 +49,7 @@ angular.module("cockpitModule").factory("cockpitModule_properties",function(){
 		STARTING_SELECTIONS:[],
 		STARTING_FILTERS:[],
 		CURRENT_SHEET: <%=initialSheet%>,
-		FOLDER_ID: "<%=folderId%>",
+		FOLDER_ID: "<%= StringEscapeUtils.escapeJavaScript(folderId)%>",
 		EXPORT_MODE: <%=exportMode%>,
 		INITIALIZED_WIDGETS : [],
 		DIRTY_WIDGETS : [],
@@ -109,7 +110,7 @@ angular.module("cockpitModule").factory("cockpitModule_template",function(sbiMod
 		template.configuration.variables=[];
 	}
 
-    var cockpitSelections = JSON.parse('<%=initialSelections%>');
+    var cockpitSelections = JSON.parse('<%=esapiEncoder.encodeForJavaScript(initialSelections)%>');
 	if(cockpitSelections.aggregations && cockpitSelections.aggregations.length > 0) {
 	    angular.merge(template.configuration.aggregations, cockpitSelections.aggregations);
 	}

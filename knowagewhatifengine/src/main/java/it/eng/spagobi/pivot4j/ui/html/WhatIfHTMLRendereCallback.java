@@ -49,6 +49,7 @@ import org.pivot4j.ui.table.TableRenderContext;
 import org.pivot4j.util.CssWriter;
 import org.pivot4j.util.RenderPropertyUtils;
 
+import it.eng.knowage.commons.security.KnowageSystemConfiguration;
 import it.eng.spagobi.engines.whatif.crossnavigation.CrossNavigationManager;
 import it.eng.spagobi.engines.whatif.crossnavigation.SpagoBICrossNavigationConfig;
 import it.eng.spagobi.engines.whatif.crossnavigation.TargetClickable;
@@ -64,14 +65,15 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 	private Map<Integer, String> positionMeasureMap;
 	private boolean initialized = false;
 	private final Map<String, Object> properties;
-	private static final String pathToImages = "../../../../knowage/themes/commons/img/olap/";
+	private static final String PATH_TO_IMAGES = "../../../.." + KnowageSystemConfiguration.getKnowageContext()
+			+ "/themes/commons/img/olap/";
 
 	public WhatIfHTMLRendereCallback(Writer writer) {
 		super(writer);
-		memberPositions = new HashMap<Member, Integer>();
+		memberPositions = new HashMap<>();
 		showProperties = true;
 		setRowHeaderLevelPadding(20);
-		properties = new HashMap<String, Object>();
+		properties = new HashMap<>();
 	}
 
 	public Object getProperty(String key) {
@@ -108,14 +110,9 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 
 	@Override
 	protected Map<String, String> getCellAttributes(TableRenderContext context) {
-
 		StringWriter sw = new StringWriter();
 		CssWriter cssw = new CssWriter(sw);
 		Map<String, String> attributes = super.getCellAttributes(context);
-		// initializeInternal(context);
-		if (context.getCellType() == CellTypes.AGG_VALUE) {
-			// System.out.println(context.getCell());
-		}
 
 		if (context.getCellType() == CellTypes.VALUE && context.getCell() != null) {
 
@@ -128,17 +125,13 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 			int rowId = context.getRowIndex();
 			int positionId = getOrdinalNoSubset(context.getCell().getOrdinal());
 			String value = context.getCell().getFormattedValue();
-			// String memberUniqueName = context.getMember().getUniqueName();
 			if (context.getCell().getValue() != null && context.getCell().getFormattedValue() != null) {
-				double dd = Double.parseDouble(context.getCell().getValue().toString());
 				String formatedValue = context.getCell().getFormattedValue();
-				// if (formatedValue.contains("style")) {
 				String style;
-				ArrayList<String> fv = trimStyle(formatedValue);// formatedValue.split("=*\\s*\"
-				// | =*\\s*\'");
+				ArrayList<String> fv = trimStyle(formatedValue);// formatedValue.split("=*\\s*\" | =*\\s*\'");
 
 				for (int i = 0; i < fv.size(); i++) {
-					String styles[] = fv.get(i).split("\\s*=\\s*");
+					String[] styles = fv.get(i).replaceAll("\\s*=", "=").replaceAll("=\\s*", "=").split("=");
 					if (styles.length == 2) {
 						cssw.writeStyle(styles[0], styles[1] + "!important");
 
@@ -148,20 +141,14 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 				style = sw.toString();
 				attributes.put("style", style);
 			}
-			// }
 
 			String id = positionId + "!" + rowId + "!" + colId + "!" + System.currentTimeMillis() % 1000;
-			// attributes.put("ng-dblclick", "makeEditable('" + id + "','" +
-			// measureName + "')");
 			attributes.put("id", id);
 			attributes.put("measureName", measureName);
 			attributes.put("ordinal", String.valueOf(positionId));
 			attributes.put("value", value);
 			attributes.put("cell", null);
 		} else if (context.getCellType() == CellTypes.LABEL) {
-			NonInternalPropertyCollector np = new NonInternalPropertyCollector();
-			List<Property> properties = np.getProperties(context.getMember().getLevel());
-
 			String uniqueName = context.getMember().getUniqueName();
 			String level = context.getMember().getLevel().getUniqueName();
 			String dimensionType = null;
@@ -182,9 +169,6 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 			}
 
 			int axisOrdinal = context.getAxis().axisOrdinal();
-			// attributes.put("ondblclick",
-			// "javascript:Sbi.olap.eventManager.setCalculatedFieldParent('" +
-			// uniqueName + "','" + axis + "')");
 
 			attributes.put("axisOrdinal", String.valueOf(axisOrdinal));
 			attributes.put("dimensionUniqueName", dimensionUniqueName);
@@ -213,10 +197,10 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 
 				if (context.getRenderer().getEnableDrillThrough()) {
 
-					Map<String, String> attributes = new TreeMap<String, String>();
-					attributes.put("src", pathToImages + "ico_search.gif");
+					Map<String, String> attributes = new TreeMap<>();
+					attributes.put("src", PATH_TO_IMAGES + "ico_search.gif");
 					attributes.put("id", "drillt");
-					attributes.put("ng-click", "drillThrough(" + ordinal + ")");
+					attributes.put("drillThrough", "(" + ordinal + ")");
 					startElement("img", attributes);
 					endElement("img");
 				}
@@ -224,14 +208,14 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 
 			if (context.getMember() != null && context.getMember().getMemberType() != null
 					&& !context.getMember().getMemberType().name().equalsIgnoreCase("Measure")) {
-				Map<String, String> attributes = new TreeMap<String, String>();
+				Map<String, String> attributes = new TreeMap<>();
 				NonInternalPropertyCollector np = new NonInternalPropertyCollector();
 				List<Property> properties = np.getProperties(context.getMember().getLevel());
 
 				if (properties != null && !properties.isEmpty()) {
-					Map<String, String> attributes1 = new TreeMap<String, String>();
-					attributes.put("src", pathToImages + "show_props.png");
-					attributes1.put("ng-click", "getProps('" + context.getMember().getUniqueName() + "') ;$event.stopPropagation();");
+					Map<String, String> attributes1 = new TreeMap<>();
+					attributes.put("src", PATH_TO_IMAGES + "show_props.png");
+					attributes1.put("getProps", "('" + context.getMember().getUniqueName() + "')");
 					startElement("img", attributes1);
 					endElement("img");
 
@@ -242,33 +226,23 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 						String cmd = command.getName();
 						UICommandParameters commandParams = command.createParameters(context);
 
-						int colIdx = context.getColumnIndex();
-						int rowIdx = context.getRowIndex();
-
 						int axis = 0;
 						if (context.getAxis() != null) {
 							axis = context.getAxis().axisOrdinal();
 						}
 						int memb = 0;
 						if (context.getPosition() != null) {
-							// memb =
-							// context.getPosition().getMembers().indexOf(context.getMember());
 							memb = context.getAxis().axisOrdinal();
-						}
-						int pos = 0;
-						if (context.getAxis() == Axis.COLUMNS) {
-							pos = rowIdx;
-						} else {
-							pos = colIdx;
 						}
 
 						String uniqueName = context.getMember().getUniqueName();
 						String positionUniqueName = context.getPosition().getMembers().toString();
 						if (cmd != null) {
-							if ((cmd.equalsIgnoreCase("collapsePosition") || cmd.equalsIgnoreCase("drillUp") || cmd.equalsIgnoreCase("collapseMember"))
+							if ((cmd.equalsIgnoreCase("collapsePosition") || cmd.equalsIgnoreCase("drillUp")
+									|| cmd.equalsIgnoreCase("collapseMember"))
 									&& !drillMode.equals(DrillDownCommand.MODE_REPLACE)) {
 
-								Map<String, String> drillUpAttributes = new TreeMap<String, String>();
+								Map<String, String> drillUpAttributes = new TreeMap<>();
 								drillUpAttributes.put("axis", String.valueOf(commandParams.getAxisOrdinal()));
 								drillUpAttributes.put("position", String.valueOf(commandParams.getMemberOrdinal()));
 								drillUpAttributes.put("memberOrdinal", String.valueOf(memb));
@@ -277,10 +251,10 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 								startElement("drillup", drillUpAttributes);
 								endElement("drillup");
 
-							} else if ((cmd.equalsIgnoreCase("expandPosition") || cmd.equalsIgnoreCase("drillDown") || cmd.equalsIgnoreCase("expandMember"))
-									&& commandParams.getMemberOrdinal() > -1) {
+							} else if ((cmd.equalsIgnoreCase("expandPosition") || cmd.equalsIgnoreCase("drillDown")
+									|| cmd.equalsIgnoreCase("expandMember")) && commandParams.getMemberOrdinal() > -1) {
 
-								Map<String, String> drillDownAttributes = new TreeMap<String, String>();
+								Map<String, String> drillDownAttributes = new TreeMap<>();
 								drillDownAttributes.put("axis", String.valueOf(axis));
 								drillDownAttributes.put("position", String.valueOf(commandParams.getMemberOrdinal()));
 								drillDownAttributes.put("memberOrdinal", String.valueOf(memb));
@@ -291,7 +265,7 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 							} else {
 								if (context.getAxis() == Axis.ROWS && !isPropertyCell(context)) {
 
-									attributes.put("src", pathToImages + "nodrill.png");
+									attributes.put("src", PATH_TO_IMAGES + "nodrill.png");
 									attributes.put("style", "padding : 2px");
 									startElement("img", attributes);
 									endElement("img");
@@ -308,7 +282,7 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 				} else {
 					if (context.getAxis() == Axis.ROWS && !isPropertyCell(context)) {
 
-						attributes.put("src", pathToImages + "nodrill.png");
+						attributes.put("src", PATH_TO_IMAGES + "nodrill.png");
 						attributes.put("style", "padding : 2px");
 						startElement("img", attributes);
 						endElement("img");
@@ -332,8 +306,6 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 
 	@Override
 	public void renderContent(TableRenderContext context, String label, Double value) {
-
-		// super.renderContent(context, label, value);
 		if (label != null && label.contains("|")) {
 			label = formatValue(label, value);
 		}
@@ -343,7 +315,7 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 		link = propertyUtils.getString("link", propertyCategory, null);
 
 		if (link == null) {
-			Map<String, String> attributes = new TreeMap<String, String>();
+			Map<String, String> attributes = new TreeMap<>();
 			String drillMode = context.getRenderer().getDrillDownMode();
 			if ((context.getCellType() == "title") && !label.equalsIgnoreCase("Measures")) {
 
@@ -355,9 +327,6 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 					axis = context.getAxis().axisOrdinal();
 				}
 				int memb = 0;
-				/*
-				 * if (context.getPosition() != null) { memb = rowIdx;// context.getPosition().getOrdinal(); }
-				 */
 				if (context.getAxis() == Axis.COLUMNS) {
 					memb = rowIdx / 2;
 				} else {
@@ -387,12 +356,8 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 					// For drill replace the context.getPosition() and
 					// context.getMember are empty.
 					String uniqueName = "x";
-					String positionUniqueName = "x";
 
 					if (context != null) {
-						if (context.getPosition() != null && context.getPosition() != null) {
-							positionUniqueName = context.getPosition().getMembers().toString();
-						}
 						if (context.getMember() != null) {
 							uniqueName = context.getMember().getUniqueName();
 						}
@@ -401,9 +366,9 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 
 					if (d != 0) {
 						context.getMember();
-						attributes.put("src", pathToImages + "arrow-up.png");
-						attributes.put("ng-click",
-								"drillUp(" + axis + " , " + pos + " , " + memb + ",'" + uniqueName + "','" + context.getHierarchy().getUniqueName() + "' )");
+						attributes.put("src", PATH_TO_IMAGES + "arrow-up.png");
+						attributes.put("drillUp", "(" + axis + " , " + pos + " , " + memb + ",'" + uniqueName + "','"
+								+ context.getHierarchy().getUniqueName() + "' )");
 						startElement("img", attributes);
 						endElement("img");
 					}
@@ -418,15 +383,16 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 				SpagoBIPivotModel sbiModel = (SpagoBIPivotModel) context.getModel();
 				SpagoBICrossNavigationConfig crossNavigation = sbiModel.getCrossNavigation();
 
-				if (crossNavigation != null && crossNavigation.isButtonClicked() && context.getCellType() == CellTypes.VALUE) {
+				if (crossNavigation != null && crossNavigation.isButtonClicked()
+						&& context.getCellType() == CellTypes.VALUE) {
 
 					int colId = context.getColumnIndex();
 					int rowId = context.getRowIndex();
 					int positionId = getOrdinalNoSubset(context.getCell().getOrdinal());
 					String id = positionId + "!" + rowId + "!" + colId + "!" + System.currentTimeMillis() % 1000;
-					attributes.put("src", pathToImages + "cross-navigation.png");
+					attributes.put("src", PATH_TO_IMAGES + "cross-navigation.png");
 					String coordinatesAsString = StringUtils.join(context.getCell().getCoordinateList(), ",");
-					attributes.put("ng-click", "cellClickCreateCrossNavigationMenu('" + coordinatesAsString + "');$event.stopPropagation();");
+					attributes.put("cellClickCreateCrossNavigationMenu", "('" + coordinatesAsString + "')");
 					attributes.put("id", id);
 					startElement("img", attributes);
 					endElement("img");
@@ -464,7 +430,7 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 
 			}
 		} else {
-			Map<String, String> attributes = new HashMap<String, String>(1);
+			Map<String, String> attributes = new HashMap<>(1);
 			attributes.put("href", link);
 
 			startElement("a", attributes);
@@ -476,7 +442,8 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 
 	private boolean isPropertyCell(TableRenderContext context) {
 
-		if (showProperties && context.getLevel() != null && isEmptyNonPropertyCell(context) && context.getRenderer().getPropertyCollector() != null) {
+		if (showProperties && context.getLevel() != null && isEmptyNonPropertyCell(context)
+				&& context.getRenderer().getPropertyCollector() != null) {
 			List<Property> propertieds = context.getRenderer().getPropertyCollector().getProperties(context.getLevel());
 			return (propertieds != null && propertieds.size() > 0);
 		}
@@ -512,14 +479,12 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 		return false;
 	}
 
-	private String getMeasureName(TableRenderContext context) { // (RenderContext
-		// context)
+	private String getMeasureName(TableRenderContext context) {
 		int coordinate;
 		if (this.measureOnRows) {
-			coordinate = context.getRowIndex(); // coordinate =
-			// context.getRowIndex();
+			coordinate = context.getRowIndex();
 		} else {
-			coordinate = context.getColumnIndex(); // context.getColumnIndex()
+			coordinate = context.getColumnIndex();
 		}
 		String measureName = this.positionMeasureMap.get(coordinate);
 
@@ -536,7 +501,7 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 		if (!this.initialized) {
 			this.measureOnRows = true;
 			this.initialized = true;
-			this.positionMeasureMap = new HashMap<Integer, String>();
+			this.positionMeasureMap = new HashMap<>();
 
 			// check if the measures are in the rows or in the columns
 			List<Member> columnMembers = null;
@@ -573,50 +538,48 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 			axisToSort = Axis.ROWS.axisOrdinal();
 		}
 
-		Map<String, String> attributes = new TreeMap<String, String>();
+		Map<String, String> attributes = new TreeMap<>();
 
 		if (context.getRenderer().getEnableSort()) {
 			if (context.getModel().isSorting(context.getPosition()) && context.getModel().getSortCriteria() != null) {
-				if (context.getModel().getSortCriteria().equals(SortCriteria.ASC) || context.getModel().getSortCriteria().equals(SortCriteria.BASC)
+				if (context.getModel().getSortCriteria().equals(SortCriteria.ASC)
+						|| context.getModel().getSortCriteria().equals(SortCriteria.BASC)
 						|| context.getModel().getSortCriteria().equals(SortCriteria.TOPCOUNT)) {
 					if (axisToSort == Axis.ROWS.axisOrdinal()) {
-						attributes.put("src", pathToImages + "DESC-rows.png");
+						attributes.put("src", PATH_TO_IMAGES + "DESC-rows.png");
 					} else {
-						attributes.put("src", pathToImages + "DESC-columns.png");
+						attributes.put("src", PATH_TO_IMAGES + "DESC-columns.png");
 					}
 
-					attributes.put("ng-click",
-							"sort(" + axisToSort + " , " + axis + " , '" + context.getPosition().getMembers().toString() + "' ) ;$event.stopPropagation();");
-					// System.out.println(context.getMember() + " has sorting "
-					// + context.getModel().getSortCriteria());
+					attributes.put("sort", "(" + axisToSort + " , " + axis + " , '"
+							+ context.getPosition().getMembers().toString() + "' )");
 					startElement("img", attributes);
 					endElement("img");
-				} else if (context.getModel().getSortCriteria().equals(SortCriteria.DESC) || context.getModel().getSortCriteria().equals(SortCriteria.BDESC)
+				} else if (context.getModel().getSortCriteria().equals(SortCriteria.DESC)
+						|| context.getModel().getSortCriteria().equals(SortCriteria.BDESC)
 						|| context.getModel().getSortCriteria().equals(SortCriteria.BOTTOMCOUNT)) {
 
 					if (axisToSort == Axis.ROWS.axisOrdinal()) {
-						attributes.put("src", pathToImages + "ASC-rows.png");
+						attributes.put("src", PATH_TO_IMAGES + "ASC-rows.png");
 					} else {
-						attributes.put("src", pathToImages + "ASC-columns.png");
+						attributes.put("src", PATH_TO_IMAGES + "ASC-columns.png");
 					}
 
-					attributes.put("ng-click",
-							"sort(" + axisToSort + " , " + axis + " , '" + context.getPosition().getMembers().toString() + "' ) ;$event.stopPropagation();");
-					// System.out.println(context.getMember() + " has sorting "
-					// + context.getModel().getSortCriteria());
+					attributes.put("sort", "(" + axisToSort + " , " + axis + " , '"
+							+ context.getPosition().getMembers().toString() + "' )");
 					startElement("img", attributes);
 					endElement("img");
 				}
 			} else {
 				context.getModel().setSorting(false);
 				if (axisToSort == Axis.ROWS.axisOrdinal()) {
-					attributes.put("src", pathToImages + "noSortRows.png");
+					attributes.put("src", PATH_TO_IMAGES + "noSortRows.png");
 				} else {
-					attributes.put("src", pathToImages + "noSortColumns.png");
+					attributes.put("src", PATH_TO_IMAGES + "noSortColumns.png");
 				}
 
-				attributes.put("ng-click",
-						"sort(" + axisToSort + " , " + axis + " , '" + context.getPosition().getMembers().toString() + "' ); $event.stopPropagation();");
+				attributes.put("sort", "(" + axisToSort + " , " + axis + " , '"
+						+ context.getPosition().getMembers().toString() + "' )");
 
 				startElement("img", attributes);
 				endElement("img");
@@ -627,8 +590,8 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 	}
 
 	public static ArrayList<String> trimStyle(String formatedValue) {
-		ArrayList<String> result = new ArrayList<String>();
-		String results[] = formatedValue.split("\\s*\\|\\s*");
+		ArrayList<String> result = new ArrayList<>();
+		String[] results = formatedValue.replaceAll("\\s*\\|", "|").replaceAll("\\|\\s*", "|").split("\\|");
 
 		for (int i = 0; i < results.length; i++) {
 			if (!results[i].contains("format") && results[i].contains("=")) {
@@ -638,17 +601,16 @@ public class WhatIfHTMLRendereCallback extends HtmlRenderCallback {
 		return result;
 	}
 
-	private String formatValue(String label, double value) {
-		String resArr[] = label.split("\\|");
+	private String formatValue(String label, Double value) {
+		String[] resArr = label.split("\\|");
 
 		for (int i = 0; i < resArr.length; i++) {
 			if (resArr[i].contains("format")) {
-				String result[] = resArr[i].split("\\s*=\\s*");
+				String[] result = resArr[i].replaceAll("\\s*=", "=").replaceAll("=\\s*", "=").split("=");
 				String pattern = result[1];
 				NumberFormat nf = NumberFormat.getNumberInstance(Locale.getDefault());
 				DecimalFormat df = (DecimalFormat) nf;
 				df.applyPattern(pattern);
-				// System.out.println(df.format(value) + "-" + pattern);
 				return df.format(value);
 			}
 		}

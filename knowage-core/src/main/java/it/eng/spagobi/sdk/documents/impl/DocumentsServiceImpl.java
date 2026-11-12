@@ -17,38 +17,7 @@
  */
 package it.eng.spagobi.sdk.documents.impl;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileFilter;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
-
-import javax.activation.DataHandler;
-import javax.activation.FileDataSource;
-
-import org.apache.commons.io.IOUtils;
-import org.apache.log4j.LogMF;
-import org.apache.log4j.Logger;
-import org.safehaus.uuid.UUID;
-import org.safehaus.uuid.UUIDGenerator;
-
-import it.eng.spago.base.RequestContainer;
-import it.eng.spago.base.ResponseContainer;
-import it.eng.spago.base.SessionContainer;
-import it.eng.spago.base.SourceBean;
-import it.eng.spago.base.SourceBeanException;
+import it.eng.spago.base.*;
 import it.eng.spago.dispatching.service.DefaultRequestContext;
 import it.eng.spago.error.EMFErrorHandler;
 import it.eng.spago.error.EMFUserError;
@@ -70,10 +39,14 @@ import it.eng.spagobi.behaviouralmodel.lov.bo.ILovDetail;
 import it.eng.spagobi.behaviouralmodel.lov.bo.LovDetailFactory;
 import it.eng.spagobi.behaviouralmodel.lov.bo.LovResultHandler;
 import it.eng.spagobi.behaviouralmodel.lov.bo.ModalitiesValue;
+import it.eng.spagobi.commons.bo.Config;
 import it.eng.spagobi.commons.bo.Domain;
 import it.eng.spagobi.commons.bo.UserProfile;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.commons.dao.ICategoryDAO;
+import it.eng.spagobi.commons.dao.IConfigDAO;
 import it.eng.spagobi.commons.utilities.ObjectsAccessVerifier;
 import it.eng.spagobi.commons.utilities.SpagoBIUtilities;
 import it.eng.spagobi.commons.utilities.UserUtilities;
@@ -82,20 +55,10 @@ import it.eng.spagobi.engines.config.bo.Engine;
 import it.eng.spagobi.engines.exporters.ReportExporter;
 import it.eng.spagobi.sdk.AbstractSDKService;
 import it.eng.spagobi.sdk.documents.DocumentsService;
-import it.eng.spagobi.sdk.documents.bo.SDKDocument;
-import it.eng.spagobi.sdk.documents.bo.SDKDocumentParameter;
-import it.eng.spagobi.sdk.documents.bo.SDKDocumentParameterValue;
-import it.eng.spagobi.sdk.documents.bo.SDKExecutedDocumentContent;
-import it.eng.spagobi.sdk.documents.bo.SDKFunctionality;
-import it.eng.spagobi.sdk.documents.bo.SDKSchema;
-import it.eng.spagobi.sdk.documents.bo.SDKTemplate;
-import it.eng.spagobi.sdk.exceptions.InvalidParameterValue;
-import it.eng.spagobi.sdk.exceptions.MissingParameterValue;
-import it.eng.spagobi.sdk.exceptions.NonExecutableDocumentException;
-import it.eng.spagobi.sdk.exceptions.NotAllowedOperationException;
-import it.eng.spagobi.sdk.exceptions.SDKException;
+import it.eng.spagobi.sdk.documents.bo.*;
+import it.eng.spagobi.sdk.exceptions.*;
+import it.eng.spagobi.sdk.utilities.KnowageSoapDataSource;
 import it.eng.spagobi.sdk.utilities.SDKObjectsConverter;
-import it.eng.spagobi.sdk.utilities.SDKObjectsConverter.MemoryOnlyDataSource;
 import it.eng.spagobi.tools.catalogue.bo.Artifact;
 import it.eng.spagobi.tools.catalogue.bo.Content;
 import it.eng.spagobi.tools.catalogue.bo.MetaModel;
@@ -103,8 +66,21 @@ import it.eng.spagobi.tools.catalogue.dao.IArtifactsDAO;
 import it.eng.spagobi.tools.catalogue.dao.IMetaModelsDAO;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
+import it.eng.spagobi.utilities.exceptions.SpagoBIServiceException;
 import it.eng.spagobi.utilities.file.FileUtils;
 import it.eng.spagobi.utilities.mime.MimeUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.LogMF;
+import org.apache.log4j.Logger;
+
+import javax.activation.DataHandler;
+import javax.activation.FileDataSource;
+import java.io.*;
+import java.util.*;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class DocumentsServiceImpl extends AbstractSDKService implements DocumentsService {
 
@@ -112,10 +88,11 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	public static final String CFIELDS_FILE_NAME = "cfields_meta.xml";
 	public static final String MONDRIAN_SCHEMA_TYPE = "MONDRIAN_SCHEMA";
 
-	static private Logger logger = Logger.getLogger(DocumentsServiceImpl.class);
+	private static Logger logger = Logger.getLogger(DocumentsServiceImpl.class);
 
 	@Override
-	public SDKDocumentParameterValue[] getAdmissibleValues(Integer documentParameterId, String roleName) throws NonExecutableDocumentException {
+	public SDKDocumentParameterValue[] getAdmissibleValues(Integer documentParameterId, String roleName)
+			throws NonExecutableDocumentException {
 		SDKDocumentParameterValue[] values = new SDKDocumentParameterValue[] {};
 		logger.debug("IN: documentParameterId = [" + documentParameterId + "]; roleName = [" + roleName + "]");
 
@@ -123,20 +100,23 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 		try {
 			IEngUserProfile profile = getUserProfile();
-			BIObjectParameter documentParameter = DAOFactory.getBIObjectParameterDAO().loadForDetailByObjParId(documentParameterId);
+			BIObjectParameter documentParameter = DAOFactory.getBIObjectParameterDAO()
+					.loadForDetailByObjParId(documentParameterId);
 			BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(documentParameter.getBiObjectID());
 			if (!ObjectsAccessVerifier.canSee(obj, profile)) {
-				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = [" + obj.getId() + "]");
+				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = ["
+						+ obj.getId() + "]");
 				throw new NonExecutableDocumentException();
 			}
 			List correctRoles = ObjectsAccessVerifier.getCorrectRolesForExecution(obj.getId(), profile);
 			if (correctRoles == null || correctRoles.size() == 0) {
-				logger.error("User [" + ((UserProfile) profile).getUserName() + "] has no roles to execute document with id = [" + obj.getId() + "]");
+				logger.error("User [" + ((UserProfile) profile).getUserName()
+						+ "] has no roles to execute document with id = [" + obj.getId() + "]");
 				throw new NonExecutableDocumentException();
 			}
 			if (!correctRoles.contains(roleName)) {
-				logger.error("Role [" + roleName + "] is not a valid role for executing document with id = [" + obj.getId() + "] for user ["
-						+ ((UserProfile) profile).getUserName() + "]");
+				logger.error("Role [" + roleName + "] is not a valid role for executing document with id = ["
+						+ obj.getId() + "] for user [" + ((UserProfile) profile).getUserName() + "]");
 				throw new NonExecutableDocumentException();
 			}
 
@@ -183,7 +163,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	}
 
 	@Override
-	public SDKDocumentParameterValue[] getDefaultValues(Integer documentParameterId, String roleName) throws NonExecutableDocumentException {
+	public SDKDocumentParameterValue[] getDefaultValues(Integer documentParameterId, String roleName)
+			throws NonExecutableDocumentException {
 		SDKDocumentParameterValue[] values = new SDKDocumentParameterValue[] {};
 		logger.debug("IN: documentParameterId = [" + documentParameterId + "]; roleName = [" + roleName + "]");
 
@@ -191,24 +172,28 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 		try {
 			IEngUserProfile profile = getUserProfile();
-			BIObjectParameter documentParameter = DAOFactory.getBIObjectParameterDAO().loadForDetailByObjParId(documentParameterId);
+			BIObjectParameter documentParameter = DAOFactory.getBIObjectParameterDAO()
+					.loadForDetailByObjParId(documentParameterId);
 			BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(documentParameter.getBiObjectID());
 			if (!ObjectsAccessVerifier.canSee(obj, profile)) {
-				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = [" + obj.getId() + "]");
+				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = ["
+						+ obj.getId() + "]");
 				throw new NonExecutableDocumentException();
 			}
 			List correctRoles = ObjectsAccessVerifier.getCorrectRolesForExecution(obj.getId(), profile);
 			if (correctRoles == null || correctRoles.size() == 0) {
-				logger.error("User [" + ((UserProfile) profile).getUserName() + "] has no roles to execute document with id = [" + obj.getId() + "]");
+				logger.error("User [" + ((UserProfile) profile).getUserName()
+						+ "] has no roles to execute document with id = [" + obj.getId() + "]");
 				throw new NonExecutableDocumentException();
 			}
 			if (!correctRoles.contains(roleName)) {
-				logger.error("Role [" + roleName + "] is not a valid role for executing document with id = [" + obj.getId() + "] for user ["
-						+ ((UserProfile) profile).getUserName() + "]");
+				logger.error("Role [" + roleName + "] is not a valid role for executing document with id = ["
+						+ obj.getId() + "] for user [" + ((UserProfile) profile).getUserName() + "]");
 				throw new NonExecutableDocumentException();
 			}
 
-			ExecutionInstance executionInstance = new ExecutionInstance(profile, "", "", obj.getId(), roleName, null, null);
+			ExecutionInstance executionInstance = new ExecutionInstance(profile, "", "", obj.getId(), roleName, null,
+					null);
 			logger.debug("Execution instance created");
 
 			// reload BIObjectParameter in execution modality
@@ -233,7 +218,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			for (int i = 0; i < defaultValues.size(); i++) {
 				LovValue defaultValue = defaultValues.get(i);
 				String value = defaultValue.getValue() != null ? defaultValue.getValue().toString() : null;
-				String description = defaultValue.getDescription() != null ? defaultValue.getDescription().toString() : "";
+				String description = defaultValue.getDescription() != null ? defaultValue.getDescription().toString()
+						: "";
 				logger.debug("Default value retrieved : value = [" + value + "], description = [" + description + "]");
 				values[i] = new SDKDocumentParameterValue(value, description);
 			}
@@ -260,7 +246,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			IEngUserProfile profile = getUserProfile();
 			BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(documentId);
 			if (!ObjectsAccessVerifier.canSee(obj, profile)) {
-				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = [" + documentId + "]");
+				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = ["
+						+ documentId + "]");
 				throw new NonExecutableDocumentException();
 			}
 			List correctRoles = ObjectsAccessVerifier.getCorrectRolesForExecution(documentId, profile);
@@ -282,8 +269,9 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	}
 
 	@Override
-	public SDKDocumentParameter[] getDocumentParameters(Integer documentId, String roleName) throws NonExecutableDocumentException {
-		SDKDocumentParameter parameters[] = null;
+	public SDKDocumentParameter[] getDocumentParameters(Integer documentId, String roleName)
+			throws NonExecutableDocumentException {
+		SDKDocumentParameter[] parameters = null;
 		logger.debug("IN: documentId = [" + documentId + "]; roleName = [" + roleName + "]");
 
 		this.setTenant();
@@ -292,17 +280,19 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			IEngUserProfile profile = getUserProfile();
 			BIObject obj = DAOFactory.getBIObjectDAO().loadBIObjectById(documentId);
 			if (!ObjectsAccessVerifier.canSee(obj, profile)) {
-				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = [" + documentId + "]");
+				logger.error("User [" + ((UserProfile) profile).getUserName() + "] cannot execute document with id = ["
+						+ documentId + "]");
 				throw new NonExecutableDocumentException();
 			}
 			List correctRoles = ObjectsAccessVerifier.getCorrectRolesForExecution(documentId, profile);
 			if (correctRoles == null || correctRoles.size() == 0) {
-				logger.error("User [" + ((UserProfile) profile).getUserName() + "] has no roles to execute document with id = [" + documentId + "]");
+				logger.error("User [" + ((UserProfile) profile).getUserName()
+						+ "] has no roles to execute document with id = [" + documentId + "]");
 				throw new NonExecutableDocumentException();
 			}
 			if (!correctRoles.contains(roleName)) {
-				logger.error("Role [" + roleName + "] is not a valid role for executing document with id = [" + documentId + "] for user ["
-						+ ((UserProfile) profile).getUserName() + "]");
+				logger.error("Role [" + roleName + "] is not a valid role for executing document with id = ["
+						+ documentId + "] for user [" + ((UserProfile) profile).getUserName() + "]");
 				throw new NonExecutableDocumentException();
 			}
 
@@ -333,7 +323,7 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 	@Override
 	public SDKDocument[] getDocumentsAsList(String type, String state, String folderPath) {
-		SDKDocument documents[] = null;
+		SDKDocument[] documents = null;
 		logger.debug("IN");
 
 		this.setTenant();
@@ -347,9 +337,12 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 					BIObject obj = (BIObject) it.next();
 					if (ObjectsAccessVerifier.canSee(obj, profile)) {
 						SDKDocument aDoc = new SDKObjectsConverter().fromBIObjectToSDKDocument(obj);
-						if (!profile.isAbleToExecuteAction(SpagoBIConstants.DOCUMENT_MANAGEMENT_ADMIN)
-								&& !profile.isAbleToExecuteAction(SpagoBIConstants.DOCUMENT_MANAGEMENT_DEV) && obj.getVisible().equals(0)) {
-							logger.debug("Cannot view " + obj.getLabel() + " because user is not admin or dev and document is not visible");
+						if (!profile.isAbleToExecuteAction(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_ADMIN)
+								&& !profile
+										.isAbleToExecuteAction(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_DEV)
+								&& obj.getVisible().equals(0)) {
+							logger.debug("Cannot view " + obj.getLabel()
+									+ " because user is not admin or dev and document is not visible");
 						} else {
 							toReturn.add(aDoc);
 						}
@@ -403,7 +396,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 		logger.debug("IN");
 		IEngUserProfile profile = getUserProfile();
 		// loading contained documents
-		List containedBIObjects = DAOFactory.getBIObjectDAO().loadBIObjects(parentFunctionality.getId(), profile, false);
+		List containedBIObjects = DAOFactory.getBIObjectDAO().loadBIObjects(parentFunctionality.getId(), profile,
+				false);
 		List visibleDocumentsList = new ArrayList();
 		if (containedBIObjects != null && containedBIObjects.size() > 0) {
 			for (Iterator it = containedBIObjects.iterator(); it.hasNext();) {
@@ -419,13 +413,15 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 		parentFunctionality.setContainedDocuments(containedDocuments);
 
 		// loading contained functionalities
-		List containedFunctionalitiesList = DAOFactory.getLowFunctionalityDAO().loadChildFunctionalities(parentFunctionality.getId(), false);
+		List containedFunctionalitiesList = DAOFactory.getLowFunctionalityDAO()
+				.loadChildFunctionalities(parentFunctionality.getId(), false);
 		List visibleFunctionalitiesList = new ArrayList();
 		for (Iterator it = containedFunctionalitiesList.iterator(); it.hasNext();) {
 			LowFunctionality lowFunctionality = (LowFunctionality) it.next();
 			boolean canSeeFunctionality = ObjectsAccessVerifier.canSee(lowFunctionality, profile);
 			if (canSeeFunctionality) {
-				SDKFunctionality childFunctionality = new SDKObjectsConverter().fromLowFunctionalityToSDKFunctionality(lowFunctionality);
+				SDKFunctionality childFunctionality = new SDKObjectsConverter()
+						.fromLowFunctionalityToSDKFunctionality(lowFunctionality);
 				visibleFunctionalitiesList.add(childFunctionality);
 				// recursion
 				setFunctionalityContent(childFunctionality);
@@ -438,7 +434,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	}
 
 	@Override
-	public Integer saveNewDocument(SDKDocument document, SDKTemplate sdkTemplate, Integer functionalityId) throws NotAllowedOperationException {
+	public Integer saveNewDocument(SDKDocument document, SDKTemplate sdkTemplate, Integer functionalityId)
+			throws NotAllowedOperationException {
 		logger.debug("IN");
 		Integer toReturn = null;
 
@@ -476,7 +473,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 				// if Object has already functionalities associated and current
 				// one is not specified then keep previous ones,
-				if (functionalityId == null && existingObject.getFunctionalities() != null && !existingObject.getFunctionalities().isEmpty()) {
+				if (functionalityId == null && existingObject.getFunctionalities() != null
+						&& !existingObject.getFunctionalities().isEmpty()) {
 					logger.debug("Keep previous functionalities");
 					obj.setFunctionalities(existingObject.getFunctionalities());
 				} else {
@@ -499,7 +497,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				// save documents inside it
 				if (!ObjectsAccessVerifier.canDev(functionalityId, profile)) {
 					NotAllowedOperationException e = new NotAllowedOperationException();
-					e.setFaultString("User cannot save new documents in the specified folder since he hasn't development permission.");
+					e.setFaultString(
+							"User cannot save new documents in the specified folder since he hasn't development permission.");
 					throw e;
 				}
 				logger.debug("Not found existing document, saving new one.");
@@ -592,7 +591,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 		return toReturn;
 	}
 
-	private SDKExecutedDocumentContent executeKpi(SDKDocument document, BIObject biobj, String userId, String ouputType) {
+	private SDKExecutedDocumentContent executeKpi(SDKDocument document, BIObject biobj, String userId,
+			String ouputType) {
 		logger.debug("IN");
 		SDKExecutedDocumentContent toReturn = null;
 		SourceBean request = null;
@@ -638,7 +638,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				throw new ClassNotFoundException();
 			internalEngine = (InternalEngineIFace) Class.forName(className).newInstance();
 		} catch (ClassNotFoundException cnfe) {
-			logger.error("The class ['" + className + "'] for internal engine " + engine.getName() + " was not found.", cnfe);
+			logger.error("The class ['" + className + "'] for internal engine " + engine.getName() + " was not found.",
+					cnfe);
 			return null;
 		} catch (Exception e) {
 			logger.error("Error while instantiating class " + className, e);
@@ -674,7 +675,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 	}
 
-	private SDKExecutedDocumentContent executeReport(SDKDocument document, BIObject biobj, IEngUserProfile profile, String output) {
+	private SDKExecutedDocumentContent executeReport(SDKDocument document, BIObject biobj, IEngUserProfile profile,
+			String output) {
 
 		logger.debug("IN");
 		SDKExecutedDocumentContent toReturn = null;
@@ -717,17 +719,15 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	/**
 	 * Executes a document and return an object containing the result
 	 *
-	 * @param: document
-	 *             : the document
-	 * @param: parameters:
-	 *             ana array of SDKDocumentParameters, already filled with values
-	 * @param: roleName
-	 *             : name of the role
+	 * @param: document    : the document
+	 * @param: parameters: ana array of SDKDocumentParameters, already filled with values
+	 * @param: roleName    : name of the role
 	 */
 
 	@Override
-	public SDKExecutedDocumentContent executeDocument(SDKDocument document, SDKDocumentParameter[] parameters, String roleName, String outputType)
-			throws NonExecutableDocumentException, NotAllowedOperationException, MissingParameterValue, InvalidParameterValue {
+	public SDKExecutedDocumentContent executeDocument(SDKDocument document, SDKDocumentParameter[] parameters,
+			String roleName, String outputType) throws NonExecutableDocumentException, NotAllowedOperationException,
+			MissingParameterValue, InvalidParameterValue {
 		logger.debug("IN");
 		SDKExecutedDocumentContent toReturn = null;
 
@@ -750,7 +750,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 			ExecutionInstance instance = null;
 			try {
-				instance = new ExecutionInstance(profile, "111", "111", idDocument, roleName, SpagoBIConstants.SDK_EXECUTION_SERVICE, false, false, null);
+				instance = new ExecutionInstance(profile, "111", "111", idDocument, roleName,
+						SpagoBIConstants.SDK_EXECUTION_SERVICE, false, false, null);
 			} catch (Exception e) {
 				logger.error("error while creating instance", e);
 				throw new NonExecutableDocumentException();
@@ -798,8 +799,10 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			try {
 
 				if (document.getType().equalsIgnoreCase("KPI")) { // CASE KPI
-					toReturn = executeKpi(document, instance.getBIObject(), (String) profile.getUserUniqueIdentifier(), output);
-				} else if (document.getType().equalsIgnoreCase("REPORT") || document.getType().equalsIgnoreCase("ACCESSIBLE_HTML")) { // CASE
+					toReturn = executeKpi(document, instance.getBIObject(), (String) profile.getUserUniqueIdentifier(),
+							output);
+				} else if (document.getType().equalsIgnoreCase("REPORT")
+						|| document.getType().equalsIgnoreCase("ACCESSIBLE_HTML")) { // CASE
 					// REPORT
 					// OR
 					// ACCESSIBLE_HTML
@@ -834,7 +837,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 		this.setTenant();
 
 		try {
-			super.checkUserPermissionForFunctionality(SpagoBIConstants.DOCUMENT_MANAGEMENT, "User cannot see documents congifuration.");
+			super.checkUserPermissionForFunctionality(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT,
+					"User cannot see documents congifuration.");
 			if (id == null) {
 				logger.warn("Document identifier in input is null!");
 				return null;
@@ -862,7 +866,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 		this.setTenant();
 
 		try {
-			super.checkUserPermissionForFunctionality(SpagoBIConstants.DOCUMENT_MANAGEMENT, "User cannot see documents congifuration.");
+			super.checkUserPermissionForFunctionality(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT,
+					"User cannot see documents congifuration.");
 			if (label == null) {
 				logger.warn("Document label in input is null!");
 				return null;
@@ -883,8 +888,10 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	}
 
 	@Override
-	public void uploadDatamartTemplate(SDKTemplate sdkTemplate, SDKTemplate calculatedFields, String dataSourceLabel, String categoryLabel) {
-		logger.debug("IN: template file name = [" + sdkTemplate.getFileName() + "] and optional calculatedFields file [" + calculatedFields + "]");
+	public void uploadDatamartTemplate(SDKTemplate sdkTemplate, SDKTemplate calculatedFields, String dataSourceLabel,
+			String categoryLabel) {
+		logger.debug("IN: template file name = [" + sdkTemplate.getFileName() + "] and optional calculatedFields file ["
+				+ calculatedFields + "]");
 
 		this.setTenant();
 
@@ -944,8 +951,10 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 					// Check if the model is locked by another user
 					if (lockerUserId != null && !lockerUserId.equals(uploaderUserId)) {
 						// model locked by another user, cannot proceed with the update
-						logger.debug("Cannot update, the metamodel [" + metaModel.getName() + "] is currently locked by user [" + lockerUserId + "]");
-						throw new SpagoBIRuntimeException("The metamodel [" + metaModel.getName() + "] is currently locked by user [" + lockerUserId + "]");
+						logger.debug("Cannot update, the metamodel [" + metaModel.getName()
+								+ "] is currently locked by user [" + lockerUserId + "]");
+						throw new SpagoBIRuntimeException("The metamodel [" + metaModel.getName()
+								+ "] is currently locked by user [" + lockerUserId + "]");
 					}
 
 				} else {
@@ -962,7 +971,9 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 					}
 
 					// retrieve Category Id
-					Domain domain = DAOFactory.getDomainDAO().loadDomainByCodeAndValue("BM_CATEGORY", categoryLabel);
+					ICategoryDAO categoryDao = DAOFactory.getCategoryDAO();
+					Domain domain = Optional.ofNullable(categoryDao.getCategoryForBusinessModel(categoryLabel))
+							.map(Domain::fromCategory).orElse(null);
 					if (domain != null) {
 						Integer id = domain.getValueId();
 						logger.debug("Associate domain with id: " + id + " and name " + categoryLabel);
@@ -993,7 +1004,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 			} catch (Exception e) {
 				logger.error("Could not insert meta model into meta model catalogue", e);
-				throw new SpagoBIRuntimeException("Could not insert meta model into meta model catalogue: " + e.getMessage());
+				throw new SpagoBIRuntimeException(
+						"Could not insert meta model into meta model catalogue: " + e.getMessage());
 			} finally {
 				try {
 					if (is != null)
@@ -1108,9 +1120,9 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 			toReturn = new SDKTemplate();
 			toReturn.setFileName(fileName);
-			SDKObjectsConverter objConverter = new SDKObjectsConverter();
-			MemoryOnlyDataSource mods = objConverter.new MemoryOnlyDataSource(templateContent, null);
-			DataHandler dhSource = new DataHandler(mods);
+			ByteArrayInputStream bais = new ByteArrayInputStream(templateContent);
+			KnowageSoapDataSource ds = new KnowageSoapDataSource(bais);
+			DataHandler dhSource = new DataHandler(ds);
 			toReturn.setContent(dhSource);
 
 		} catch (Exception e) {
@@ -1142,8 +1154,7 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 		java.io.InputStream is = null;
 
 		try {
-			UUIDGenerator uuidGen = UUIDGenerator.getInstance();
-			UUID uuidObj = uuidGen.generateTimeBasedUUID();
+			UUID uuidObj = UUID.randomUUID();
 			String idCas = uuidObj.toString().replaceAll("-", "");
 			logger.debug("create temp file for jar");
 			String path = System.getProperty("java.io.tmpdir") + System.getProperty("file.separator") + idCas + ".jar";
@@ -1155,22 +1166,55 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			jar = new JarFile(filee);
 			logger.debug("jar file created ");
 
-			Enumeration enumEntries = jar.entries();
+			Enumeration<JarEntry> enumEntries = jar.entries();
+			int thresholdEntries = 10000;
+			int thresholdSize = 100_000_000; // 100MB
+			double thresholdRatio = 4;
+			long totalSizeArchive = 0;
+			int totalEntryArchive = 0;
+
 			while (enumEntries.hasMoreElements()) {
-				JarEntry fileEntry = (java.util.jar.JarEntry) enumEntries.nextElement();
+
+				JarEntry fileEntry = enumEntries.nextElement();
 				logger.debug("jar content " + fileEntry.getName());
 
-				if (fileEntry.getName().endsWith("sbimodel")) {
-					logger.debug("found model file " + fileEntry.getName());
-					is = jar.getInputStream(fileEntry);
-					byte[] byteContent = SpagoBIUtilities.getByteArrayFromInputStream(is);
-					return byteContent;
+				totalEntryArchive++;
 
-				}
+				int nBytes;
+				byte[] buffer = new byte[1024];
+				int totalSizeEntry = 0;
+				java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+				java.io.BufferedOutputStream bos = new java.io.BufferedOutputStream(baos);
 
+					if (fileEntry.getName().endsWith("sbimodel")) {
+						logger.debug("found model file " + fileEntry.getName());
+						is = jar.getInputStream(fileEntry);
+
+						while ((nBytes = is.read(buffer)) > 0) { // Compliant
+							totalSizeEntry += nBytes;
+							totalSizeArchive += nBytes;
+
+							double compressionRatio = (double) totalSizeEntry / fileEntry.getCompressedSize();
+							if (compressionRatio > thresholdRatio || totalSizeArchive > thresholdSize || totalEntryArchive > thresholdEntries) {
+								// ratio between compressed and uncompressed data is highly suspicious, looks like a Zip Bomb Attack
+								throw new IOException("Zip Bomb Attack detected");
+							}
+
+							if (nBytes == 1024)
+								bos.write(buffer);
+							else
+								bos.write(buffer, 0, nBytes);
+						}
+
+						bos.flush();
+						byte[] ret = baos.toByteArray();
+						bos.close();
+						return ret;					}
 			}
 		} catch (IOException e1) {
-			logger.error("the model file could not be takend by datamart.jar due to error, it will be taken from resources ", e1);
+			logger.error(
+					"the model file could not be takend by datamart.jar due to error, it will be taken from resources ",
+					e1);
 			return null;
 		} finally {
 			try {
@@ -1186,8 +1230,22 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			}
 			logger.debug("OUT");
 		}
-		logger.debug("the model file could not be takend by datamart.jar, probably datamart.jar is old, it will be taken from resources");
+		logger.debug(
+				"the model file could not be takend by datamart.jar, probably datamart.jar is old, it will be taken from resources");
 		return null;
+	}
+
+	private int getThresholdSize() {
+		IConfigDAO configDao = DAOFactory.getSbiConfigDAO();
+		Config config;
+		try {
+			config = configDao.loadConfigParametersByLabel("SPAGOBI.UPLOAD.MAX_FILE_SIZE_MB");
+		} catch (Exception e) {
+			logger.error("Error while retrieving max file size: " + e);
+			throw new SpagoBIServiceException("Error while retrieving max file size", e);
+		}
+
+        return config.getValueCheck().equals("-1") ? 100000000 : Integer.parseInt(config.getValueCheck()) * 1000000;
 	}
 
 	// download a zip file with datamart.jar and modelfile
@@ -1239,9 +1297,9 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			// creates the returned object
 			SDKTemplate toReturn = new SDKTemplate();
 			toReturn.setFileName(fileZipName);
-			SDKObjectsConverter objConverter = new SDKObjectsConverter();
-			MemoryOnlyDataSource mods = objConverter.new MemoryOnlyDataSource(new FileInputStream(inFileZip), null);
-			DataHandler dhSource = new DataHandler(mods);
+			FileInputStream fis = new FileInputStream(inFileZip);
+			KnowageSoapDataSource ds = new KnowageSoapDataSource(fis);
+			DataHandler dhSource = new DataHandler(ds);
 			toReturn.setContent(dhSource);
 
 			logger.debug("OUT");
@@ -1292,7 +1350,7 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	public HashMap<String, String> getAllDatamartModels() {
 		logger.debug("IN");
 
-		HashMap<String, String> toReturn = new HashMap<String, String>();
+		HashMap<String, String> toReturn = new HashMap<>();
 
 		this.setTenant();
 		// Models list must be taken by database not by resources
@@ -1338,7 +1396,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				for (int j = 0; j < models.length; j++) {
 					// return only if present in business service catalogue
 					if (toReturn.get(dir.getName()) != null) {
-						logger.debug("overwrite model file name of model " + dir.getName() + " to " + models[j].getName());
+						logger.debug(
+								"overwrite model file name of model " + dir.getName() + " to " + models[j].getName());
 						toReturn.put(dir.getName(), models[j].getName());
 					}
 				}
@@ -1356,8 +1415,7 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 	/**
 	 * Add the schema mondrian to the catalogue and upload a template that uses it
 	 *
-	 * @param SDKSchema
-	 *            . The object with all informations
+	 * @param SDKSchema . The object with all informations
 	 */
 	@Override
 	public void uploadMondrianSchema(SDKSchema schema) throws SDKException, NotAllowedOperationException {
@@ -1366,7 +1424,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 		try {
 			// checks permission
-			super.checkUserPermissionForFunctionality(SpagoBIConstants.DOCUMENT_MANAGEMENT, "User cannot see documents configuration.");
+			super.checkUserPermissionForFunctionality(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT,
+					"User cannot see documents configuration.");
 			if (schema.getSchemaName() == null) {
 				logger.error("Schema name in input is null!");
 				// throw new
@@ -1381,8 +1440,9 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				throw new SDKException("1001", "Error while uploading schema. Schema file is null.");
 				// return;
 			}
-			logger.debug("schema name = [" + schema.getSchemaName() + "] - schema description = [" + schema.getSchemaDescription() + "] - schema datasource = ["
-					+ schema.getSchemaDataSourceLbl() + "] ");
+			logger.debug("schema name = [" + schema.getSchemaName() + "] - schema description = ["
+					+ schema.getSchemaDescription() + "] - schema datasource = [" + schema.getSchemaDataSourceLbl()
+					+ "] ");
 			UserProfile userProfile = (UserProfile) this.getUserProfile();
 			try {
 				boolean isNewSchema = true;
@@ -1401,13 +1461,14 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				// checks if the artifact already exists. In this case doesn't
 				// create the new one!
 				if (artifact != null) {
-					logger.info(
-							"The schema with name " + schema.getSchemaName() + " is already been inserted in SpagoBI catalogue. Artifact will be updated! ");
+					logger.info("The schema with name " + schema.getSchemaName()
+							+ " is already been inserted in SpagoBI catalogue. Artifact will be updated! ");
 					isNewSchema = false;
 					artID = artifact.getId();
 				}
 				if (isNewSchema) {
-					logger.info("The schema with name " + schema.getSchemaName() + " doesn't exist in SpagoBI catalogue. Artifact will be inserted! ");
+					logger.info("The schema with name " + schema.getSchemaName()
+							+ " doesn't exist in SpagoBI catalogue. Artifact will be inserted! ");
 					// inserts schema into the catalogue (artifact)
 					artifact = new Artifact();
 					artifact.setId(new Integer(0));
@@ -1435,7 +1496,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				BIObject obj = biObjDAO.loadBIObjectByLabel(schema.getSchemaName());
 				if (obj != null) {
 					logger.info("The schema with name " + schema.getSchemaName()
-							+ " is already been inserted in SpagoBI. A new template is loaded for the sbiObject with name  " + obj.getName());
+							+ " is already been inserted in SpagoBI. A new template is loaded for the sbiObject with name  "
+							+ obj.getName());
 					isNewObj = false;
 					objTemplate.setBiobjId(obj.getId());
 				} else {
@@ -1502,7 +1564,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 
 			// if user cannot develop the specified document, he cannot upload
 			// templates on it
-			super.checkUserPermissionForFunctionality(SpagoBIConstants.DOCUMENT_MANAGEMENT, "User cannot see documents congifuration.");
+			super.checkUserPermissionForFunctionality(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT,
+					"User cannot see documents congifuration.");
 			if (sdkTemplate == null) {
 				logger.error("SDKTemplate in input is null!");
 				return;
@@ -1517,7 +1580,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				datamartFolder.mkdir();
 			}
 			path += System.getProperty("file.separator")
-					+ (sdkTemplate.getFileName() == null || sdkTemplate.getFileName().equals("") ? defaultName : sdkTemplate.getFileName());
+					+ (sdkTemplate.getFileName() == null || sdkTemplate.getFileName().equals("") ? defaultName
+							: sdkTemplate.getFileName());
 			File datamartFile = new File(path);
 			logger.debug("File: " + path);
 			if (!datamartFile.exists()) {
@@ -1562,7 +1626,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 		try {
 			// if user cannot develop the specified document, he cannot upload
 			// templates on it
-			super.checkUserPermissionForFunctionality(SpagoBIConstants.DOCUMENT_MANAGEMENT, "User cannot see documents congifuration.");
+			super.checkUserPermissionForFunctionality(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT,
+					"User cannot see documents congifuration.");
 
 			// retrieves template
 			String path = getResourcePath() + System.getProperty("file.separator") + folderName;
@@ -1666,8 +1731,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 				throw new Exception("Cannot recover measure bean. Check the schema.");
 			SourceBean measureSB = (SourceBean) measuresLst.get(0);
 			// defines the start query
-			toReturn = "select {[Measures].[" + measureSB.getAttribute("name") + "]} on columns, {([" + dimensionSB.getAttribute("name") + "])} on rows from ["
-					+ cubeSB.getAttribute("name") + "]";
+			toReturn = "select {[Measures].[" + measureSB.getAttribute("name") + "]} on columns, {(["
+					+ dimensionSB.getAttribute("name") + "])} on rows from [" + cubeSB.getAttribute("name") + "]";
 		} catch (Exception e) {
 			LogMF.error(logger, e, "Error while loading SourceBean from xml \n {0}", new Object[] { schemaStr });
 			throw new SpagoBIRuntimeException("Error while loading SourceBean from xml. " + e.getMessage(), e);
@@ -1762,7 +1827,8 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			String previousLockerUser = biObj.getLockedByUser();
 			String currentUser = (String) ((UserProfile) getUserProfile()).getUserId();
 
-			boolean isUserAdmin = getUserProfile().isAbleToExecuteAction(SpagoBIConstants.DOCUMENT_MANAGEMENT_ADMIN);
+			boolean isUserAdmin = getUserProfile()
+					.isAbleToExecuteAction(CommunityFunctionalityConstants.DOCUMENT_MANAGEMENT_ADMIN);
 
 			boolean isLocked = false;
 			boolean isLockedByCurrentUser = false;
@@ -1780,17 +1846,19 @@ public class DocumentsServiceImpl extends AbstractSDKService implements Document
 			IBIObjectDAO biObjDAO = DAOFactory.getBIObjectDAO();
 			biObjDAO.setUserProfile(getUserProfile());
 
-			if (isLocked == false) {
+			if (!isLocked) {
 				logger.debug("Document " + documentLabel + " is not locked, lock it");
 				toReturn = biObjDAO.changeLockStatus(documentLabel, isUserAdmin);
-			} else if (isLocked == true && isLockedByCurrentUser == true) {
+			} else if (isLocked && isLockedByCurrentUser) {
 				logger.debug("Document " + documentLabel + " is locked by current user, unlock");
 				toReturn = biObjDAO.changeLockStatus(documentLabel, isUserAdmin);
-			} else if (isLocked == true && isLockedByCurrentUser == false && isUserAdmin == true) {
-				logger.debug("Document " + documentLabel + " is not locked by current user but current user is administrator");
+			} else if (isLocked && !isLockedByCurrentUser && isUserAdmin) {
+				logger.debug("Document " + documentLabel
+						+ " is not locked by current user but current user is administrator");
 				toReturn = biObjDAO.changeLockStatus(documentLabel, isUserAdmin);
 			} else {
-				logger.debug("Document " + documentLabel + " is locked by another user and current user is not administrator is, don't change");
+				logger.debug("Document " + documentLabel
+						+ " is locked by another user and current user is not administrator is, don't change");
 				toReturn = previousLockerUser;
 			}
 

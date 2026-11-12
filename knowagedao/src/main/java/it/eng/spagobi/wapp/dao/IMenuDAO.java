@@ -17,13 +17,16 @@
  */
 package it.eng.spagobi.wapp.dao;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import it.eng.spago.error.EMFUserError;
 import it.eng.spagobi.commons.dao.ISpagoBIDao;
 import it.eng.spagobi.commons.metadata.SbiExtRoles;
 import it.eng.spagobi.wapp.bo.Menu;
 import it.eng.spagobi.wapp.metadata.SbiMenu;
+import org.hibernate.Session;
 
 /**
  * @author Antonella Giachino (antonella.giachino@eng.it)
@@ -66,6 +69,19 @@ public interface IMenuDAO extends ISpagoBIDao {
 	 * @throws EMFUserError If an Exception occurred
 	 */
 	public Menu loadMenuByID(Integer menuID, Integer roleID) throws EMFUserError;
+
+	/**
+	 * Loads all detail information for a menu identified by its <code>menuID</code>. All these information, archived by a query to the DB, are stored into an
+	 * <code>menu</code> object, which is returned.
+	 *
+	 * @param menuID The id for the menu to load
+	 *
+	 * @return An <code>menu</code> object containing all loaded information
+	 *
+	 * @throws EMFUserError If an Exception occurred
+	 */
+	public Menu loadMenuByIDV2(Integer menuID, Integer roleID) throws EMFUserError;
+
 
 	/**
 	 * Loads all detail information for a menu whose name is equal to <code>name</code>.
@@ -151,6 +167,19 @@ public interface IMenuDAO extends ISpagoBIDao {
 	 */
 	public List getChildrenMenu(Integer menuId, Integer roleID) throws EMFUserError;
 
+
+
+	/**
+	 * Tells if a menu has children element. It is useful for define the type of menu
+	 *
+	 * @param menuId The menu identifier
+	 *
+	 * @return True if the menu is used by one or more objects, else false
+	 *
+	 * @throws EMFUserError If any exception occurred
+	 */
+	public List getChildrenMenuV2(Integer menuId, Integer roleID, Session session) throws EMFUserError;
+
 	/**
 	 * Substitution between the current node and his father
 	 *
@@ -184,4 +213,13 @@ public interface IMenuDAO extends ISpagoBIDao {
 
 	public void updateMenu(SbiMenu hibMenu) throws EMFUserError;
 
+	/**
+	 * Loads detailed information for multiple menus identified by their unique IDs.
+	 * The details for each menu are retrieved from the system and returned in a map,
+	 * where the key is the menu ID and the value is the corresponding SbiMenu object.
+	 *
+	 * @param integers A list of integers representing the menu IDs whose details need to be loaded.
+	 * @return A map where each key is a menu ID and the value is an SbiMenu object containing the details for that menu.
+	 */
+    Map<Integer, SbiMenu> loadSbiMenusByIds(ArrayList<Integer> integers);
 }

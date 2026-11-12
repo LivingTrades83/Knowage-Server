@@ -35,7 +35,7 @@ import junit.framework.TestCase;
  */
 public abstract class AbstractDAOTest extends TestCase {
 
-	static private Logger logger = Logger.getLogger(AbstractDAOTest.class);
+	private static Logger logger = Logger.getLogger(AbstractDAOTest.class);
 
 	/*
 	 * (non-Javadoc)
@@ -45,7 +45,7 @@ public abstract class AbstractDAOTest extends TestCase {
 	@Override
 	protected void setUp() throws Exception {
 		super.setUp();
-		Map<String, String> mappings = new HashMap<String, String>();
+		Map<String, String> mappings = new HashMap<>();
 		mappings.put("DataSetDAO", "it.eng.spagobi.tools.dataset.dao.DataSetDAOImpl");
 		mappings.put("SbiNewsDAO", "it.eng.spagobi.tools.news.dao.SbiNewsDAOImpl");
 		DAOConfig.setMappings(mappings);

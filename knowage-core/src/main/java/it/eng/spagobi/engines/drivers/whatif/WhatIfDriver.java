@@ -21,30 +21,25 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.apache.log4j.Logger;
 import org.json.JSONObject;
-import org.safehaus.uuid.UUID;
-import org.safehaus.uuid.UUIDGenerator;
 
 import it.eng.spago.base.SourceBean;
 import it.eng.spago.base.SourceBeanException;
-import it.eng.spago.error.EMFInternalError;
 import it.eng.spago.error.EMFUserError;
 import it.eng.spago.security.IEngUserProfile;
 import it.eng.spagobi.analiticalmodel.document.bo.BIObject;
 import it.eng.spagobi.analiticalmodel.document.bo.ObjTemplate;
-import it.eng.spagobi.commons.bo.UserProfile;
 import it.eng.spagobi.commons.constants.SpagoBIConstants;
 import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.commons.utilities.EngineUtilities;
 import it.eng.spagobi.engines.config.bo.Engine;
 import it.eng.spagobi.engines.drivers.DefaultOutputParameter;
 import it.eng.spagobi.engines.drivers.DefaultOutputParameter.TYPE;
 import it.eng.spagobi.engines.drivers.EngineURL;
 import it.eng.spagobi.engines.drivers.exceptions.InvalidOperationRequest;
 import it.eng.spagobi.engines.drivers.generic.GenericDriver;
-import it.eng.spagobi.engines.drivers.whatif.manager.WhatIfWorkflowManager;
 import it.eng.spagobi.tools.catalogue.bo.Artifact;
 import it.eng.spagobi.tools.catalogue.bo.Content;
 import it.eng.spagobi.tools.catalogue.dao.IArtifactsDAO;
@@ -56,7 +51,7 @@ import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 public class WhatIfDriver extends GenericDriver {
 
-	static private Logger logger = Logger.getLogger(WhatIfDriver.class);
+	private static Logger logger = Logger.getLogger(WhatIfDriver.class);
 
 	@Override
 	public Map getParameterMap(Object biobject, IEngUserProfile profile, String roleName) {
@@ -89,8 +84,9 @@ public class WhatIfDriver extends GenericDriver {
 		try {
 			BIObject biobj = (BIObject) biobject;
 			template = DAOFactory.getObjTemplateDAO().getBIObjectActiveTemplate(biobj.getId());
-			if (template == null)
+			if (template == null) {
 				throw new Exception("Active Template null");
+			}
 		} catch (Exception e) {
 			throw new RuntimeException("Error while getting document's template", e);
 		}
@@ -105,13 +101,15 @@ public class WhatIfDriver extends GenericDriver {
 		} catch (Exception e) {
 			throw new RuntimeException("Error while getting document's template", e);
 		}
-		if (bytes == null)
+		if (bytes == null) {
 			throw new RuntimeException("Content of the Active template null");
+		}
 		return bytes;
 	}
 
 	@Override
-	public EngineURL getEditDocumentTemplateBuildUrl(Object biobject, IEngUserProfile profile) throws InvalidOperationRequest {
+	public EngineURL getEditDocumentTemplateBuildUrl(Object biobject, IEngUserProfile profile)
+			throws InvalidOperationRequest {
 		logger.debug("IN");
 		BIObject obj = null;
 		try {
@@ -140,8 +138,7 @@ public class WhatIfDriver extends GenericDriver {
 		parameters.put("template", json);
 		// CREATE EXECUTION ID
 		String sbiExecutionId = null;
-		UUIDGenerator uuidGen = UUIDGenerator.getInstance();
-		UUID uuidObj = uuidGen.generateTimeBasedUUID();
+		UUID uuidObj = UUID.randomUUID();
 		sbiExecutionId = uuidObj.toString();
 		sbiExecutionId = sbiExecutionId.replaceAll("-", "");
 		parameters.put("SBI_EXECUTION_ID", sbiExecutionId);
@@ -154,7 +151,8 @@ public class WhatIfDriver extends GenericDriver {
 	}
 
 	@Override
-	public EngineURL getNewDocumentTemplateBuildUrl(Object biobject, IEngUserProfile profile) throws InvalidOperationRequest {
+	public EngineURL getNewDocumentTemplateBuildUrl(Object biobject, IEngUserProfile profile)
+			throws InvalidOperationRequest {
 		logger.debug("IN");
 		BIObject obj = null;
 		try {
@@ -176,8 +174,7 @@ public class WhatIfDriver extends GenericDriver {
 		parameters.put("mode", "edit");
 		// CREATE EXECUTION ID
 		String sbiExecutionId = null;
-		UUIDGenerator uuidGen = UUIDGenerator.getInstance();
-		UUID uuidObj = uuidGen.generateTimeBasedUUID();
+		UUID uuidObj = UUID.randomUUID();
 		sbiExecutionId = uuidObj.toString();
 		sbiExecutionId = sbiExecutionId.replaceAll("-", "");
 		parameters.put("SBI_EXECUTION_ID", sbiExecutionId);
@@ -187,7 +184,8 @@ public class WhatIfDriver extends GenericDriver {
 		return engineURL;
 	}
 
-	protected Map addArtifactVersionId(byte[] template, Map pars, IEngUserProfile profile, int documentId, Engine engine) {
+	protected Map addArtifactVersionId(byte[] template, Map pars, IEngUserProfile profile, int documentId,
+			Engine engine) {
 		SourceBean sb = null;
 		try {
 			sb = SourceBean.fromXMLString(new String(template));
@@ -198,8 +196,8 @@ public class WhatIfDriver extends GenericDriver {
 		SourceBean cubeSb = (SourceBean) sb.getAttribute(SpagoBIConstants.MONDRIAN_CUBE);
 		Assert.assertNotNull(cubeSb, "Template is missing \"" + SpagoBIConstants.MONDRIAN_CUBE + "\" definition");
 		String reference = (String) cubeSb.getAttribute(SpagoBIConstants.MONDRIAN_REFERENCE);
-		Assert.assertNotNull(reference,
-				"Template is missing \"" + SpagoBIConstants.MONDRIAN_REFERENCE + "\" property, that is the reference to the Mondrian schema");
+		Assert.assertNotNull(reference, "Template is missing \"" + SpagoBIConstants.MONDRIAN_REFERENCE
+				+ "\" property, that is the reference to the Mondrian schema");
 		IArtifactsDAO dao = DAOFactory.getArtifactsDAO();
 		Artifact artifact = dao.loadArtifactByNameAndType(reference, SpagoBIConstants.MONDRIAN_SCHEMA);
 		Assert.assertNotNull(artifact, "Mondrian schema with name [" + reference + "] was not found");
@@ -207,11 +205,6 @@ public class WhatIfDriver extends GenericDriver {
 		Assert.assertNotNull(content, "Mondrian schema with name [" + reference + "] has no content");
 
 		pars.put(SpagoBIConstants.SBI_ARTIFACT_VERSION_ID, content.getId());
-
-		if (EngineUtilities.isWhatIf(engine)) {
-			// add info if artifact is locked
-			addArtifactStausInfo(pars, artifact.getId(), profile, documentId);
-		}
 
 		return pars;
 
@@ -247,8 +240,8 @@ public class WhatIfDriver extends GenericDriver {
 		SourceBean cubeSb = (SourceBean) sb.getAttribute(SpagoBIConstants.MONDRIAN_CUBE);
 		Assert.assertNotNull(cubeSb, "Template is missing \"" + SpagoBIConstants.MONDRIAN_CUBE + "\" definition");
 		String reference = (String) cubeSb.getAttribute(SpagoBIConstants.MONDRIAN_REFERENCE);
-		Assert.assertNotNull(reference,
-				"Template is missing \"" + SpagoBIConstants.MONDRIAN_REFERENCE + "\" property, that is the reference to the Mondrian schema");
+		Assert.assertNotNull(reference, "Template is missing \"" + SpagoBIConstants.MONDRIAN_REFERENCE
+				+ "\" property, that is the reference to the Mondrian schema");
 		IArtifactsDAO dao = DAOFactory.getArtifactsDAO();
 		Artifact artifact = dao.loadArtifactByNameAndType(reference, SpagoBIConstants.MONDRIAN_SCHEMA);
 		Assert.assertNotNull(artifact, "Mondrian schema with name [" + reference + "] was not found");
@@ -257,64 +250,6 @@ public class WhatIfDriver extends GenericDriver {
 
 		return pars;
 
-	}
-
-	public Map addArtifactStausInfo(Map pars, Integer artifactId, IEngUserProfile profile, int documentId) {
-		logger.debug("IN");
-
-		String statusToReturn = null;
-		String userId = ((UserProfile) profile).getUserId().toString();
-		String locker;
-		logger.debug("User Id is " + userId);
-		logger.debug("Artifact Id is " + artifactId);
-
-		IArtifactsDAO artifactsDAO = DAOFactory.getArtifactsDAO();
-
-		Artifact artifact = artifactsDAO.loadArtifactById(artifactId);
-
-		if (artifact == null) {
-			logger.error("Artifact referring to id [" + artifactId + "] could not be loaded");
-			throw new RuntimeException("Artifact with id [" + artifactId + "] could not be loaded", null);
-		}
-
-		logger.debug("Artifact id is " + artifactId);
-
-		int did = artifact.getId();
-
-		// Boolean locked = artifact.getModelLocked();
-
-		try {
-			if (!profile.getFunctionalities().contains("WorkFlowManagment")) {
-				statusToReturn = SpagoBIConstants.SBI_ARTIFACT_VALUE_LOCKED_BY_USER;
-				locker = userId;
-			} else {
-				WhatIfWorkflowManager wfm = new WhatIfWorkflowManager();
-				locker = wfm.getActiveUser(did);
-				if (locker == null) {
-					logger.debug("Artifact with id " + artifactId + " is unlocked");
-					statusToReturn = SpagoBIConstants.SBI_ARTIFACT_VALUE_UNLOCKED;
-				} else {
-					if (locker != null && locker.equals(userId)) {
-						statusToReturn = SpagoBIConstants.SBI_ARTIFACT_VALUE_LOCKED_BY_USER;
-					} else {
-						statusToReturn = SpagoBIConstants.SBI_ARTIFACT_VALUE_LOCKED_BY_OTHER;
-					}
-
-				}
-			}
-			;
-		} catch (EMFInternalError e) {
-			logger.error("Error checking functionality", e);
-			throw new SpagoBIRuntimeException("Error checking functionality", e);
-		} catch (EMFUserError e) {
-			logger.error("Error loading locker user", e);
-			throw new SpagoBIRuntimeException("Error loading locker user", e);
-		}
-
-		logger.debug("Status of artifact is " + statusToReturn);
-		pars.put(SpagoBIConstants.SBI_ARTIFACT_STATUS, statusToReturn);
-		pars.put(SpagoBIConstants.SBI_ARTIFACT_LOCKER, locker != null ? locker : "");
-		return pars;
 	}
 
 	private Map applyDatasourceForWriting(Map parameters, BIObject biObject) {

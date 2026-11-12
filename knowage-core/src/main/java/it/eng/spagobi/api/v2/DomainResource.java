@@ -17,17 +17,7 @@
  */
 package it.eng.spagobi.api.v2;
 
-import it.eng.spagobi.api.AbstractSpagoBIResource;
-import it.eng.spagobi.commons.bo.Domain;
-import it.eng.spagobi.commons.constants.SpagoBIConstants;
-import it.eng.spagobi.commons.dao.DAOFactory;
-import it.eng.spagobi.commons.dao.IDomainDAO;
-import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
-import it.eng.spagobi.services.rest.annotations.UserConstraint;
-import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
-
 import java.net.URI;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,6 +36,19 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
 import org.apache.log4j.Logger;
+import org.owasp.esapi.Encoder;
+
+import it.eng.knowage.security.OwaspDefaultEncoderFactory;
+import it.eng.spagobi.api.AbstractSpagoBIResource;
+import it.eng.spagobi.commons.bo.Domain;
+import it.eng.spagobi.commons.constants.CommunityFunctionalityConstants;
+import it.eng.spagobi.commons.dao.DAOFactory;
+import it.eng.spagobi.commons.dao.ICategoryDAO;
+import it.eng.spagobi.commons.dao.IDomainDAO;
+import it.eng.spagobi.commons.dao.dto.SbiCategory;
+import it.eng.spagobi.services.rest.annotations.ManageAuthorization;
+import it.eng.spagobi.services.rest.annotations.UserConstraint;
+import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 @Path("/2.0/domains")
 @ManageAuthorization
@@ -77,7 +80,7 @@ public class DomainResource extends AbstractSpagoBIResource {
 			logger.debug("OUT");
 		}
 
-		return new ArrayList<Domain>();
+		return new ArrayList<>();
 	}
 
 	@GET
@@ -103,8 +106,8 @@ public class DomainResource extends AbstractSpagoBIResource {
 
 	@POST
 	@Path("/")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOMAIN_WRITE })
 	@Consumes("application/json")
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOMAIN_WRITE })
 	public Response insertDomain(@Valid Domain body) {
 
 		IDomainDAO domainsDao = null;
@@ -114,7 +117,8 @@ public class DomainResource extends AbstractSpagoBIResource {
 		}
 
 		if (domain.getValueId() != null) {
-			return Response.status(Status.BAD_REQUEST).entity("Error paramters. New domain should not have ID value").build();
+			return Response.status(Status.BAD_REQUEST).entity("Error paramters. New domain should not have ID value")
+					.build();
 		}
 
 		try {
@@ -122,7 +126,8 @@ public class DomainResource extends AbstractSpagoBIResource {
 			domainsDao.setUserProfile(getUserProfile());
 			List<Domain> domainsList = domainsDao.loadListDomains();
 			domainsDao.saveDomain(domain);
-			String encodedDomain = URLEncoder.encode("" + domain.getValueId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedDomain = encoder.encodeForURL("" + domain.getValueId());
 			return Response.created(new URI("1.0/domains/" + encodedDomain)).entity(encodedDomain).build();
 		} catch (Exception e) {
 			Response.notModified().build();
@@ -133,8 +138,8 @@ public class DomainResource extends AbstractSpagoBIResource {
 
 	@PUT
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOMAIN_WRITE })
 	@Consumes(MediaType.APPLICATION_JSON)
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOMAIN_WRITE })
 	public Response updateDomain(@PathParam("id") Integer id, @Valid Domain body) {
 
 		IDomainDAO domainsDao = null;
@@ -153,7 +158,8 @@ public class DomainResource extends AbstractSpagoBIResource {
 			domainsDao.setUserProfile(getUserProfile());
 			List<Domain> domainsList = domainsDao.loadListDomains();
 			domainsDao.saveDomain(domain);
-			String encodedDomain = URLEncoder.encode("" + domain.getValueId(), "UTF-8");
+			Encoder encoder = OwaspDefaultEncoderFactory.getInstance().getEncoder();
+			String encodedDomain = encoder.encodeForURL("" + domain.getValueId());
 			return Response.created(new URI("1.0/domains/" + encodedDomain)).entity(encodedDomain).build();
 		} catch (Exception e) {
 			logger.error("Error while updating url of the new resource", e);
@@ -163,7 +169,7 @@ public class DomainResource extends AbstractSpagoBIResource {
 
 	@DELETE
 	@Path("/{id}")
-	@UserConstraint(functionalities = { SpagoBIConstants.DOMAIN_WRITE })
+	@UserConstraint(functionalities = { CommunityFunctionalityConstants.DOMAIN_WRITE })
 	public Response deleteDomain(@PathParam("id") Integer id) {
 
 		IDomainDAO domainsDao = null;
@@ -179,93 +185,9 @@ public class DomainResource extends AbstractSpagoBIResource {
 		}
 	}
 
-	// @formatter:off
-		/**
-		 * @api {get} /2.0/domains/listByCode/:code Request domain by code
-		 * @apiName GET_getDomainsByCode
-		 * @apiGroup Domain
-		 *
-		 * @apiVersion 0.1.0
-		 *
-		 * @apiDescription
-		 * -- AUTHENTICATION
-		 *
-		 * All the Knowage RESTful services are based on Basic Authentication. Please generate your request in accordance with this
-		 * requirement.
-		 *
-		 *
-		 * -- DESCRIPTION
-		 *
-		 * This service can be called to obtain a list of domains by code. To get the list of function types, please use the code 'FUNCTION_TYPE'.
-		 *
-		 * @apiSuccess {json} functions The list of domain by code.
-		 *
-		 * @apiSuccessExample {json} Response-example:
-			[
-			   {
-			      "valueId":324,
-			      "valueCd":"Text Analysis",
-			      "valueName":"Text Analysis",
-			      "valueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/text.png)",
-			      "domainCode":"FUNCTION_TYPE",
-			      "domainName":"Make sense of unstructured text",
-			      "translatedValueName":"Text Analysis",
-			      "translatedValueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/text.png)"
-			   },
-			   {
-			      "valueId":325,
-			      "valueCd":"Machine Learning",
-			      "valueName":"Machine Learning",
-			      "valueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/degree.png)",
-			      "domainCode":"FUNCTION_TYPE",
-			      "domainName":"Teach your app to teach himself",
-			      "translatedValueName":"Machine Learning",
-			      "translatedValueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/degree.png)"
-			   },
-			   {
-			      "valueId":326,
-			      "valueCd":"Computer Vision",
-			      "valueName":"Computer Vision",
-			      "valueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/eye.png)",
-			      "domainCode":"FUNCTION_TYPE",
-			      "domainName":"Identify objects in images",
-			      "translatedValueName":"Computer Vision",
-			      "translatedValueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/eye.png)"
-			   },
-			   {
-			      "valueId":327,
-			      "valueCd":"Utilities",
-			      "valueName":"Utilities",
-			      "valueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/memory.png)",
-			      "domainCode":"FUNCTION_TYPE",
-			      "domainName":"Ready to use microservices",
-			      "translatedValueName":"Utilities",
-			      "translatedValueDescription":"url(../../knowage/themes/commons/img/functions_catalog_images/memory.png)"
-			   },
-			   {
-			      "valueId":328,
-			      "valueCd":"All",
-			      "valueName":"All",
-			      "valueDescription":"all.png",
-			      "domainCode":"FUNCTION_TYPE",
-			      "domainName":"All kind of functions",
-			      "translatedValueName":"All",
-			      "translatedValueDescription":"all.png"
-			   }
-			]
-		 * @apiErrorExample {json} Error-Response example:
-			 *    {
-			 *    	"service":"",
-			 *    	"errors":[
-			 *    		{"message":"Here the error message."}
-			 *    	]
-			 *    }
-		*/
-		// @formatter:on
-
 	@GET
 	@Path("/listByCode/{code}")
-	@Produces(MediaType.APPLICATION_JSON )
+	@Produces(MediaType.APPLICATION_JSON)
 	public List<Domain> getDomainsByCode(@PathParam("code") String code) {
 		logger.debug("IN");
 		IDomainDAO domainsDao = null;
@@ -289,28 +211,30 @@ public class DomainResource extends AbstractSpagoBIResource {
 	@Produces(MediaType.APPLICATION_JSON + "; charset=UTF-8")
 	public List<Domain> getCategoriesOfRoles(@QueryParam("id") List<Integer> ids) {
 		logger.debug("IN");
-		IDomainDAO domainsDao = null;
-		List allRolesCategories = new ArrayList<>();
-		List<Domain> metaModelCategories;
-		List<Domain> rolesMetaModelCategories = new ArrayList<Domain>();
+		List<Domain> rolesMetaModelCategories = new ArrayList<>();
 		try {
-			domainsDao = DAOFactory.getDomainDAO();
+			List<Integer> allRolesCategories = new ArrayList<>();
+
+			IDomainDAO domainsDao = DAOFactory.getDomainDAO();
+			ICategoryDAO categoryDao = DAOFactory.getCategoryDAO();
+
 			domainsDao.setUserProfile(getUserProfile());
 			for (int i = 0; i < ids.size(); i++) {
-				List tempL = domainsDao.loadListMetaModelDomainsByRole(ids.get(i));
+				List<Integer> tempL = domainsDao.loadListMetaModelDomainsByRole(ids.get(i));
 				for (int j = 0; j < tempL.size(); j++) {
 					if (!allRolesCategories.contains(tempL.get(j))) {
 						allRolesCategories.add(tempL.get(j));
 					}
 				}
 			}
-			metaModelCategories = domainsDao.loadListDomainsByType("BM_CATEGORY");
-			Integer[] arrayAllRolesCategories = new Integer[allRolesCategories.size()];
-			allRolesCategories.toArray(arrayAllRolesCategories);
-			for (int i = 0; i < arrayAllRolesCategories.length; i++) {
+
+			List<SbiCategory> metaModelCategories = categoryDao.getCategoriesForBusinessModel();
+			for (int i = 0; i < allRolesCategories.size(); i++) {
 				for (int j = 0; j < metaModelCategories.size(); j++) {
-					if (metaModelCategories.get(j).getValueId().equals(arrayAllRolesCategories[i])) {
-						rolesMetaModelCategories.add(metaModelCategories.get(j));
+					SbiCategory sbiCategory = metaModelCategories.get(j);
+					if (allRolesCategories.contains(sbiCategory.getId())) {
+						Domain domain = Domain.fromCategory(sbiCategory);
+						rolesMetaModelCategories.add(domain);
 					}
 				}
 			}

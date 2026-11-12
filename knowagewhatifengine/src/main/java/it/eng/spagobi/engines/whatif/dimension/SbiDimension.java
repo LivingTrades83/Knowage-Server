@@ -28,7 +28,7 @@ import org.olap4j.metadata.Dimension;
 
 public class SbiDimension {
 
-	static private Logger logger = Logger.getLogger(SbiDimension.class);
+	private static Logger logger = Logger.getLogger(SbiDimension.class);
 
 	private String name;
 	private String uniqueName;
@@ -46,7 +46,7 @@ public class SbiDimension {
 		this.caption = dimension.getCaption();
 		this.uniqueName = dimension.getUniqueName();
 		this.axis = axis;
-		this.hierarchies = new ArrayList<SbiHierarchy>();
+		this.hierarchies = new ArrayList<>();
 		this.positionInAxis = positionInAxis;
 
 		try {

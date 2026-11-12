@@ -20,7 +20,8 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 			"SbiSolrDataSet": sbiModule_translate.load('kn.cockpit.dataset.type.solr'),
 			"SbiSPARQLDataSet": sbiModule_translate.load('kn.cockpit.dataset.type.sparql'),
 			"SbiRESTDataSet": sbiModule_translate.load('kn.cockpit.dataset.type.rest'),
-			"SbiPythonDataSet": sbiModule_translate.load('kn.cockpit.dataset.type.python')
+			"SbiPythonDataSet": sbiModule_translate.load('kn.cockpit.dataset.type.python'),
+			"SbiPreparedDataSet": sbiModule_translate.load('kn.cockpit.dataset.type.prepared')
 	}
 
 	this.isDatasetFromTemplateLoaded = false;
@@ -465,7 +466,8 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 			for(var j=0;j<sheet.widgets.length;j++){
 				var widget = sheet.widgets[j];
 				if(widget.dataset !=undefined){
-					array.push(widget.dataset.dsId);
+					if(Array.isArray(widget.dataset.dsId)) array.push(...widget.dataset.dsId)
+					else array.push(widget.dataset.dsId)
 				}
 			}
 		}
@@ -920,6 +922,8 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 			chartTemplate.CHART.outcomingEventsEnabled = true;
 			chartTemplate.CHART.cliccable = ngModel.cliccable;
 			chartTemplate.CHART.drillable = ngModel.drillable;
+			bodyJSON.aggregations = this.getI18NAggregations(bodyJSON.aggregations);
+			
 			this.replaceVariables(chartTemplate.CHART);
 			var body = {"aggregations":bodyJSON, "chartTemp":chartTemplate, "exportWebData":false}
 			sbiModule_restServices.promisePost("1.0/chart/jsonChartTemplate", encodeURIComponent(dataset.label) + "/getDataAndConf" + params, body)
@@ -1037,7 +1041,7 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 	this.replaceStringVariables = function (obj){
 	var objString = angular.copy(obj);
 	objString = JSON.stringify(objString);
-    objString = objString.replace(/\$V\{([a-zA-Z0-9\-\_]*){1}(?:.([a-zA-Z0-9\-\_]*){1})?\}/g,function(match,p1,p2){
+    objString = objString.replace(/\$V\{([a-zA-Z0-9\-\_]{1,255})(?:.([a-zA-Z0-9\-\_]{1,255}))?\}/,function(match,p1,p2){
 					return p2 ? cockpitModule_properties.VARIABLES[p1][p2] : cockpitModule_properties.VARIABLES[p1];
 				})
 				
@@ -1226,7 +1230,11 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 			if (parameters.hasOwnProperty(parameter)){
 				if (parameters[parameter] == null || parameters[parameter] == undefined) {
 					output += delim + "\"" + parameter + "\":null";
-				}else{
+				}
+				else if (!cockpitModule_properties.PARAMETERS[parameter].multiValue){
+					output += delim + "\"" + parameter + "\":"+ "\""+parameters[parameter]+ "\"";
+				}
+				else{
 //					var tempJSN = JSON.stringify(parameters[parameter]);
 					var tempJSN = '"';
 					if(Array.isArray(parameters[parameter])) {
@@ -1254,12 +1262,16 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 						// CASE 4 [[pippo],[pluto]]
 						
 						for (var j in splittedValues) {
-							if (splittedValues[j] != "") {
+							if (splittedValues[j] && splittedValues[j] != "") {
 								if (j!=0) {
 									tempJSN  +=",";
 								}
 								if(cockpitModule_properties.PARAMETERS[parameter].type == "String"){
-									tempJSN  +=  (splittedValues[j].charAt(0) == "'" ? "" : "'") + splittedValues[j] + (splittedValues[j].charAt(splittedValues[j].length - 1) == "'" ? "" : "'") ;
+									if ((splittedValues[j].charAt(0) == "'") && (splittedValues[j].charAt(splittedValues[j].length - 1) == "'")) {
+										splittedValues[j] = splittedValues[j].substring(1, splittedValues[j].length - 1);										
+									}
+									splittedValues[j]  = splittedValues[j].replace(/'/g, "\'");
+									tempJSN  += `'${splittedValues[j]}'`;
 								}
 								else {
 									tempJSN  += splittedValues[j];
@@ -1311,6 +1323,19 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 		return clone;
 
 	}
+
+   // returns the internationalized aggregations
+	this.getI18NAggregations = function (aggregations) {
+		var measuresArray = aggregations.measures;
+		for (i=0; i<measuresArray.length;i++){
+			measuresArray[i].alias = sbiModule_i18n.getI18n(measuresArray[i].alias.slice(0, measuresArray[i].alias.lastIndexOf("_"))) +"_" + measuresArray[i].alias.substring(measuresArray[i].alias.lastIndexOf("_") + 1);
+			measuresArray[i].id =  sbiModule_i18n.getI18n(measuresArray[i].id.slice(0, measuresArray[i].id.lastIndexOf("_"))) +"_"+ measuresArray[i].id.substring(measuresArray[i].id.lastIndexOf("_") + 1);
+			}
+		 aggregations.measures = measuresArray;
+	return aggregations;
+		
+	}
+
 
 	this.traverse = function(o, func) {
 		for (var i in o) {
@@ -1605,7 +1630,7 @@ $mdPanel,cockpitModule_widgetSelection,cockpitModule_properties,cockpitModule_ut
 								$scope.$destroy();
 
 							}
-							cockpitModule_properties.PARAMETERS = this.returnParametersArray();
+							cockpitModule_properties.PARAMETERS = ds.returnParametersArray();
 						}
 					}
 

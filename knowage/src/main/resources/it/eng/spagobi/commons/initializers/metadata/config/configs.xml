@@ -1,27 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIGS>
-	<CONFIG label="internal.security.encript.password" name="encript password"
-		description="Enable the password encription" isActive="false"
-		valueCheck="true" valueType="NUM" category="SECURITY" />
-	<CONFIG label="changepwdmodule.len_min" name="Password Len Min"
-		description="Minimum length" isActive="false" valueCheck="8"
-		valueType="NUM" category="SECURITY" />
-	<CONFIG label="changepwdmodule.special_char" name="Special char"
-		description="Special chars" isActive="false" valueCheck="_|-#$"
-		valueType="STRING" category="SECURITY" />
-	<CONFIG label="changepwdmodule.upper_char" name="Upper char"
-		description="Minimum a char must be in upper case" isActive="false"
-		valueCheck="ABCDEFGJKLMNOPQRSTUVWXYZ" valueType="STRING" category="SECURITY" />
-	<CONFIG label="changepwdmodule.lower_char" name="Lower char"
-		description="Minimum a char must be in lower case" isActive="false"
-		valueCheck="abcdefghjklmnopqrstuwxyz" valueType="STRING" category="SECURITY" />
-	<CONFIG label="changepwdmodule.number" name="Number"
-		description="Minimum a char must be a number" isActive="false"
-		valueCheck="0123456789" valueType="STRING" category="SECURITY" />
-	<CONFIG label="changepwdmodule.alphabetical" name="Alaphabetical"
-		description="Minimum a char must be a letter" isActive="false"
-		valueCheck="abcdefghjklmnopqrstuwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		valueType="STRING" category="SECURITY" />
 	<CONFIG label="changepwdmodule.change" name="Change from last"
 		description="The new pwd must be different from the latest" isActive="false"
 		valueCheck="" valueType="" category="SECURITY" />
@@ -53,15 +31,11 @@
 
 	<CONFIG label="SPAGOBI.RESOURCE_PATH_JNDI_NAME" name="RESOURCE PATH JNDI NAME"
 		description="The name of the JNDI variable that contains the RESOURCE PATH"
-		isActive="true" valueCheck="java://comp/env/resource_path"
+		isActive="true" valueCheck="java:comp/env/resource_path"
 		valueType="STRING" category="GENERIC_CONFIGURATION" />
-   
-	
-	<CONFIG label="SPAGOBI.SPAGOBI_HOST_JNDI" name="SPAGOBI HOST JNDI"
-		description="HOST JNDI" isActive="true" valueCheck="java://comp/env/host_url"
-		valueType="STRING" category="GENERIC_CONFIGURATION" />
+
 	<CONFIG label="SPAGOBI.SPAGOBI_SERVICE_JNDI" name="SPAGOBI SERVICE JNDI"
-		description="HOST JNDI" isActive="true" valueCheck="java://comp/env/service_url"
+		description="HOST JNDI" isActive="true" valueCheck="java:comp/env/service_url"
 		valueType="STRING" category="GENERIC_CONFIGURATION" />
 	<CONFIG label="SPAGOBI.SPAGO_ADAPTERHTTP_URL" name="ADAPTERHTTP URL"
 		description="ADAPTERHTTP URL" isActive="true" valueCheck="/servlet/AdapterHTTP"
@@ -240,12 +214,12 @@
 		valueType="STRING" category="SECURITY" />
 	<CONFIG label="SPAGOBI_SSO.INTEGRATION_CLASS_JNDI" name="SSO INTEGRATION CLASS JNDI"
 		description="SSO INTEGRATION CLASS JNDI" isActive="true"
-		valueCheck="java://comp/env/sso_class" valueType="STRING"
+		valueCheck="java:comp/env/sso_class" valueType="STRING"
 		category="SECURITY" />
 	
 	<CONFIG label="SPAGOBI_HMAC.HMAC_JNDI_LOOKUP" name="HMAC JNDI LOOKUP"
 		description="HMAC JNDI LOOKUP" isActive="true"
-		valueCheck="java:/comp/env/hmacKey" valueType="STRING"
+		valueCheck="java:comp/env/hmacKey" valueType="STRING"
 		category="SECURITY" />
 
 	<!-- TimeStamp Format of SpagoBI DB -->
@@ -404,7 +378,7 @@
 		valueCheck="true" valueType="STRING" category="SECURITY" />
 	<CONFIG label="JNDI_THREAD_MANAGER" name="JNDI_THREAD_MANAGER"
 		description="Jndi to build work manager" isActive="true"
-		valueCheck="java:/comp/env/wm/SpagoWorkManager" valueType="STRING"
+		valueCheck="java:comp/env/wm/SpagoWorkManager" valueType="STRING"
 		category="GENERIC_CONFIGURATION" />
 
 	<CONFIG label="SPAGOBI.SECURITY.CHECK_ROLE_LOGIN" name="SPAGOBI.SECURITY.CHECK_ROLE_LOGIN"
@@ -470,6 +444,7 @@
 	<CONFIG label="SPAGOBI.CACHE.DATABASE_SCHEMA" name="SPAGOBI.CACHE.DATABASE_SCHEMA" description="name of the schema where the cache tables are created" isActive="true" valueCheck="" valueType="STRING" category="GENERIC_CONFIGURATION"/>
 	<CONFIG label="SPAGOBI.CACHE.CREATE_AND_PERSIST_TABLE.TIMEOUT" name="SPAGOBI.CACHE.CREATE_AND_PERSIST_TABLE.TIMEOUT" description="Allowed time (in seconds) to create temporary table for the dataset" isActive="true" valueCheck="120" valueType="NUM" category="GENERIC_CONFIGURATION"/>
 	<CONFIG label="SPAGOBI.CACHE.LIMIT_FOR_STORE" name="SPAGOBI.CACHE.LIMIT_FOR_STORE" description="% of dimension of cache usable to store a single dataset" isActive="true" valueCheck="10" valueType="NUM" category="GENERIC_CONFIGURATION"/>
+	<CONFIG label="SPAGOBI.CACHE.REFRESH" name="SPAGOBI.CACHE.REFRESH" description="Cache clean o refresh" isActive="true" valueCheck="false" valueType="STRING" category="GENERIC_CONFIGURATION"/>
 	
 	<CONFIG label="SPAGOBI.WORKMANAGER.SQLDBCACHE.TIMEOUT" name="SPAGOBI.WORKMANAGER.SQLDBCACHE.TIMEOUT" description="Allowed time (in milliseconds) to wait untile the work manager will stop the execution of works" isActive="true" valueCheck="180000" valueType="NUM" category="GENERIC_CONFIGURATION"/>
 	
@@ -548,11 +523,6 @@
         description="If true, when opening a document, it will be executed automatically in case no mandatory drivers are missing"
         isActive="true" valueCheck="true" valueType="STRING"
         category="GENERIC_CONFIGURATION" />    
-        
-	<CONFIG label="dataset.export.xls.resultsLimit" name="Dataset XLS/XLSX export result limit"
-		description="Specify max number of rows as a dataset when exporting into XLS/XLSX"
-		isActive="true" valueCheck="10000" valueType="NUM"
-		category="GENERIC_CONFIGURATION" />
 
 	<CONFIG label="internal.security.login.checkForMaxFailedLoginAttempts" name="Max failed login attempts filter"
 		description="Enable filter for max value of failed login attempts" isActive="true"
@@ -596,7 +566,20 @@
 	<CONFIG label="KNOWAGE.DASHBOARD.EXPORT.EXCEL.STREAMING_WINDOW_SIZE" name="Apache POI streaming mode window size"
 		description="The number of Excel rows that are kept in memory before flushing." isActive="true"
 		valueCheck="5000" valueType="NUM" category="GENERIC_CONFIGURATION" />
-		
+	<CONFIG label="KNOWAGE.DASHBOARD.EXTERNAL_PROCESS_NAME" name="KNOWAGE.DASHBOARD.EXTERNAL_PROCESS_NAME"
+		description="Avoid sonar security hotspot issue" isActive="true"
+		valueCheck="node" valueType="STRING" category="GENERIC_CONFIGURATION" />	
+	<CONFIG label="KNOWAGE.DASHBOARD.PASSWORD.ENCRYPTER.TRANSFORMATION_ALGORITHM" name="KNOWAGE.DASHBOARD.PASSWORD.ENCRYPTER.TRANSFORMATION_ALGORITHM"
+		description="Avoid sonar security hotspot issue" isActive="true"
+		valueCheck="AES/CTR/NoPadding" valueType="STRING" category="GENERIC_CONFIGURATION" />
+	<CONFIG label="KNOWAGE.DASHBOARD.PASSWORD.ENCRYPTER.PROVIDER_ALGORITHM" name="KNOWAGE.DASHBOARD.PASSWORD.ENCRYPTER.PROVIDER_ALGORITHM"
+		description="Avoid sonar security hotspot issue" isActive="true"
+		valueCheck="HmacSHA1" valueType="STRING" category="GENERIC_CONFIGURATION" />	
+	
+	<CONFIG label="KNOWAGE.DASHBOARD.RESERVED.WORDS" name="Query Reserved Words"
+		description="Query Reserved Words" isActive="true"
+		valueCheck="RESOURCE,TABLE" valueType="STRING" category="GENERIC_CONFIGURATION" />
+	
 	<CONFIG label="SPAGOBI.DATASET.SOLR.FACET_LIMIT" name="SPAGOBI.DATASET.SOLR.FACET_LIMIT"
 		description="Limit the buckets count when Solr dataset execute facet query (-1 for unlimited)" isActive="true"
 		valueCheck="-1" valueType="NUM" category="SOLR_CONFIGURATION" />
@@ -612,7 +595,103 @@
 		description="Maximum rows number for front-end table pagination. Default is 5000"
 		isActive="true" valueCheck="5000" valueType="NUM"
 		category="GENERIC_CONFIGURATION" />
-	
-	
+		
+	<CONFIG label="KNOWAGE.WSEVENTCLEANJOB.PERIOD" name="SBI_WS_EVENT records' validity time period"
+		description="Time period of validity of records into SBI_WS_EVENT in seconds"
+		isActive="true" valueCheck="31536000" valueType="NUM"
+		category="GENERIC_CONFIGURATION" />
+
+	<CONFIG label="KNOWAGE.DATAPREP.LIVY_URL" name="KNOWAGE.DATAPREP.LIVY_HOST"
+		description="The URL where Apache Livy is listening"
+		isActive="true" valueCheck="http://localhost:8998" valueType="STRING"
+		category="DATA_PREPARATION" />
+		
+	<CONFIG label="KNOWAGE.AUDIT_ENABLED" name="KNOWAGE.AUDIT_ENABLED"
+		description="Enables audit table updating"
+		isActive="true" valueCheck="true" valueType="STRING"
+		category="GENERIC_CONFIGURATION" />
+		
+	<CONFIG label="KNOWAGE.AUDIT_DATA_RETENTION" name="KNOWAGE.AUDIT_DATA_RETENTION"
+		description="Set retention period for audit table cleaning"
+		isActive="true" valueCheck="180" valueType="NUM"
+		category="GENERIC_CONFIGURATION" />
+
+	<CONFIG label="KNOWAGE.EMIT_AUTHORIZATION_EVENTS" name="KNOWAGE.EMIT_AUTHORIZATION_EVENTS"
+		description="Enable or disable events emission for authorization changes"
+		isActive="true" valueCheck="false" valueType="STRING"
+		category="GENERIC_CONFIGURATION" />	
+		
+	<CONFIG label="document.exporter.knowagekpiengine" name="document.exporter.knowagekpiengine"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="PDF" valueType="STRING"
+		category="EXPORTER_CONFIGURATION" />
+	<CONFIG label="document.exporter.knowagejasperreporte" name="document.exporter.knowagejasperreporte"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="PDF,XLS,RTF,JPG" valueType="STRING"
+		category="EXPORTER_CONFIGURATION" />
+	<CONFIG label="document.exporter.knowagebirtreporteng" name="document.exporter.knowagebirtreporteng"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="PDF,XLS,XLSX,RTF,DOC,DOCX,PPTX,CSV,XML,JPG,TXT,PPT" valueType="STRING"
+		category="EXPORTER_CONFIGURATION" />
+	<CONFIG label="document.exporter.knowageqbeengine" name="document.exporter.knowageqbeengine"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="XLS,XLSX,CSV" valueType="STRING"
+		category="EXPORTER_CONFIGURATION" />
+	<CONFIG label="document.exporter.knowagewhatifengine" name="document.exporter.knowagewhatifengine"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="XLS" valueType="STRING"
+		category="EXPORTER_CONFIGURATION" />
+	<CONFIG label="document.exporter.knowagecockpitengine" name="document.exporter.knowagecockpitengine"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="XLSX,PDF" valueType="STRING"
+		category="EXPORTER_CONFIGURATION" />
+	<CONFIG label="document.exporter.knowageolapengine" name="document.exporter.knowageolapengine"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="XLS" valueType="STRING"
+		category="EXPORTER_CONFIGURATION" />
+	<CONFIG label="document.exporter.knowagedashboardengine" name="document.exporter.knowagedashboardengine"
+		description="Adds exporters file format"
+		isActive="true" valueCheck="XLSX,PDF" valueType="STRING" />
+
+	<CONFIG label="ZIP_MIN_INFLATE_RATIO" name="ZIP_MIN_INFLATE_RATIO"
+		description="Sets the ratio between de- and inflated bytes to detect zipbomb. It defaults to 0.0009"
+		isActive="true" valueCheck="0.0009" valueType="NUM"
+		category="GENERIC_CONFIGURATION" />
+		
+	<CONFIG label="internal.security.login.importUserIfNotExisting" name="Enable import of user into internal metadata when not existing"
+		description="Enable import procudere of an user profile object into internal metadata if he is not existing" isActive="true"
+		valueCheck="false" valueType="STRING" category="SECURITY" />
+		
+	<CONFIG label="internal.security.users.defaultRole" name="Default users role"
+		description="Default role to be assigned to the users when they have no roles" isActive="true"
+		valueCheck="default_role" valueType="STRING" category="SECURITY" />
+		
+	<CONFIG label="KNOWAGE.MANDATORY-ROLE" name="Mandatory session role"
+		description="If true, when users with more than one role logon, they must choose a session role before continuing" isActive="true"
+		valueCheck="false" valueType="STRING" category="SECURITY" />
+
+	<CONFIG label="DASHBOARD.EXPORT.SHOW_DRIVERS_SHEET" name="Show drivers sheet in dashboard export"
+			description="If true, drivers sheet will be included in the exported workbook (dashboard xlsx export)" isActive="true"
+			valueCheck="false" valueType="STRING" category="GENERIC_CONFIGURATION" />
+
+	<CONFIG label="DASHBOARD.EXPORT.SHOW_SELECTIONS_SHEET" name="Show selections sheet in dashboard export"
+			description="If true, selections sheet will be included in the exported workbook (dashboard xlsx export)" isActive="true"
+			valueCheck="false" valueType="STRING" category="GENERIC_CONFIGURATION" />
+
+	<CONFIG label="COCKPIT.EXPORT.SHOW_FILTER" name="Show drivers and selections sheet in cockpit export"
+			description="If true, drivers and selections sheet will be included in the exported workbook (cockpit xlsx export)" isActive="true"
+			valueCheck="false" valueType="STRING" category="GENERIC_CONFIGURATION" />
+
+    <CONFIG label="userDefaultPassword" name="userDefaultPassword"
+            description="Password di default del nuovo utente" isActive="true"
+            valueCheck="changemenow" valueType="STRING" category="SECURITY" />
+
+	<CONFIG label="KNOWAGE.SESSION_TIMEOUT" name="KNOWAGE.SESSION_TIMEOUT"
+			description="enables session timeout for the application" isActive="true"
+			valueCheck="true" valueType="STRING" category="SECURITY" />
+
+	<CONFIG label="PM.DISABLE_HOSTNAME_VERIFICATION" name="PM.DISABLE_HOSTNAME_VERIFICATION"
+			description="disables hostname verification for privacy manager" isActive="true"
+			valueCheck="false" valueType="STRING" category="SECURITY" />
 </CONFIGS>
 

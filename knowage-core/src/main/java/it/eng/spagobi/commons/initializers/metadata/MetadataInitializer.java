@@ -36,13 +36,13 @@ public class MetadataInitializer extends SpagoBIInitializer {
 
 	protected List<SpagoBIInitializer> metadataInitializers;
 
-	static private boolean disposed = false;
-	static private Logger logger = Logger.getLogger(MetadataInitializer.class);
+	private static boolean disposed = false;
+	private static Logger logger = Logger.getLogger(MetadataInitializer.class);
 
 	public MetadataInitializer() {
 		targetComponentName = "SpagoBI Metadata Database";
 
-		metadataInitializers = new ArrayList<SpagoBIInitializer>();
+		metadataInitializers = new ArrayList<>();
 		metadataInitializers.add(new DomainsInitializer());
 		metadataInitializers.add(new EnginesInitializer());
 		metadataInitializers.add(new ProductTypesInitializer());
@@ -51,10 +51,11 @@ public class MetadataInitializer extends SpagoBIInitializer {
 		metadataInitializers.add(new ChecksInitializer());
 		metadataInitializers.add(new LovsInitializer());
 		metadataInitializers.add(new FunctionalitiesInitializer());
-		metadataInitializers.add(new ExportersInitializer());
 		metadataInitializers.add(new ConfigurationsInitializer());
 		metadataInitializers.add(new AlertListenerInitializer());
 		metadataInitializers.add(new AlertActionInitializer());
+		metadataInitializers.add(new WsEventCleanJobInitializer());
+		metadataInitializers.add(new DashboardThemesInitializer());
 
 	}
 
@@ -79,11 +80,15 @@ public class MetadataInitializer extends SpagoBIInitializer {
 		try {
 			for (SpagoBIInitializer metadataInitializer : metadataInitializers) {
 				startTime = System.currentTimeMillis();
-				metadataInitializer.init(config, hibernateSession);
+				try {
+					metadataInitializer.init(config, hibernateSession);
+				} catch (Exception e) {
+					logger.error("Error running initializer " + metadataInitializer.getClass().getName(), e);
+				}
 				endTime = System.currentTimeMillis();
 				logger.info("[" + metadataInitializer.getTargetComponentName() + "] succesfully initializated in " + (endTime - startTime) + " ms");
 			}
-		} catch (Throwable t) {
+		} catch (Exception t) {
 			logger.error("An unexpected error occured while initializing metadata", t);
 		} finally {
 			logger.debug("OUT");

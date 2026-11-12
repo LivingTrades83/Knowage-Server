@@ -23,6 +23,8 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 
+import it.eng.knowage.encryption.DecryptionDataStoreTransformer;
+import it.eng.knowage.privacymanager.PrivacyManagerDataStoreTransformer;
 import it.eng.spagobi.services.dataset.bo.SpagoBiDataSet;
 import it.eng.spagobi.tenant.Tenant;
 import it.eng.spagobi.tenant.TenantManager;
@@ -31,6 +33,7 @@ import it.eng.spagobi.tools.dataset.common.dataproxy.IDataProxy;
 import it.eng.spagobi.tools.dataset.common.datareader.FileDatasetCsvDataReader;
 import it.eng.spagobi.tools.dataset.common.datareader.IDataReader;
 import it.eng.spagobi.tools.dataset.common.datastore.IDataStore;
+import it.eng.spagobi.tools.dataset.common.transformer.DataStoreStatsTransformer;
 import it.eng.spagobi.tools.datasource.bo.IDataSource;
 import it.eng.spagobi.utilities.assertion.UnreachableCodeException;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
@@ -53,13 +56,12 @@ public abstract class ConfigurableDataSet extends AbstractDataSet {
 	private static transient Logger logger = Logger.getLogger(ConfigurableDataSet.class);
 
 	public ConfigurableDataSet() {
-		super();
-		userProfileParameters = new HashMap<String, Object>();
+		userProfileParameters = new HashMap<>();
 	}
 
 	public ConfigurableDataSet(SpagoBiDataSet dataSetConfig) {
 		super(dataSetConfig);
-		userProfileParameters = new HashMap<String, Object>();
+		userProfileParameters = new HashMap<>();
 	}
 
 	/**
@@ -89,7 +91,7 @@ public abstract class ConfigurableDataSet extends AbstractDataSet {
 	@Override
 	public void loadData(int offset, int fetchSize, int maxResults) {
 
-		if (this.isPersisted() || this.isFlatDataset()) {
+		if (this.isPersisted() || this.isFlatDataset() || this.isPreparedDataSet()) {
 			JDBCDataSet dataset = new JDBCDataSet();
 			dataset.setDataSource(getDataSourceForReading());
 			dataset.setQuery("select * from " + getTableNameForReading());
@@ -131,7 +133,8 @@ public abstract class ConfigurableDataSet extends AbstractDataSet {
 			}
 
 			if (hasBehaviour(QuerableBehaviour.class.getName())) {
-				QuerableBehaviour querableBehaviour = (QuerableBehaviour) getBehaviour(QuerableBehaviour.class.getName());
+				QuerableBehaviour querableBehaviour = (QuerableBehaviour) getBehaviour(
+						QuerableBehaviour.class.getName());
 				String stm = querableBehaviour.getStatement();
 				dataProxy.setStatement(stm);
 			}
@@ -144,12 +147,17 @@ public abstract class ConfigurableDataSet extends AbstractDataSet {
 					((FileDatasetCsvDataReader) dataReader).setMetaData(this.getMetadata());
 			} catch (Exception e) {
 				// Yes, it's mute
+				logger.debug("Cannot set user metadata", e);
 			}
 
 			dataStore = dataProxy.load(dataReader);
 
-			if (hasDataStoreTransformer()) {
-				getDataStoreTransformer().transform(dataStore);
+			addDataStoreTransformer(new DecryptionDataStoreTransformer(this));
+			addDataStoreTransformer(new PrivacyManagerDataStoreTransformer(this));
+			addDataStoreTransformer(new DataStoreStatsTransformer());
+
+			if (hasDataStoreTransformers()) {
+				executeDataStoreTransformers(dataStore);
 			}
 
 		}
@@ -260,12 +268,14 @@ public abstract class ConfigurableDataSet extends AbstractDataSet {
 
 	@Override
 	public void setDataSource(IDataSource dataSource) {
-		throw new UnreachableCodeException("setDataSource method not implemented in class " + this.getClass().getName() + "!!!!");
+		throw new UnreachableCodeException(
+				"setDataSource method not implemented in class " + this.getClass().getName() + "!!!!");
 	}
 
 	@Override
 	public IDataSource getDataSource() {
-		throw new UnreachableCodeException("getDataSource method not implemented in class " + this.getClass().getName() + "!!!!");
+		throw new UnreachableCodeException(
+				"getDataSource method not implemented in class " + this.getClass().getName() + "!!!!");
 	}
 
 }

@@ -16,11 +16,11 @@ import it.eng.spagobi.services.serialization.JsonConverter;
 import it.eng.spagobi.utilities.exceptions.SpagoBIRuntimeException;
 
 public class FolderManagementAPI extends AbstractSpagoBIResource {
-	static protected Logger logger = Logger.getLogger(FolderManagementAPI.class);
+	protected static Logger logger = Logger.getLogger(FolderManagementAPI.class);
 
 	public List<LowFunctionality> getFolders(Boolean recoverBIObjects, String permissionOnFolder, String dateFilter, String status) {
 
-		List<LowFunctionality> folders = new ArrayList<LowFunctionality>();
+		List<LowFunctionality> folders = new ArrayList<>();
 		try {
 			UserProfile profile = getUserProfile();
 			ILowFunctionalityDAO dao = DAOFactory.getLowFunctionalityDAO();
